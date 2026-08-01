@@ -53,6 +53,17 @@ Pas de contrainte « hors ligne » : le site **peut** appeler des API externes.
 **Prérequis** : une **clé API TMDB** (gratuite), stockée dans `config.json`
 (jamais committée).
 
+**Coût & licence TMDB** : **gratuit et sans limite de durée** pour un usage
+**personnel / non-commercial** (ce projet). Débit ~40-50 requêtes/seconde,
+très au-dessus des besoins. Payant seulement en usage commercial. **Obligation**
+: afficher en bas de page la mention *« This product uses the TMDb API but is
+not endorsed or certified by TMDb »* + le logo TMDB.
+
+**Sources de style** (inspiration UI, pas de code repris) : **FilmNoir**
+(carrousels Discover : tendances / box-office / populaires), **Letterboxd**
+(carrousels + « voir plus » + puces de filtre), **Simkl** (notifications de
+sorties).
+
 ---
 
 ## 4. Fonctionnalités
@@ -95,11 +106,26 @@ Pas de contrainte « hors ligne » : le site **peut** appeler des API externes.
   répartition par année.
 - (Pas de stats par période — jugé inutile.)
 
-### 4.6 Suggestions
-- **Recommandations personnalisées** d'après la bibliothèque (recommandations
-  TMDB à partir des titres vus/aimés).
-- **Filtres & tri** : par **genre**, par **popularité / les plus vus**.
-- **Onglet affiché à l'ouverture du site.**
+### 4.6 Suggestions (page d'accueil)
+Inspiration : **FilmNoir** / **Letterboxd** — une pile de **carrousels
+horizontaux** (défilement gauche→droite), habillés du thème doré/sombre, avec
+des **puces de filtre** `Tout / Films / Séries` en haut de page.
+
+Carrousels proposés :
+- ▸ **Reprendre** — séries en cours à continuer
+- ▸ **Tendances cette semaine**
+- ▸ **Au cinéma en ce moment** (l'esprit « box-office »)
+- ▸ **Populaires**
+- ▸ **Mieux notés**
+- ▸ **Recommandé pour toi** — d'après la bibliothèque (recommandations TMDB)
+
+Chaque carrousel a un bouton **« voir plus »**. Filtres & tri : par **genre**,
+par **popularité / les plus vus**.
+
+> Note « box-office » : TMDB ne fournit pas de classement officiel des recettes.
+> On rend le même ressenti avec **« Au cinéma en ce moment »** + **tendances**
+> (et les recettes affichées sur chaque fiche). Un vrai classement chiffré
+> nécessiterait une source tierce payante — hors périmètre.
 
 ### 4.7 Découverte
 - **Catalogue large** : voir **tous les films et séries** qui existent.
