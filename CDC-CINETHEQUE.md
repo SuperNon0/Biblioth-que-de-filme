@@ -98,12 +98,14 @@ Pas de contrainte « hors ligne » : le site **peut** appeler des API externes.
 ### 4.6 Suggestions
 - **Recommandations personnalisées** d'après la bibliothèque (recommandations
   TMDB à partir des titres vus/aimés).
-- Triables (dont par **popularité / nombre de visionnages**).
+- **Filtres & tri** : par **genre**, par **popularité / les plus vus**.
 - **Onglet affiché à l'ouverture du site.**
 
 ### 4.7 Découverte
-- **Catalogue large** de films à parcourir.
-- Tri par **les plus vus / populaires / tendances**.
+- **Catalogue large** : voir **tous les films et séries** qui existent.
+- Vue **« Top films »**, avec bascule **Films seuls / Séries seules / Tout**.
+- **Filtres** : par **genre**, par **popularité / tendances / les plus vus**.
+- **Pagination** (« par page ») pour parcourir de grands volumes.
 
 ### 4.8 Listes
 - Liste **« À voir » présente par défaut**.
