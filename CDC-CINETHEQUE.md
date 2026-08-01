@@ -104,7 +104,8 @@ Pas de contrainte « hors ligne » : le site **peut** appeler des API externes.
 ### 4.7 Découverte
 - **Catalogue large** : voir **tous les films et séries** qui existent.
 - Vue **« Top films »**, avec bascule **Films seuls / Séries seules / Tout**.
-- **Filtres** : par **genre**, par **popularité / tendances / les plus vus**.
+- **Filtres & tri** : par **genre**, **popularité / tendances**, **année de
+  sortie**, **note TMDB**, **pays / langue**.
 - **Pagination** (« par page ») pour parcourir de grands volumes.
 
 ### 4.8 Listes
@@ -186,5 +187,7 @@ pour un affichage rapide et une sauvegarde autonome.
 ## 9. Identité
 
 - Nom : **cinéthèque**.
-- Logo : symbole graphique (pas seulement du texte) + mot-symbole
+- Logo du site (haut-gauche) : **clap de cinéma** doré + mot-symbole
   **ciné** (doré) *thèque* (blanc italique), dans le thème du site.
+- Favicon (onglet navigateur + favori) : **clap minimal** (icône sans texte,
+  assortie au logo), lisible en 16 px.
