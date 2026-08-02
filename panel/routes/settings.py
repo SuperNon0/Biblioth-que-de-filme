@@ -4,6 +4,8 @@
 - Clé API TMDB + région, stockées dans le magasin de réglages inscriptible.
 - Export complet des données (fichier JSON de secours) et réimport.
 """
+import os
+import subprocess
 import time
 
 from flask import Blueprint, jsonify, request
@@ -11,10 +13,12 @@ from flask import Blueprint, jsonify, request
 import auth
 import db
 import settings_store
-from context import get_tmdb
+from context import cfg, get_tmdb
 from tmdb import TMDBError
 
 bp = Blueprint("settings", __name__, url_prefix="/api")
+
+UPDATE_SCRIPT = "/opt/cinetheque/scripts/update-panel.sh"
 
 # Tables exportées/réimportées (ordre respectant les dépendances).
 TABLES = ["titres", "visionnages", "episodes", "listes", "liste_items", "alertes"]
@@ -77,6 +81,43 @@ def change_password():
     except ValueError as exc:
         return jsonify(error=str(exc)), 400
     return jsonify(ok=True)
+
+
+@bp.get("/version")
+@auth.login_required
+def version():
+    """Version déployée : commit court + message du dernier commit du dépôt source."""
+    src = cfg().get("source_dir", "/opt/cinetheque-src")
+    try:
+        sha = subprocess.check_output(["git", "-C", src, "rev-parse", "--short", "HEAD"],
+                                      text=True, timeout=5).strip()
+        msg = subprocess.check_output(["git", "-C", src, "log", "-1", "--pretty=%s"],
+                                      text=True, timeout=5).strip()
+        return jsonify(version=sha, message=msg)
+    except (subprocess.SubprocessError, OSError):
+        return jsonify(version=None, message=None)
+
+
+@bp.post("/update")
+@auth.login_required
+def update():
+    """Lance la mise à jour depuis GitHub (script auto-remplaçant + redémarrage).
+
+    Le script fait `git pull` sur la branche déployée (main), recopie les
+    fichiers, puis redémarre le service de façon détachée.
+    """
+    if not os.path.exists(UPDATE_SCRIPT):
+        return jsonify(error="Script de mise à jour introuvable (déploiement requis)."), 400
+    try:
+        proc = subprocess.run(["sudo", "-n", UPDATE_SCRIPT],
+                              capture_output=True, text=True, timeout=120)
+    except subprocess.SubprocessError as exc:
+        return jsonify(error=f"Échec du lancement : {exc}"), 500
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout or "échec inconnu").strip()
+        return jsonify(error=detail[-400:]), 500
+    return jsonify(ok=True,
+                   message="Mise à jour lancée. Le site redémarre dans quelques secondes.")
 
 
 @bp.get("/export")

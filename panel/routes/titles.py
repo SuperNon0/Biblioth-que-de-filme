@@ -47,6 +47,28 @@ def _saisons(titre_id):
     return [saisons[k] for k in sorted(saisons)]
 
 
+@bp.get("/preview")
+@auth.login_required
+def preview():
+    """Aperçu d'un titre TMDB **sans l'ajouter** à la bibliothèque.
+
+    Renvoie la fiche complète (résumé, plateformes, bande-annonce, casting,
+    saisons pour les séries). L'ajout ne se fait que si l'utilisateur choisit
+    un statut ensuite.
+    """
+    tmdb_id = request.args.get("tmdb_id")
+    typ = request.args.get("type")
+    if typ not in ("film", "serie") or not tmdb_id:
+        return jsonify(error="Titre invalide."), 400
+    tmdb = get_tmdb()
+    try:
+        detail = (tmdb.movie(int(tmdb_id)) if typ == "film"
+                  else tmdb.tv(int(tmdb_id)))
+    except (TMDBError, ValueError) as exc:
+        return jsonify(error=str(exc)), 502
+    return jsonify(detail)
+
+
 @bp.get("/title/<int:titre_id>")
 @auth.login_required
 def detail(titre_id):

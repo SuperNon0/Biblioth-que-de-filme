@@ -118,7 +118,7 @@ def roulette():
     """
     source = request.args.get("source", "library")
     try:
-        count = min(max(int(request.args.get("count", 6) or 6), 1), 8)
+        count = min(max(int(request.args.get("count", 6) or 6), 1), 18)
     except ValueError:
         count = 6
     if source == "library":

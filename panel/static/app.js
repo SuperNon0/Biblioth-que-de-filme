@@ -69,17 +69,13 @@ function posterCard(item) {
   </div>`;
 }
 
-/* Ouvre l'élément cliqué : titre local → fiche ; résultat TMDB → ajout + fiche. */
-async function openItem(el) {
+/* Ouvre l'élément cliqué : titre déjà en bibliothèque → sa fiche ;
+   résultat TMDB → aperçu (SANS l'ajouter — l'ajout se fait via un statut). */
+function openItem(el) {
   const id = el.dataset.id;
   if (id) return openDetail(Number(id));
   const tmdb = Number(el.dataset.tmdb), type = el.dataset.type;
-  if (!tmdb || !type) return;
-  try {
-    const r = await api("/api/library", { method: "POST", body: { tmdb_id: tmdb, type } });
-    toast("Ajouté à la bibliothèque");
-    openDetail(r.id);
-  } catch (e) { toast(e.message); }
+  if (tmdb && type) openPreview(tmdb, type);
 }
 
 function bindGrid(container) {
@@ -186,7 +182,11 @@ async function loadSuggestions() {
     wrap.innerHTML = blocs.map((b) => `
       <div class="row-block">
         <h3>${esc(b.titre)}</h3>
-        <div class="row-scroll">${b.items.map(posterCard).join("")}</div>
+        <div class="row-wrap">
+          <button class="row-arrow left" aria-label="Précédent">‹</button>
+          <div class="row-scroll">${b.items.map(posterCard).join("")}</div>
+          <button class="row-arrow right" aria-label="Suivant">›</button>
+        </div>
       </div>`).join("");
   } catch (e) { wrap.innerHTML = `<p class="muted">${esc(e.message)}</p>`; }
 }
@@ -198,6 +198,23 @@ $("[data-filter='suggestions']").addEventListener("click", (e) => {
   loadSuggestions();
 });
 bindGrid($("#suggestions-rows"));
+
+/* Carrousels : flèches gauche/droite + défilement à la molette. */
+$("#suggestions-rows").addEventListener("click", (e) => {
+  const arrow = e.target.closest(".row-arrow");
+  if (!arrow) return;
+  const scroll = arrow.parentElement.querySelector(".row-scroll");
+  const dx = scroll.clientWidth * 0.85;
+  scroll.scrollBy({ left: arrow.classList.contains("left") ? -dx : dx, behavior: "smooth" });
+});
+$("#suggestions-rows").addEventListener("wheel", (e) => {
+  const scroll = e.target.closest(".row-scroll");
+  if (!scroll) return;
+  if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+    scroll.scrollLeft += e.deltaY;
+    e.preventDefault();
+  }
+}, { passive: false });
 
 /* ============================ BIBLIOTHÈQUE ============================= */
 async function loadLibrary() {
@@ -234,7 +251,7 @@ async function openRoulette(source) {
   rollRoulette(source);
 }
 async function rollRoulette(source) {
-  const params = new URLSearchParams({ source, count: 6 });
+  const params = new URLSearchParams({ source, count: source === "catalog" ? 12 : 10 });
   if (source === "catalog") params.set("type", dec.type);
   try {
     const { results } = await api(`/api/roulette?${params}`);
@@ -444,7 +461,28 @@ async function loadSettings() {
     $("#set-ntfy-url").value = s.ntfy_url || "https://ntfy.sh";
     $("#set-ntfy-topic").value = s.ntfy_topic || "";
   } catch (_) { /* ignore */ }
+  loadVersion();
 }
+async function loadVersion() {
+  try {
+    const v = await api("/api/version");
+    $("#app-version").textContent = v.version
+      ? `${v.version}${v.message ? " — " + v.message : ""}` : "inconnue";
+  } catch (_) { $("#app-version").textContent = "inconnue"; }
+}
+$("#btn-update").addEventListener("click", async () => {
+  if (!confirm("Mettre à jour le site maintenant ? Il redémarrera quelques secondes.")) return;
+  $("#update-status").textContent = "Mise à jour en cours…";
+  $("#btn-update").disabled = true;
+  try {
+    const r = await api("/api/update", { method: "POST" });
+    $("#update-status").textContent = "✅ " + r.message + " Rechargement automatique…";
+    setTimeout(() => location.reload(), 9000);
+  } catch (e) {
+    $("#update-status").textContent = "❌ " + e.message;
+    $("#btn-update").disabled = false;
+  }
+});
 $("#btn-save-notif").addEventListener("click", async () => {
   try {
     await api("/api/settings", { method: "POST", body: {
@@ -612,6 +650,52 @@ function renderPerson(p) {
   </div>`;
 }
 
+/* Aperçu d'un titre pas encore en bibliothèque (ne l'ajoute pas). */
+async function openPreview(tmdb, type) {
+  modal.classList.remove("hidden");
+  modalContent.innerHTML = `<div class="detail-body"><p class="muted">Chargement…</p></div>`;
+  try {
+    const t = await api(`/api/preview?tmdb_id=${tmdb}&type=${type}`);
+    modalContent.innerHTML = renderPreview(t, tmdb, type);
+  } catch (e) {
+    modalContent.innerHTML = `<div class="detail-body"><p class="muted">${esc(e.message)}</p></div>`;
+  }
+}
+
+function renderPreview(t, tmdb, type) {
+  const genres = (t.genres || []).map((g) => `<span class="tag">${esc(g)}</span>`).join("");
+  const note = t.note_tmdb ? `<span class="tag">★ ${t.note_tmdb}</span>` : "";
+  const trailer = t.bande_annonce
+    ? `<a class="btn small" target="_blank" rel="noopener"
+         href="https://www.youtube.com/watch?v=${t.bande_annonce}">▶ Bande-annonce</a>` : "";
+  const providers = (t.plateformes || []).length
+    ? `<h3 class="sub-title">Où le regarder</h3><div class="providers">
+       ${t.plateformes.map((p) => `<img title="${esc(p.nom)}" src="${p.logo}" alt="${esc(p.nom)}">`).join("")}</div>` : "";
+  const saisonsInfo = (type === "serie" && t.nb_saisons)
+    ? `<p class="muted">${t.nb_saisons} saison(s) · ${t.nb_episodes || "?"} épisodes</p>` : "";
+  return `<div class="detail-hero" style="background-image:url('${t.fond || ""}')">
+    <img class="detail-poster" src="${posterSrc(t.affiche)}" alt="">
+    <div class="detail-info">
+      <h2>${esc(t.titre)}</h2>
+      <div class="detail-tags"><span class="tag">${type === "serie" ? "Série" : "Film"}</span>
+        <span class="tag">${t.annee || "—"}</span>${note}${genres}</div>
+      <div class="detail-actions preview-add" data-tmdb="${tmdb}" data-type="${type}">
+        <span class="preview-label">Ajouter :</span>
+        <button class="btn small primary" data-addstatus="en_cours">En cours</button>
+        <button class="btn small" data-addstatus="a_voir">À voir</button>
+        <button class="btn small" data-addstatus="vu">Vu</button>
+        ${trailer}
+      </div>
+    </div>
+  </div>
+  <div class="detail-body">
+    <p class="detail-resume">${esc(t.resume) || "Pas de résumé."}</p>
+    ${t.duree ? `<p class="muted">Durée : ${t.duree} min</p>` : ""}${saisonsInfo}
+    ${providers}
+    ${castingBlock(t.casting)}
+  </div>`;
+}
+
 function renderSerie(data) {
   const t = data.titre;
   const next = data.prochain_episode;
@@ -670,6 +754,17 @@ modalContent.addEventListener("click", async (e) => {
       toast(`${r.ajoutes} titre(s) importé(s)`); closeModal();
       if ($("#page-listes").classList.contains("active")) loadListes();
     } catch (err) { toast(err.message); presetEl.disabled = false; presetEl.textContent = "Importer"; }
+    return;
+  }
+  const addEl = e.target.closest("[data-addstatus]");
+  if (addEl) {
+    const box = addEl.closest("[data-tmdb]");
+    try {
+      const r = await api("/api/library", { method: "POST", body: {
+        tmdb_id: Number(box.dataset.tmdb), type: box.dataset.type,
+        statut: addEl.dataset.addstatus } });
+      toast("Ajouté à ta bibliothèque"); refreshAll(); openDetail(r.id);
+    } catch (err) { toast(err.message); }
     return;
   }
   const posterEl = e.target.closest(".poster");
