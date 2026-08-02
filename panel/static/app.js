@@ -42,7 +42,9 @@ const posterSrc = (u) => u || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.or
 
 /* Carte d'affiche réutilisée partout (bibliothèque, carrousels, découverte). */
 function posterCard(item) {
-  const note = item.note_tmdb ? `<span class="poster-note">★ ${item.note_tmdb}</span>` : "";
+  // Note TMDB (communauté, sur 10) : à droite de la ligne d'infos, pour ne pas
+  // chevaucher le badge de statut sur les cartes étroites.
+  const note = item.note_tmdb ? `<span class="meta-note">★ ${item.note_tmdb}</span>` : "";
   const statut = item.statut
     ? `<span class="poster-badge badge-${item.statut}">${STATUTS[item.statut] || ""}</span>` : "";
   const fav = item.favori ? `<span class="poster-fav">♥</span>` : "";
@@ -51,10 +53,10 @@ function posterCard(item) {
   return `<div class="poster" data-id="${item.id || ""}" data-tmdb="${item.tmdb_id || ""}"
        data-type="${item.type || ""}">
     <img class="poster-img" loading="lazy" src="${posterSrc(item.affiche)}" alt="">
-    ${statut}${note}${fav}
+    ${statut}${fav}
     <div class="poster-body">
       <div class="poster-title">${esc(item.titre)}</div>
-      <div class="poster-meta"><span>${type}</span><span>${annee}</span></div>
+      <div class="poster-meta"><span>${type}${annee ? " · " + annee : ""}</span>${note}</div>
     </div>
   </div>`;
 }
