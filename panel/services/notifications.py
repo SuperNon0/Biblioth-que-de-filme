@@ -33,13 +33,12 @@ def _post(url, data=None, headers=None, timeout=8):
         return resp.status
 
 
-def send_discord(kind, title, message, variables=None):
+def send_discord(kind, variables=None):
     """Déclenche la notification botpanel correspondant au type d'événement.
 
-    Envoie ``id`` (slug) + ``title`` / ``message`` (raccourci d'override) + un
-    objet ``vars`` (approche générale recommandée : le template botpanel remplit
-    ses emplacements ``{{ vars.x }}``). Le botpanel actuel ignore les champs
-    inconnus ; une future version pourra utiliser ``vars``.
+    Contrat botpanel : ``POST {url}/api/notify`` avec ``{"id": slug, "vars": {…}}``.
+    Le contenu du message est le template configuré côté botpanel ; les ``vars``
+    remplissent ses emplacements ``{var:nom}``. Aucun jeton requis.
     """
     if not settings_store.get("notif_discord_enabled"):
         return False
@@ -47,8 +46,7 @@ def send_discord(kind, title, message, variables=None):
     slug = settings_store.get(SLUG_KEYS.get(kind, "")) or ""
     if not base or not slug:
         return False
-    payload = json.dumps({"id": slug, "title": title, "message": message,
-                          "vars": variables or {}}).encode()
+    payload = json.dumps({"id": slug, "vars": variables or {}}).encode()
     try:
         _post(f"{base}/api/notify", data=payload,
               headers={"Content-Type": "application/json"})
@@ -90,7 +88,7 @@ def notify(kind, title, message, variables=None):
     — approche générale réutilisable par tous les projets.
     """
     ok = []
-    if send_discord(kind, title, message, variables):
+    if send_discord(kind, variables):
         ok.append("discord")
     if send_ntfy(title, message):
         ok.append("ntfy")

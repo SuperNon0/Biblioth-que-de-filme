@@ -1,90 +1,52 @@
-# Demande d'évolution botpanel — contenu dynamique sur `/api/notify`
+# Intégration des notifications avec botpanel
 
-## Objectif (général, pour tous les projets)
-Permettre à **n'importe quelle appli externe** (cinéthèque, un moniteur, un bot
-CI…) d'injecter des **valeurs dynamiques** dans une notification botpanel, sans
-que botpanel ait à connaître chaque projet. Le *design* de la notif (couleur,
-salon, mode, boutons) reste **entièrement configuré dans botpanel** : seul le
-contenu variable vient de l'appelant.
+cinéthèque envoie ses notifications Discord **via botpanel** (aucun code Discord
+côté cinéthèque). Botpanel gère la mise en forme ; cinéthèque ne fait qu'appeler
+son API avec un **slug** et des **variables**.
 
-## Approche recommandée : notifications à **variables** (`vars`)
+Référence complète de l'API : `docs/API.md` du dépôt **botpanel**.
 
-Dans l'éditeur de notification botpanel, on écrit des emplacements avec un
-namespace `vars` (en s'appuyant sur le moteur de templates déjà présent) :
+## Ce que cinéthèque envoie
 
-> Titre : `📺 {{ vars.serie }}`
-> Message : `Nouvel épisode : {{ vars.code }} — {{ vars.titre }}`
-
-L'appelant fournit ses valeurs :
-
-```json
-POST http://<botpanel>:8080/api/notify
+```
+POST {BOTPANEL_URL}/api/notify
 Content-Type: application/json
 
-{
-  "id": "nouvel_episode",
-  "vars": { "serie": "Breaking Bad", "code": "S05E14", "titre": "Ozymandias" }
-}
+{ "id": "<slug>", "vars": { … } }
 ```
 
-botpanel substitue les `vars` dans le template, puis envoie.
+Le `BOTPANEL_URL` et les slugs se règlent dans **cinéthèque → Paramètres →
+Notifications**. cinéthèque utilise **trois slugs** (un par type d'événement) :
 
-### Pourquoi cette approche
-- **Source unique de vérité** : le design reste dans botpanel ; les projets
-  n'envoient que des données.
-- **Générique et réutilisable** : chaque projet définit ses propres variables.
-- **Cohérent** avec le moteur de templates existant (`{state:…}`, Jinja) : on
-  ajoute juste `vars` au contexte de rendu.
-- **Rétrocompatible** : pas de `vars` → emplacements vides, rien ne casse.
+| Événement | Réglage cinéthèque | Variables (`vars`) envoyées |
+|-----------|--------------------|------------------------------|
+| Nouvel épisode d'une série suivie | slug « épisode » | `serie`, `code` (ex. S05E14), `titre` (nom de l'épisode), `saison`, `episode` |
+| Film qui sort au cinéma | slug « ciné » | `titre`, `canal` (= « cinéma ») |
+| Film dispo en streaming | slug « streaming » | `titre`, `plateformes` (ex. « Netflix, Disney+ ») |
 
-## Piste d'implémentation (FastAPI)
-```python
-# app/api/routes/ha_hook.py
-class NotifyPayload(BaseModel):
-    id: str
-    vars: dict[str, str] | None = None      # valeurs dynamiques de l'appelant
-    title: str | None = None                # (optionnel) raccourci d'override
-    message: str | None = None              # (optionnel) raccourci d'override
+## Modèles de notifications à créer dans botpanel
 
-@router.post("/notify")
-async def notify(payload: NotifyPayload):
-    message = await send_notification(
-        payload.id,
-        variables=payload.vars or {},
-        overrides={"title": payload.title, "message": payload.message},
-    )
-    ...
-```
-```python
-# app/bot/notifications.py — au rendu de l'embed, ajouter `vars` au contexte
-# du moteur de templates (Jinja) :  render(text, vars=variables, state=…)
-# puis appliquer overrides["title"] / overrides["message"] s'ils sont fournis.
-```
+Crée trois notifications dans botpanel (page Notifications), avec ces slugs et
+des emplacements `{var:nom}` correspondants. Exemples :
 
-### Raffinements utiles
-- Variable manquante → vide (`{{ vars.x | default('') }}`).
-- L'éditeur peut lister les variables détectées dans une notif (`{{ vars.* }}`).
-- Logguer les `vars` reçues dans l'Historique pour déboguer.
-- `/api/notify` reste public (route machine) ; `vars` ne remplit que du texte,
-  ne change ni le salon ni le mode d'envoi.
+**Slug `cinetheque_episode`**
+> Titre : `📺 {var:serie}`
+> Message : `Nouvel épisode {var:code}{var:titre| }`
 
-## Variables envoyées par cinéthèque (à utiliser dans les templates)
+**Slug `cinetheque_cine`**
+> Titre : `🎬 {var:titre}`
+> Message : `Maintenant au {var:canal} !`
 
-cinéthèque appelle `/api/notify` avec trois slugs (configurés côté cinéthèque)
-et ces `vars` :
+**Slug `cinetheque_streaming`**
+> Titre : `📺 {var:titre}`
+> Message : `Disponible sur {var:plateformes|une plateforme}.`
 
-| Événement (slug côté cinéthèque) | `vars` fournies |
-|----------------------------------|-----------------|
-| **nouvel épisode** | `serie`, `code` (ex. S05E14), `titre` (nom de l'épisode), `saison`, `episode` |
-| **sortie ciné**    | `titre`, `canal` (= « cinéma ») |
-| **sortie streaming** | `titre`, `plateformes` (ex. « Netflix, Disney+ ») |
+*(Choisis les slugs que tu veux : reporte-les simplement dans les Paramètres de
+cinéthèque. La syntaxe `{var:nom|défaut}` fournit une valeur de repli.)*
 
-cinéthèque envoie aussi `title` et `message` déjà rédigés (raccourci) : tu peux
-soit utiliser les `vars` pour un rendu 100 % maîtrisé côté botpanel, soit
-utiliser directement `{{ title }}` / `{{ message }}`.
-
-Côté cinéthèque : **rien à changer** — elle envoie déjà `vars` + `title` +
-`message`. Dès que botpanel les exploite, les notifs Discord afficheront le
-contenu exact automatiquement.
-
-Merci ! 🙏
+## Rappels
+- Route `/api/notify` **sans authentification** → garde botpanel sur le réseau
+  local ou derrière un tunnel/VPN.
+- `vars` est optionnel côté botpanel ; les champs inconnus sont ignorés.
+- **ntfy** (autre canal, réglé dans cinéthèque) reçoit déjà le **texte complet**
+  dynamique, indépendamment de botpanel.
