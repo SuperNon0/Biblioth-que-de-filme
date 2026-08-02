@@ -83,17 +83,21 @@ def change_password():
     return jsonify(ok=True)
 
 
+def _git(src, *args):
+    """Commande git tolérante à la propriété du dépôt (site non-root, dépôt root)."""
+    return subprocess.check_output(
+        ["git", "-c", f"safe.directory={src}", "-C", src, *args],
+        text=True, timeout=5, stderr=subprocess.DEVNULL).strip()
+
+
 @bp.get("/version")
 @auth.login_required
 def version():
     """Version déployée : commit court + message du dernier commit du dépôt source."""
     src = cfg().get("source_dir", "/opt/cinetheque-src")
     try:
-        sha = subprocess.check_output(["git", "-C", src, "rev-parse", "--short", "HEAD"],
-                                      text=True, timeout=5).strip()
-        msg = subprocess.check_output(["git", "-C", src, "log", "-1", "--pretty=%s"],
-                                      text=True, timeout=5).strip()
-        return jsonify(version=sha, message=msg)
+        return jsonify(version=_git(src, "rev-parse", "--short", "HEAD"),
+                       message=_git(src, "log", "-1", "--pretty=%s"))
     except (subprocess.SubprocessError, OSError):
         return jsonify(version=None, message=None)
 
