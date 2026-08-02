@@ -6,6 +6,12 @@
   <title>cinéthèque</title>
   <meta name="theme-color" content="#0e0f11">
   <link rel="icon" href="{{ asset('favicon.svg') }}" type="image/svg+xml">
+  <link rel="manifest" href="{{ asset('manifest.webmanifest') }}">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="cinéthèque">
+  <link rel="apple-touch-icon" href="{{ asset('favicon.svg') }}">
   <link rel="stylesheet" href="{{ asset('fonts.css') }}">
   <link rel="stylesheet" href="{{ asset('style.css') }}">
 </head>
@@ -89,6 +95,11 @@
           <button class="btn small primary filter-done">Appliquer</button>
         </div>
       </div>
+      <div class="sub-bar">
+        <input id="lib-search" class="search-inline" type="search"
+               placeholder="Rechercher dans ma bibliothèque…" autocomplete="off">
+        <button id="lib-roulette" class="btn small">🎲 Que regarder ?</button>
+      </div>
       <div id="lib-grid" class="grid"></div>
     </section>
 
@@ -113,6 +124,10 @@
           <button class="btn small primary filter-done">Appliquer</button>
         </div>
       </div>
+      <div class="sub-bar">
+        <button id="dec-roulette" class="btn small">🎲 Roulette aléatoire</button>
+        <span class="muted">Pioche des titres au hasard dans tout le catalogue.</span>
+      </div>
       <div id="dec-grid" class="grid"></div>
       <div class="pager">
         <button id="dec-prev" class="btn small">← Précédent</button>
@@ -133,7 +148,8 @@
         <h2>Mes listes</h2>
         <div class="toolbar">
           <button id="btn-liste-new" class="btn small">+ Nouvelle liste</button>
-          <button id="btn-liste-import" class="btn small">↧ Importer une liste</button>
+          <button id="btn-liste-presets" class="btn small">🎬 Listes prêtes</button>
+          <button id="btn-liste-import" class="btn small">↧ Importer (JSON)</button>
         </div>
       </div>
       <div id="listes-grid" class="cards-list"></div>
@@ -189,6 +205,39 @@
                  placeholder="Email Google autorisé (vide = tout email vérifié)">
           <button id="btn-save-cf" class="btn primary small">Enregistrer</button>
           <span id="cf-status" class="muted"></span>
+        </div>
+
+        <div class="card">
+          <h3 class="sub-title">Notifications</h3>
+          <p class="muted">Être prévenu des nouveaux épisodes de tes séries et des
+            sorties de films (ciné / streaming).</p>
+
+          <label class="switch-row">
+            <input type="checkbox" id="set-discord-enabled">
+            <span>Discord (via botpanel)</span>
+          </label>
+          <input id="set-botpanel-url" class="input" type="text"
+                 placeholder="URL botpanel (ex. http://192.168.1.x:8080)">
+          <div class="row-inline">
+            <input id="set-slug-episode" class="input small-input" type="text" placeholder="slug épisode">
+            <input id="set-slug-cine" class="input small-input" type="text" placeholder="slug ciné">
+            <input id="set-slug-streaming" class="input small-input" type="text" placeholder="slug streaming">
+          </div>
+
+          <label class="switch-row">
+            <input type="checkbox" id="set-ntfy-enabled">
+            <span>ntfy (push sur le téléphone)</span>
+          </label>
+          <div class="row-inline">
+            <input id="set-ntfy-url" class="input small-input" type="text" placeholder="Serveur ntfy">
+            <input id="set-ntfy-topic" class="input small-input" type="text" placeholder="Sujet ntfy">
+          </div>
+
+          <div class="row-inline">
+            <button id="btn-save-notif" class="btn primary small">Enregistrer</button>
+            <button id="btn-test-notif" class="btn small">Tester l'envoi</button>
+          </div>
+          <span id="notif-status" class="muted"></span>
         </div>
 
         <div class="card">

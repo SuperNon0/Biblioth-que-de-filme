@@ -1,0 +1,19 @@
+{
+  "name": "cinéthèque",
+  "short_name": "cinéthèque",
+  "description": "Ma bibliothèque de films et séries",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0e0f11",
+  "theme_color": "#0e0f11",
+  "icons": [
+    {
+      "src": "/static/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -166,10 +166,39 @@ class TMDB:
                 return c.get("name")
         return None
 
-    def _cast(self, d, limit=8):
-        return [{"nom": c.get("name"),
+    def _cast(self, d, limit=15):
+        return [{"id": c.get("id"), "nom": c.get("name"),
+                 "personnage": c.get("character"),
                  "photo": self.image_url(c.get("profile_path"), "w185")}
                 for c in d.get("credits", {}).get("cast", [])[:limit]]
+
+    def person(self, person_id):
+        """Fiche d'une personne : infos + filmographie (films et séries)."""
+        d = self._get(f"/person/{person_id}",
+                      append_to_response="combined_credits")
+        seen, films = set(), []
+        for c in d.get("combined_credits", {}).get("cast", []):
+            media = c.get("media_type")
+            if media not in ("movie", "tv"):
+                continue
+            key = (c.get("id"), media)
+            if key in seen:
+                continue
+            seen.add(key)
+            brief = self._brief(c, media)
+            brief["personnage"] = c.get("character")
+            films.append(brief)
+        films.sort(key=lambda x: (x.get("annee") or 0), reverse=True)
+        return {
+            "id": d.get("id"),
+            "nom": d.get("name"),
+            "bio": d.get("biography") or "",
+            "naissance": d.get("birthday"),
+            "lieu": d.get("place_of_birth"),
+            "metier": d.get("known_for_department"),
+            "photo": self.image_url(d.get("profile_path"), "w185"),
+            "films": films[:40],
+        }
 
     def _movie_detail(self, d):
         brief = self._brief(d, "movie")

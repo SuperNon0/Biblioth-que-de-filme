@@ -11,10 +11,34 @@ from flask import Blueprint, jsonify, request
 import auth
 import db
 from context import get_tmdb
-from services import sync
+from services import presets, sync
 from tmdb import TMDBError
 
 bp = Blueprint("lists", __name__, url_prefix="/api")
+
+
+def _import_items(nom, entrees):
+    """Crée une liste et y range des entrées {tmdb_id, type} dans l'ordre.
+
+    Chaque titre est récupéré depuis TMDB (validé) puis ajouté à la biblio en
+    « à voir ». Renvoie (liste_id, nombre ajouté).
+    """
+    liste_id = db.run("INSERT INTO listes (nom, cree) VALUES (?, ?)",
+                      (nom, int(time.time())))
+    tmdb = get_tmdb()
+    ajoutes = 0
+    for rang, e in enumerate(entrees):
+        typ = e.get("type", "film")
+        try:
+            detail = (tmdb.movie(e["tmdb_id"]) if typ == "film"
+                      else tmdb.tv(e["tmdb_id"]))
+        except (TMDBError, KeyError):
+            continue
+        titre_id = sync.upsert_titre(detail, "a_voir")
+        db.run("INSERT OR IGNORE INTO liste_items (liste_id, titre_id, rang, ajoute) "
+               "VALUES (?,?,?,?)", (liste_id, titre_id, rang, int(time.time())))
+        ajoutes += 1
+    return liste_id, ajoutes
 
 
 def _liste(row):
@@ -93,29 +117,30 @@ def remove_item(liste_id, titre_id):
 @bp.post("/lists/import")
 @auth.login_required
 def import_list():
-    """Crée une liste à partir d'entrées {tmdb_id, type}, dans l'ordre fourni.
-
-    Chaque titre est d'abord ajouté à la bibliothèque (statut « à voir »),
-    puis rangé dans la nouvelle liste selon l'ordre reçu.
-    """
+    """Crée une liste à partir d'entrées {tmdb_id, type}, dans l'ordre fourni."""
     data = request.get_json(silent=True) or {}
     nom = (data.get("nom") or "Liste importée").strip()
     entrees = data.get("items") or []
     if not entrees:
         return jsonify(error="Aucun élément à importer."), 400
-    liste_id = db.run("INSERT INTO listes (nom, cree) VALUES (?, ?)",
-                      (nom, int(time.time())))
-    tmdb = get_tmdb()
-    ajoutes = 0
-    for rang, e in enumerate(entrees):
-        typ = e.get("type", "film")
-        try:
-            detail = (tmdb.movie(e["tmdb_id"]) if typ == "film"
-                      else tmdb.tv(e["tmdb_id"]))
-        except (TMDBError, KeyError):
-            continue
-        titre_id = sync.upsert_titre(detail, "a_voir")
-        db.run("INSERT OR IGNORE INTO liste_items (liste_id, titre_id, rang, ajoute) "
-               "VALUES (?,?,?,?)", (liste_id, titre_id, rang, int(time.time())))
-        ajoutes += 1
+    liste_id, ajoutes = _import_items(nom, entrees)
+    return jsonify(ok=True, id=liste_id, ajoutes=ajoutes)
+
+
+@bp.get("/lists/presets")
+@auth.login_required
+def presets_list():
+    """Listes toutes prêtes disponibles (Marvel, Star Wars…)."""
+    return jsonify(presets=presets.liste())
+
+
+@bp.post("/lists/import-preset")
+@auth.login_required
+def import_preset():
+    """Importe une liste toute prête par sa clé (ex. « marvel_films »)."""
+    cle = (request.get_json(silent=True) or {}).get("cle")
+    preset = presets.PRESETS.get(cle)
+    if not preset:
+        return jsonify(error="Liste prête inconnue."), 404
+    liste_id, ajoutes = _import_items(preset["nom"], preset["items"])
     return jsonify(ok=True, id=liste_id, ajoutes=ajoutes)

@@ -61,14 +61,18 @@ def create_app():
             resp.headers["Cache-Control"] = "no-store"
         return resp
 
+    # Planificateur de notifications (nouveaux épisodes, sorties) en arrière-plan.
+    from services import scheduler
+    scheduler.start(app)
+
     return app
 
 
 def _register_blueprints(app):
-    from routes import (alerts, discover, library, lists, pages, settings,
-                        stats, titles)
-    for module in (pages, library, titles, discover, lists, alerts, stats,
-                   settings):
+    from routes import (alerts, discover, library, lists, pages, people,
+                        settings, stats, titles)
+    for module in (pages, library, titles, discover, lists, alerts, people,
+                   stats, settings):
         app.register_blueprint(module.bp)
 
 

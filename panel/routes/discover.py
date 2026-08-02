@@ -5,6 +5,8 @@
 - /api/discover : catalogue filtrable et paginé (films/séries).
 - /api/upcoming : films à venir + gestion des alertes de sortie.
 """
+import random
+
 import db
 from flask import Blueprint, jsonify, request
 
@@ -104,6 +106,37 @@ def discover():
     except TMDBError as exc:
         return jsonify(error=str(exc)), 502
     return jsonify(data)
+
+
+@bp.get("/roulette")
+@auth.login_required
+def roulette():
+    """Tire au sort des titres : dans la liste « À voir » ou dans le catalogue.
+
+    - source=library : pioche dans les titres marqués « À voir ».
+    - source=catalog : pioche au hasard dans le catalogue TMDB.
+    """
+    source = request.args.get("source", "library")
+    try:
+        count = min(max(int(request.args.get("count", 6) or 6), 1), 8)
+    except ValueError:
+        count = 6
+    if source == "library":
+        rows = db.q(
+            """SELECT id, tmdb_id, type, titre, affiche, annee, note_tmdb, statut
+               FROM titres WHERE statut = 'a_voir'"""
+        )
+        random.shuffle(rows)
+        return jsonify(results=rows[:count])
+    media = "tv" if request.args.get("type") == "serie" else "movie"
+    try:
+        data = get_tmdb().discover(media=media, page=random.randint(1, 30),
+                                   sort_by="popularity.desc")
+    except TMDBError as exc:
+        return jsonify(error=str(exc)), 502
+    items = data.get("results", [])
+    random.shuffle(items)
+    return jsonify(results=items[:count])
 
 
 @bp.get("/genres")

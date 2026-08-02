@@ -5,7 +5,7 @@ oublié) et la route qui sert les affiches mises en cache localement.
 """
 from pathlib import Path
 
-from flask import (Blueprint, redirect, render_template, request,
+from flask import (Blueprint, current_app, redirect, render_template, request,
                    send_from_directory, session, url_for)
 
 import auth
@@ -54,6 +54,15 @@ def forgot_password():
 def logout():
     session.clear()
     return redirect(url_for("pages.login"))
+
+
+@bp.get("/sw.js")
+def service_worker():
+    """Sert le service worker à la racine (portée « / » pour la PWA)."""
+    resp = send_from_directory(current_app.static_folder, "sw.js")
+    resp.headers["Content-Type"] = "application/javascript"
+    resp.headers["Service-Worker-Allowed"] = "/"
+    return resp
 
 
 @bp.get("/media/<path:name>")
