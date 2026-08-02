@@ -1,0 +1,16 @@
+[Unit]
+Description=cinéthèque — bibliothèque de films et séries
+After=network.target
+
+[Service]
+Type=simple
+User=cinetheque
+Group=cinetheque
+WorkingDirectory=/opt/cinetheque/panel
+Environment=PANEL_CONFIG=/etc/cinetheque/config.json
+ExecStart=/usr/bin/python3 /opt/cinetheque/panel/app.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
