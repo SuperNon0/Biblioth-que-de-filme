@@ -78,7 +78,10 @@ def _check_episodes():
             code = f"S{e['saison']:02d}E{e['numero']:02d}"
             titre = f"{s['titre']} — nouvel épisode"
             msg = f"📺 {s['titre']} {code}" + (f" — {e['nom']}" if e["nom"] else "")
-            notifications.notify("episode", titre, msg)
+            notifications.notify("episode", titre, msg, {
+                "serie": s["titre"], "code": code, "titre": e["nom"] or "",
+                "saison": str(e["saison"]), "episode": str(e["numero"]),
+            })
             db.run("UPDATE episodes SET notifie=1 WHERE id=?", (e["id"],))
 
 
@@ -94,7 +97,8 @@ def _check_alertes():
         if a["canal"] == "cine":
             if a["date_sortie"] and a["date_sortie"] <= today:
                 notifications.notify("cine", f"{a['titre']} — au cinéma",
-                                     f"🎬 {a['titre']} est maintenant au cinéma !")
+                                     f"🎬 {a['titre']} est maintenant au cinéma !",
+                                     {"titre": a["titre"], "canal": "cinéma"})
                 db.run("UPDATE alertes SET vue=1 WHERE id=?", (a["id"],))
         elif a["canal"] == "streaming" and a["tmdb_id"]:
             try:
@@ -106,5 +110,6 @@ def _check_alertes():
             if plateformes:
                 noms = ", ".join(p["nom"] for p in plateformes[:3])
                 notifications.notify("streaming", f"{a['titre']} — en streaming",
-                                     f"📺 {a['titre']} est dispo sur {noms}.")
+                                     f"📺 {a['titre']} est dispo sur {noms}.",
+                                     {"titre": a["titre"], "plateformes": noms})
                 db.run("UPDATE alertes SET vue=1 WHERE id=?", (a["id"],))

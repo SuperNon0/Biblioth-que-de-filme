@@ -33,15 +33,22 @@ def _post(url, data=None, headers=None, timeout=8):
         return resp.status
 
 
-def send_discord(kind, title, message):
-    """Déclenche la notification botpanel correspondant au type d'événement."""
+def send_discord(kind, title, message, variables=None):
+    """Déclenche la notification botpanel correspondant au type d'événement.
+
+    Envoie ``id`` (slug) + ``title`` / ``message`` (raccourci d'override) + un
+    objet ``vars`` (approche générale recommandée : le template botpanel remplit
+    ses emplacements ``{{ vars.x }}``). Le botpanel actuel ignore les champs
+    inconnus ; une future version pourra utiliser ``vars``.
+    """
     if not settings_store.get("notif_discord_enabled"):
         return False
     base = (settings_store.get("botpanel_url") or "").rstrip("/")
     slug = settings_store.get(SLUG_KEYS.get(kind, "")) or ""
     if not base or not slug:
         return False
-    payload = json.dumps({"id": slug, "title": title, "message": message}).encode()
+    payload = json.dumps({"id": slug, "title": title, "message": message,
+                          "vars": variables or {}}).encode()
     try:
         _post(f"{base}/api/notify", data=payload,
               headers={"Content-Type": "application/json"})
@@ -76,10 +83,14 @@ def send_ntfy(title, message):
         return False
 
 
-def notify(kind, title, message):
-    """Envoie l'événement sur tous les canaux activés. Renvoie les canaux OK."""
+def notify(kind, title, message, variables=None):
+    """Envoie l'événement sur tous les canaux activés. Renvoie les canaux OK.
+
+    ``variables`` : dict de valeurs dynamiques (namespace ``vars`` côté botpanel)
+    — approche générale réutilisable par tous les projets.
+    """
     ok = []
-    if send_discord(kind, title, message):
+    if send_discord(kind, title, message, variables):
         ok.append("discord")
     if send_ntfy(title, message):
         ok.append("ntfy")
@@ -89,4 +100,5 @@ def notify(kind, title, message):
 def test():
     """Envoie une notification de test sur les canaux activés."""
     return notify("episode", "cinéthèque — test",
-                  "🎬 Notification de test depuis cinéthèque. Tout fonctionne !")
+                  "🎬 Notification de test depuis cinéthèque. Tout fonctionne !",
+                  {"type": "test"})
