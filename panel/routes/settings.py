@@ -31,9 +31,17 @@ def get_settings():
 def set_settings():
     data = request.get_json(silent=True) or {}
     values = {}
-    for key in ("tmdb_api_key", "tmdb_region", "tmdb_language", "cf_access_email"):
-        if key in data and str(data[key]).strip() != "":
+    # Clé TMDB : on ne l'écrase que si une nouvelle valeur non vide est fournie.
+    if str(data.get("tmdb_api_key", "")).strip():
+        values["tmdb_api_key"] = str(data["tmdb_api_key"]).strip()
+    for key in ("tmdb_region", "tmdb_language"):
+        if key in data and str(data[key]).strip():
             values[key] = str(data[key]).strip()
+    # Auto-login Cloudflare : toggle (bool) + email autorisé (peut être vidé).
+    if "cf_sso_enabled" in data:
+        values["cf_sso_enabled"] = bool(data["cf_sso_enabled"])
+    if "cf_access_email" in data:
+        values["cf_access_email"] = str(data["cf_access_email"]).strip()
     settings_store.update(values)
     return jsonify(ok=True, **settings_store.all_public())
 

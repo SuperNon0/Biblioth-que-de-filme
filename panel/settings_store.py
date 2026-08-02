@@ -20,6 +20,9 @@ EDITABLES = {
     "tmdb_api_key": "",
     "tmdb_language": "fr-FR",
     "tmdb_region": "FR",
+    # Auto-login Cloudflare Access : activé par défaut (sans effet hors Cloudflare,
+    # car l'en-tête est alors absent). Désactivable pour toujours exiger le MDP.
+    "cf_sso_enabled": True,
     "cf_access_email": "",
 }
 
@@ -50,6 +53,7 @@ def all_public():
         "tmdb_configuree": bool(get("tmdb_api_key")),
         "tmdb_language": get("tmdb_language"),
         "tmdb_region": get("tmdb_region"),
+        "cf_sso_enabled": bool(get("cf_sso_enabled")),
         "cf_access_email": get("cf_access_email"),
     }
 

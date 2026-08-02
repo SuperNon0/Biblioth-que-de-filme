@@ -288,6 +288,10 @@ main { padding: 20px; max-width: 1400px; margin: 0 auto; }
                  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
 .card { background: var(--bg-card); border: 1px solid var(--border);
         border-radius: var(--radius); padding: 18px; }
+.switch-row { display: flex; align-items: center; gap: 10px; margin: 10px 0;
+              font-size: 0.8rem; cursor: pointer; }
+.switch-row input { width: 18px; height: 18px; accent-color: var(--accent);
+                    cursor: pointer; }
 
 /* ------------------------------------------------------------------ toast */
 .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);

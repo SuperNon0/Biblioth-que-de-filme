@@ -70,14 +70,18 @@ def cloudflare_sso():
     """Connexion auto si la requête passe par Cloudflare Access (en-tête signé).
 
     En accès LAN direct, l'en-tête est absent → le mot de passe reste exigé.
-    Un email autorisé peut être configuré pour n'accepter que le tien.
+    Cette protection est activable/désactivable dans les Paramètres
+    (``cf_sso_enabled``) ; un email autorisé peut aussi être exigé.
     """
+    import settings_store
     if session.get("logged_in"):
         return
+    if not settings_store.get("cf_sso_enabled"):
+        return  # auto-login désactivé : mot de passe toujours requis
     email = request.headers.get("Cf-Access-Authenticated-User-Email", "").strip()
     if not email:
         return
-    allowed = (current_app.config["APP_CONFIG"].get("cf_access_email") or "").strip().lower()
+    allowed = (settings_store.get("cf_access_email") or "").strip().lower()
     if allowed and email.lower() != allowed:
         return
     session.update(logged_in=True, user="admin", via="cloudflare")

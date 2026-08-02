@@ -171,6 +171,22 @@
         </div>
 
         <div class="card">
+          <h3 class="sub-title">Connexion automatique (Cloudflare)</h3>
+          <p class="muted">Quand tu accèdes au site <b>via Cloudflare Access</b>
+            (login Google), tu es connecté automatiquement. En accès direct par
+            l'<b>IP locale</b>, le mot de passe reste exigé. Tu peux désactiver
+            entièrement cette connexion auto ci-dessous.</p>
+          <label class="switch-row">
+            <input type="checkbox" id="set-cf-enabled">
+            <span>Activer la connexion automatique Cloudflare</span>
+          </label>
+          <input id="set-cf-email" class="input" type="email"
+                 placeholder="Email Google autorisé (vide = tout email vérifié)">
+          <button id="btn-save-cf" class="btn primary small">Enregistrer</button>
+          <span id="cf-status" class="muted"></span>
+        </div>
+
+        <div class="card">
           <h3 class="sub-title">Sauvegarde</h3>
           <p class="muted">Exporte toutes tes données dans un fichier de secours,
             ou restaure une sauvegarde.</p>

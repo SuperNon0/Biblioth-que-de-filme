@@ -340,8 +340,20 @@ async function loadSettings() {
     const s = await api("/api/settings");
     $("#set-region").value = s.tmdb_region || "FR";
     $("#tmdb-status").textContent = s.tmdb_configuree ? "✅ Clé configurée" : "⚠️ Non configurée";
+    $("#set-cf-enabled").checked = !!s.cf_sso_enabled;
+    $("#set-cf-email").value = s.cf_access_email || "";
   } catch (_) { /* ignore */ }
 }
+$("#btn-save-cf").addEventListener("click", async () => {
+  try {
+    await api("/api/settings", { method: "POST", body: {
+      cf_sso_enabled: $("#set-cf-enabled").checked,
+      cf_access_email: $("#set-cf-email").value.trim(),
+    } });
+    $("#cf-status").textContent = "✅ Enregistré.";
+    toast("Réglage de connexion enregistré");
+  } catch (e) { $("#cf-status").textContent = "❌ " + e.message; }
+});
 $("#btn-save-tmdb").addEventListener("click", async () => {
   const body = { tmdb_region: $("#set-region").value };
   if ($("#set-tmdb-key").value.trim()) body.tmdb_api_key = $("#set-tmdb-key").value.trim();
