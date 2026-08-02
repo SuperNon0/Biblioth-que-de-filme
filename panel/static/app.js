@@ -80,18 +80,48 @@ function bindGrid(container) {
 }
 
 /* ------------------------------------------------------------ navigation */
+const MAIN_TABS = ["suggestions", "bibliotheque", "decouverte", "futur"];
+const moreSheet = $("#more-sheet");
+const filterBackdrop = $("#filter-backdrop");
+
+function closeSheet() { moreSheet && moreSheet.classList.add("hidden"); }
+function closeToolbars() {
+  $$(".toolbar.open").forEach((t) => t.classList.remove("open"));
+  filterBackdrop && filterBackdrop.classList.add("hidden");
+}
+
 function showTab(name) {
   $$("#main-tabs .tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === name));
   $$(".page").forEach((p) => p.classList.toggle("active", p.id === `page-${name}`));
+  // synchronise la barre du bas (mobile) + état du bouton « Plus »
+  $$(".bnav[data-tab]").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
+  const more = $("#bnav-more");
+  if (more) more.classList.toggle("active", !MAIN_TABS.includes(name));
+  closeSheet(); closeToolbars();
+  window.scrollTo(0, 0);
   LOADERS[name] && LOADERS[name]();
 }
 
 document.addEventListener("click", (e) => {
   const tab = e.target.closest("[data-tab]");
-  if (tab && tab.classList.contains("tab")) return showTab(tab.dataset.tab);
+  if (tab) return showTab(tab.dataset.tab);
   const goto = e.target.closest("[data-goto]");
   if (goto) { e.preventDefault(); showTab(goto.dataset.goto); }
 });
+
+/* Barre du bas : bouton « Plus » → panneau ; filtres → feuille du bas. */
+$("#bnav-more").addEventListener("click", () => moreSheet.classList.toggle("hidden"));
+document.addEventListener("click", (e) => {
+  if (e.target.closest("[data-close-sheet]")) closeSheet();
+  const fb = e.target.closest(".filter-btn");
+  if (fb) {
+    const tb = document.getElementById(fb.dataset.toolbar);
+    if (tb) { tb.classList.add("open"); filterBackdrop.classList.remove("hidden"); }
+    return;
+  }
+  if (e.target.closest(".filter-done")) closeToolbars();
+});
+filterBackdrop.addEventListener("click", closeToolbars);
 
 /* --------------------------------------------------------------- recherche */
 let searchTimer;

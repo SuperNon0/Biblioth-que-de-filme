@@ -64,7 +64,8 @@
     <section id="page-bibliotheque" class="page">
       <div class="page-head">
         <h2>Ma bibliothèque</h2>
-        <div class="toolbar">
+        <button class="btn small filter-btn" data-toolbar="lib-toolbar">⚙ Filtres</button>
+        <div class="toolbar" id="lib-toolbar">
           <select id="lib-statut" class="select">
             <option value="">Tous les statuts</option>
             <option value="en_cours">En cours</option>
@@ -85,6 +86,7 @@
             <option value="note">Note</option>
           </select>
           <button id="btn-manuel" class="btn small">+ Ajout manuel</button>
+          <button class="btn small primary filter-done">Appliquer</button>
         </div>
       </div>
       <div id="lib-grid" class="grid"></div>
@@ -94,7 +96,8 @@
     <section id="page-decouverte" class="page">
       <div class="page-head">
         <h2>Découverte</h2>
-        <div class="toolbar">
+        <button class="btn small filter-btn" data-toolbar="dec-toolbar">⚙ Filtres</button>
+        <div class="toolbar" id="dec-toolbar">
           <div class="chips" data-filter="decouverte">
             <button class="chip active" data-type="film">Films</button>
             <button class="chip" data-type="serie">Séries</button>
@@ -107,6 +110,7 @@
           <select id="dec-genre" class="select"><option value="">Tous genres</option></select>
           <input id="dec-annee" class="select" type="number" placeholder="Année" min="1900" max="2100">
           <input id="dec-pays" class="select" type="text" placeholder="Pays (FR, US…)" maxlength="2">
+          <button class="btn small primary filter-done">Appliquer</button>
         </div>
       </div>
       <div id="dec-grid" class="grid"></div>
@@ -295,6 +299,30 @@ sudo bash /opt/cinetheque/scripts/restore.sh cinetheque-AAAAMMJJ-HHMMSS.tar.gz</
       </details>
     </section>
   </main>
+
+  <!-- Barre de navigation basse (mobile) -->
+  <nav class="bottom-nav" id="bottom-nav">
+    <button class="bnav active" data-tab="suggestions"><span class="bi">🏠</span><span>Accueil</span></button>
+    <button class="bnav" data-tab="bibliotheque"><span class="bi">🎬</span><span>Biblio</span></button>
+    <button class="bnav" data-tab="decouverte"><span class="bi">🧭</span><span>Découvrir</span></button>
+    <button class="bnav" data-tab="futur"><span class="bi">🔔</span><span>Futur</span></button>
+    <button class="bnav" id="bnav-more"><span class="bi">⋯</span><span>Plus</span></button>
+  </nav>
+
+  <!-- Panneau « Plus » (mobile) -->
+  <div class="sheet hidden" id="more-sheet">
+    <div class="sheet-backdrop" data-close-sheet></div>
+    <div class="sheet-card">
+      <div class="sheet-handle"></div>
+      <button class="sheet-item" data-tab="listes">📃 Listes</button>
+      <button class="sheet-item" data-tab="profil">📊 Profil &amp; statistiques</button>
+      <button class="sheet-item" data-tab="parametres">⚙️ Paramètres</button>
+      <button class="sheet-item" data-tab="aide">❓ Aide &amp; support</button>
+    </div>
+  </div>
+
+  <!-- Fond semi-transparent derrière le panneau de filtres (mobile) -->
+  <div class="filter-backdrop hidden" id="filter-backdrop"></div>
 
   <footer class="footer">
     <span>cinéthèque · ma bibliothèque de films &amp; séries</span>

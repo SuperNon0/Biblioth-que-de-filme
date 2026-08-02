@@ -347,6 +347,34 @@ main { padding: 20px; max-width: 1400px; margin: 0 auto; }
               padding: 8px; border-radius: 8px; font-size: 0.72rem; margin-top: 4px;
               overflow-x: auto; }
 
+/* ------------------------------------------- navigation basse (mobile) */
+.bottom-nav { display: none; }
+.filter-btn, .filter-done { display: none; }
+.bnav { background: none; border: none; color: var(--muted); font-family: var(--font);
+        display: flex; flex-direction: column; align-items: center; gap: 2px;
+        font-size: 0.6rem; padding: 4px 6px; cursor: pointer; flex: 1; }
+.bnav .bi { font-size: 1.15rem; line-height: 1; }
+.bnav.active { color: var(--accent); }
+
+/* panneau « Plus » et panneau de filtres (feuilles du bas) */
+.sheet { position: fixed; inset: 0; z-index: 75; display: flex; align-items: flex-end; }
+.sheet.hidden { display: none; }
+.sheet-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.6);
+                  backdrop-filter: blur(2px); }
+.sheet-card { position: relative; z-index: 2; width: 100%; background: var(--bg-panel);
+              border-top: 1px solid var(--border); border-radius: 18px 18px 0 0;
+              padding: 10px 12px calc(12px + env(safe-area-inset-bottom));
+              display: flex; flex-direction: column; gap: 2px; box-shadow: var(--shadow); }
+.sheet-handle { width: 40px; height: 4px; border-radius: 999px; background: var(--border);
+                margin: 4px auto 10px; }
+.sheet-item { text-align: left; background: none; border: none; color: var(--text);
+              font-family: var(--font); font-size: 0.95rem; padding: 15px 12px;
+              border-radius: 10px; cursor: pointer; }
+.sheet-item:hover, .sheet-item.active { background: var(--bg-card); color: var(--accent); }
+.filter-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+                   backdrop-filter: blur(2px); z-index: 65; }
+.filter-backdrop.hidden { display: none; }
+
 /* ------------------------------------------------------------ responsive */
 @media (max-width: 680px) {
   .topbar { flex-wrap: wrap; }
@@ -356,5 +384,25 @@ main { padding: 20px; max-width: 1400px; margin: 0 auto; }
   .detail-poster { width: 110px; }
   .episode img { width: 90px; }
   .bar-label { width: 90px; }
-  main { padding: 14px; }
+  main { padding: 14px 14px 84px; }        /* place pour la barre du bas */
+
+  /* onglets du haut cachés → navigation en bas */
+  .tabs { display: none; }
+  .bottom-nav { display: flex; justify-content: space-around; align-items: center;
+                position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
+                background: var(--bg-panel); border-top: 1px solid var(--border);
+                padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); }
+
+  /* filtres : cachés en ligne, ouverts en feuille du bas via « Filtres » */
+  .filter-btn { display: inline-flex; }
+  .toolbar { display: none; }
+  .toolbar.open { display: flex; flex-direction: column; align-items: stretch;
+                  gap: 12px; position: fixed; left: 0; right: 0; bottom: 0; z-index: 70;
+                  background: var(--bg-panel); border-top: 1px solid var(--border);
+                  border-radius: 18px 18px 0 0; padding: 20px;
+                  padding-bottom: calc(20px + env(safe-area-inset-bottom));
+                  max-height: 80vh; overflow-y: auto; box-shadow: var(--shadow); }
+  .toolbar.open .select, .toolbar.open .input, .toolbar.open .chips { width: 100%; }
+  .toolbar.open .chips { justify-content: center; }
+  .filter-done { display: block; }
 }
