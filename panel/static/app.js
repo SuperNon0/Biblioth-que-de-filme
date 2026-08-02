@@ -50,6 +50,13 @@ function posterCard(item) {
   const fav = item.favori ? `<span class="poster-fav">♥</span>` : "";
   const annee = item.annee || "";
   const type = item.type === "serie" ? "Série" : "Film";
+  // Barre de progression pour les séries (épisodes vus / total).
+  let prog = "";
+  if (item.total_ep) {
+    const pct = Math.round((item.vus_ep || 0) / item.total_ep * 100);
+    prog = `<div class="poster-prog" title="${item.vus_ep || 0}/${item.total_ep} épisodes">
+      <span style="width:${pct}%"></span></div>`;
+  }
   return `<div class="poster" data-id="${item.id || ""}" data-tmdb="${item.tmdb_id || ""}"
        data-type="${item.type || ""}">
     <img class="poster-img" loading="lazy" src="${posterSrc(item.affiche)}" alt="">
@@ -57,6 +64,7 @@ function posterCard(item) {
     <div class="poster-body">
       <div class="poster-title">${esc(item.titre)}</div>
       <div class="poster-meta"><span>${type}${annee ? " · " + annee : ""}</span>${note}</div>
+      ${prog}
     </div>
   </div>`;
 }
@@ -197,6 +205,7 @@ async function loadLibrary() {
   const params = new URLSearchParams({
     statut: $("#lib-statut").value, type: $("#lib-type").value,
     genre: $("#lib-genre").value, tri: $("#lib-tri").value,
+    q: $("#lib-search").value.trim(),
   });
   grid.innerHTML = `<p class="muted">Chargement…</p>`;
   try {
@@ -209,7 +218,41 @@ async function loadLibrary() {
 }
 ["lib-statut", "lib-type", "lib-genre", "lib-tri"].forEach((id) =>
   $("#" + id).addEventListener("change", loadLibrary));
+let libSearchTimer;
+$("#lib-search").addEventListener("input", () => {
+  clearTimeout(libSearchTimer);
+  libSearchTimer = setTimeout(loadLibrary, 300);
+});
+$("#lib-roulette").addEventListener("click", () => openRoulette("library"));
 bindGrid($("#lib-grid"));
+
+/* -------------------------------------------------- roulette « que regarder » */
+async function openRoulette(source) {
+  modal.classList.remove("hidden");
+  modalContent.innerHTML = `<div class="detail-body"><h2>🎲 Que regarder ?</h2>
+    <p class="muted">Tirage en cours…</p></div>`;
+  rollRoulette(source);
+}
+async function rollRoulette(source) {
+  const params = new URLSearchParams({ source, count: 6 });
+  if (source === "catalog") params.set("type", dec.type);
+  try {
+    const { results } = await api(`/api/roulette?${params}`);
+    const vide = source === "library"
+      ? "Ta liste « À voir » est vide — ajoute des titres d'abord."
+      : "Aucun résultat.";
+    const intro = source === "library"
+      ? "Piochés dans ta liste « À voir » :" : "Piochés au hasard dans le catalogue :";
+    modalContent.innerHTML = `<div class="detail-body"><h2>🎲 Que regarder ?</h2>
+      ${(!results || !results.length) ? `<p class="muted">${vide}</p>`
+        : `<p class="muted">${intro}</p><div class="grid">${results.map(posterCard).join("")}</div>
+           <div class="row-inline"><button class="btn primary" data-reroll="${source}">🎲 Relancer</button></div>`}
+    </div>`;
+  } catch (e) {
+    modalContent.innerHTML = `<div class="detail-body"><h2>🎲 Que regarder ?</h2>
+      <p class="muted">${esc(e.message)}</p></div>`;
+  }
+}
 
 async function fillGenres(selectId, type = "movie") {
   try {
@@ -253,6 +296,7 @@ $("[data-filter='decouverte']").addEventListener("click", (e) => {
   $("#" + id).addEventListener("change", () => { dec.page = 1; loadDiscover(); }));
 $("#dec-prev").addEventListener("click", () => { if (dec.page > 1) { dec.page--; loadDiscover(); } });
 $("#dec-next").addEventListener("click", () => { dec.page++; loadDiscover(); });
+$("#dec-roulette").addEventListener("click", () => openRoulette("catalog"));
 bindGrid($("#dec-grid"));
 
 /* ============================== FUTUR ================================= */
@@ -330,6 +374,23 @@ $("#btn-liste-new").addEventListener("click", async () => {
   catch (e) { toast(e.message); }
 });
 $("#btn-liste-import").addEventListener("click", openImportListModal);
+$("#btn-liste-presets").addEventListener("click", openPresetsModal);
+
+async function openPresetsModal() {
+  modal.classList.remove("hidden");
+  modalContent.innerHTML = `<div class="detail-body"><h2>🎬 Listes prêtes</h2>
+    <p class="muted">Choisis une saga : ses titres sont ajoutés à ta bibliothèque
+      (« À voir ») et rangés dans une nouvelle liste, dans l'ordre.</p>
+    <div id="presets-list" class="muted">Chargement…</div></div>`;
+  try {
+    const { presets } = await api("/api/lists/presets");
+    $("#presets-list").innerHTML = presets.map((p) => `
+      <div class="preset-row">
+        <span>${esc(p.nom)} <span class="muted">(${p.nb} titres)</span></span>
+        <button class="btn small primary" data-preset="${p.cle}">Importer</button>
+      </div>`).join("");
+  } catch (e) { $("#presets-list").textContent = e.message; }
+}
 
 /* ============================ STATISTIQUES =========================== */
 async function loadStats() {
@@ -374,8 +435,38 @@ async function loadSettings() {
     $("#tmdb-status").textContent = s.tmdb_configuree ? "✅ Clé configurée" : "⚠️ Non configurée";
     $("#set-cf-enabled").checked = !!s.cf_sso_enabled;
     $("#set-cf-email").value = s.cf_access_email || "";
+    $("#set-discord-enabled").checked = !!s.notif_discord_enabled;
+    $("#set-botpanel-url").value = s.botpanel_url || "";
+    $("#set-slug-episode").value = s.botpanel_slug_episode || "";
+    $("#set-slug-cine").value = s.botpanel_slug_cine || "";
+    $("#set-slug-streaming").value = s.botpanel_slug_streaming || "";
+    $("#set-ntfy-enabled").checked = !!s.notif_ntfy_enabled;
+    $("#set-ntfy-url").value = s.ntfy_url || "https://ntfy.sh";
+    $("#set-ntfy-topic").value = s.ntfy_topic || "";
   } catch (_) { /* ignore */ }
 }
+$("#btn-save-notif").addEventListener("click", async () => {
+  try {
+    await api("/api/settings", { method: "POST", body: {
+      notif_discord_enabled: $("#set-discord-enabled").checked,
+      botpanel_url: $("#set-botpanel-url").value.trim(),
+      botpanel_slug_episode: $("#set-slug-episode").value.trim(),
+      botpanel_slug_cine: $("#set-slug-cine").value.trim(),
+      botpanel_slug_streaming: $("#set-slug-streaming").value.trim(),
+      notif_ntfy_enabled: $("#set-ntfy-enabled").checked,
+      ntfy_url: $("#set-ntfy-url").value.trim(),
+      ntfy_topic: $("#set-ntfy-topic").value.trim(),
+    } });
+    $("#notif-status").textContent = "✅ Enregistré."; toast("Notifications enregistrées");
+  } catch (e) { $("#notif-status").textContent = "❌ " + e.message; }
+});
+$("#btn-test-notif").addEventListener("click", async () => {
+  $("#notif-status").textContent = "Envoi du test…";
+  try {
+    const r = await api("/api/settings/notif-test", { method: "POST" });
+    $("#notif-status").textContent = "✅ Test envoyé sur : " + r.canaux.join(", ");
+  } catch (e) { $("#notif-status").textContent = "❌ " + e.message; }
+});
 $("#btn-save-cf").addEventListener("click", async () => {
   try {
     await api("/api/settings", { method: "POST", body: {
@@ -480,6 +571,44 @@ function renderFilm(data) {
     <ul class="watch-list">${watches.map((w) => `<li><span>${w.date}</span>
       <button class="ep-btn" data-delwatch="${w.id}">✕</button></li>`).join("")
       || `<li class="muted">Aucun visionnage enregistré.</li>`}</ul>
+    ${castingBlock(t.casting)}
+  </div>`;
+}
+
+/* Grille du casting : clic sur un acteur → sa fiche (filmographie + infos). */
+function castingBlock(cast) {
+  if (!cast || !cast.length) return "";
+  return `<h3 class="sub-title">Casting</h3><div class="cast-row">${cast.map((c) => `
+    <div class="cast" data-person="${c.id}">
+      <img loading="lazy" src="${posterSrc(c.photo)}" alt="">
+      <div class="cast-name">${esc(c.nom)}</div>
+      ${c.personnage ? `<div class="cast-role">${esc(c.personnage)}</div>` : ""}
+    </div>`).join("")}</div>`;
+}
+
+async function openPerson(id) {
+  modal.classList.remove("hidden");
+  modalContent.innerHTML = `<div class="detail-body"><p class="muted">Chargement…</p></div>`;
+  try {
+    const p = await api(`/api/person/${id}`);
+    modalContent.innerHTML = renderPerson(p);
+  } catch (e) {
+    modalContent.innerHTML = `<div class="detail-body"><p class="muted">${esc(e.message)}</p></div>`;
+  }
+}
+
+function renderPerson(p) {
+  const infos = [
+    p.metier, p.naissance ? `Né(e) le ${p.naissance}` : "", p.lieu,
+  ].filter(Boolean).map((t) => `<span class="tag">${esc(t)}</span>`).join("");
+  const bio = p.bio ? `<p class="detail-resume">${esc(p.bio.slice(0, 700))}${p.bio.length > 700 ? "…" : ""}</p>` : "";
+  return `<div class="detail-hero">
+    <img class="detail-poster" src="${posterSrc(p.photo)}" alt="">
+    <div class="detail-info"><h2>${esc(p.nom)}</h2><div class="detail-tags">${infos}</div></div>
+  </div>
+  <div class="detail-body">${bio}
+    <h3 class="sub-title">Filmographie</h3>
+    <div class="grid">${p.films.map(posterCard).join("")}</div>
   </div>`;
 }
 
@@ -507,6 +636,7 @@ function renderSerie(data) {
     <div class="row-inline"><button class="btn small" data-markseries>✓ Marquer la série vue</button></div>
     <h3 class="sub-title">Saisons &amp; épisodes</h3>
     ${seasons || `<p class="muted">Épisodes indisponibles.</p>`}
+    ${castingBlock(t.casting)}
   </div>`;
 }
 
@@ -526,6 +656,25 @@ function episodeRow(e) {
 
 /* Actions dans la fiche (délégation d'événements sur la modale). */
 modalContent.addEventListener("click", async (e) => {
+  // Interactions transverses : acteur, relance roulette, import preset, affiche.
+  const personEl = e.target.closest("[data-person]");
+  if (personEl) return openPerson(Number(personEl.dataset.person));
+  const rerollEl = e.target.closest("[data-reroll]");
+  if (rerollEl) return rollRoulette(rerollEl.dataset.reroll);
+  const presetEl = e.target.closest("[data-preset]");
+  if (presetEl) {
+    presetEl.disabled = true; presetEl.textContent = "Import…";
+    try {
+      const r = await api("/api/lists/import-preset",
+        { method: "POST", body: { cle: presetEl.dataset.preset } });
+      toast(`${r.ajoutes} titre(s) importé(s)`); closeModal();
+      if ($("#page-listes").classList.contains("active")) loadListes();
+    } catch (err) { toast(err.message); presetEl.disabled = false; presetEl.textContent = "Importer"; }
+    return;
+  }
+  const posterEl = e.target.closest(".poster");
+  if (posterEl) return openItem(posterEl);
+
   const idEl = e.target.closest("[data-id]");
   const id = idEl && Number(idEl.dataset.id);
   try {
@@ -645,6 +794,12 @@ const LOADERS = {
 function refreshAll() {
   if ($("#page-bibliotheque").classList.contains("active")) loadLibrary();
   if ($("#page-suggestions").classList.contains("active")) loadSuggestions();
+}
+
+/* Service worker (PWA : app installable + démarrage rapide). */
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () =>
+    navigator.serviceWorker.register("/sw.js").catch(() => {}));
 }
 
 /* Au démarrage : onglet Suggestions. */

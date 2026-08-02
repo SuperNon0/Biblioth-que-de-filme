@@ -24,7 +24,25 @@ EDITABLES = {
     # car l'en-tête est alors absent). Désactivable pour toujours exiger le MDP.
     "cf_sso_enabled": True,
     "cf_access_email": "",
+    # Notifications Discord via botpanel (déclenchement par slug).
+    "notif_discord_enabled": False,
+    "botpanel_url": "",
+    "botpanel_slug_episode": "",
+    "botpanel_slug_cine": "",
+    "botpanel_slug_streaming": "",
+    # Notifications ntfy (push direct sur le téléphone, contenu dynamique).
+    "notif_ntfy_enabled": False,
+    "ntfy_url": "https://ntfy.sh",
+    "ntfy_topic": "",
 }
+
+# Ces clés sont renvoyées telles quelles à l'interface (pas de secret sensible).
+PUBLIC_KEYS = (
+    "tmdb_language", "tmdb_region", "cf_sso_enabled", "cf_access_email",
+    "notif_discord_enabled", "botpanel_url", "botpanel_slug_episode",
+    "botpanel_slug_cine", "botpanel_slug_streaming",
+    "notif_ntfy_enabled", "ntfy_url", "ntfy_topic",
+)
 
 
 def _path():
@@ -49,13 +67,10 @@ def get(key):
 
 def all_public():
     """Réglages exposés à l'interface (la clé TMDB est masquée si présente)."""
-    return {
-        "tmdb_configuree": bool(get("tmdb_api_key")),
-        "tmdb_language": get("tmdb_language"),
-        "tmdb_region": get("tmdb_region"),
-        "cf_sso_enabled": bool(get("cf_sso_enabled")),
-        "cf_access_email": get("cf_access_email"),
-    }
+    data = {"tmdb_configuree": bool(get("tmdb_api_key"))}
+    for key in PUBLIC_KEYS:
+        data[key] = get(key)
+    return data
 
 
 def update(values):

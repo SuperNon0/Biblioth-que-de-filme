@@ -23,6 +23,7 @@ def _titre(titre_id):
     if t:
         t["genres"] = db.jload(t.get("genres"), [])
         t["plateformes"] = db.jload(t.get("plateformes"), [])
+        t["casting"] = db.jload(t.get("casting"), [])
         t["favori"] = bool(t["favori"])
     return t
 

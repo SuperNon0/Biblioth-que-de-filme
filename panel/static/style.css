@@ -171,6 +171,33 @@ main { padding: 20px; max-width: 1400px; margin: 0 auto; }
 .poster-fav { position: absolute; top: 8px; right: 8px; font-size: 0.95rem;
               color: var(--accent); text-shadow: 0 1px 5px #000, 0 0 3px #000; }
 
+.poster-prog { margin-top: 6px; height: 4px; border-radius: 999px;
+               background: var(--border); overflow: hidden; }
+.poster-prog span { display: block; height: 100%;
+                    background: linear-gradient(90deg, var(--green), #6fe0c0); }
+
+/* barre secondaire (recherche biblio + roulette) */
+.sub-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+           margin-bottom: 16px; }
+.search-inline { flex: 1; min-width: 180px; padding: 9px 14px; border-radius: 999px;
+                 background: var(--bg-input); border: 1px solid var(--border);
+                 color: var(--text); font-family: var(--font); font-size: 0.82rem; }
+.search-inline:focus { border-color: var(--accent); }
+
+/* casting (fiche) */
+.cast-row { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px; }
+.cast { flex: 0 0 90px; text-align: center; cursor: pointer; }
+.cast img { width: 90px; height: 120px; object-fit: cover; border-radius: 10px;
+            background: var(--bg-card); border: 1px solid var(--border); }
+.cast:hover img { border-color: var(--accent); }
+.cast-name { font-size: 0.72rem; margin-top: 4px; font-weight: 500; }
+.cast-role { font-size: 0.68rem; color: var(--muted); }
+
+/* listes prêtes (presets) */
+.preset-row { display: flex; align-items: center; justify-content: space-between;
+              gap: 12px; padding: 12px; border: 1px solid var(--border);
+              border-radius: var(--radius); margin-bottom: 8px; }
+
 /* ------------------------------------------------------- carrousels (rows) */
 .rows { display: flex; flex-direction: column; gap: 26px; }
 .row-block h3 { margin-bottom: 10px; }

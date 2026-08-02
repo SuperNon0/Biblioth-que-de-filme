@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS titres (
     note_tmdb     REAL,
     pays          TEXT,
     plateformes   TEXT,                          -- JSON: [{"nom","logo"}]
+    casting       TEXT,                          -- JSON: [{"id","nom","personnage","photo"}]
     statut        TEXT DEFAULT 'a_voir',         -- vu|a_voir|en_cours|abandonne
     favori        INTEGER DEFAULT 0,
     ajout_manuel  INTEGER DEFAULT 0,
@@ -63,6 +64,7 @@ CREATE TABLE IF NOT EXISTS episodes (
     vu           INTEGER DEFAULT 0,
     nb_vues      INTEGER DEFAULT 0,              -- revisionnages
     derniere_vue TEXT,
+    notifie      INTEGER DEFAULT 0,             -- notification « nouvel épisode » envoyée
     UNIQUE(titre_id, saison, numero)
 );
 
@@ -108,6 +110,7 @@ def init(db_path):
     _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = connect()
     conn.executescript(SCHEMA)
+    _migrate(conn)
     # Listes système présentes par défaut : « À voir » et « Favoris ».
     now = int(time.time())
     for systeme, nom in (("a_voir", "À voir"), ("favoris", "Favoris")):
@@ -116,6 +119,17 @@ def init(db_path):
             (nom, systeme, now),
         )
     conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+    conn.commit()
+
+
+def _migrate(conn):
+    """Ajoute les colonnes manquantes sur une base déjà créée (migration douce)."""
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(titres)")}
+    if "casting" not in cols:
+        conn.execute("ALTER TABLE titres ADD COLUMN casting TEXT")
+    ep_cols = {r[1] for r in conn.execute("PRAGMA table_info(episodes)")}
+    if "notifie" not in ep_cols:
+        conn.execute("ALTER TABLE episodes ADD COLUMN notifie INTEGER DEFAULT 0")
     conn.commit()
 
 

@@ -64,12 +64,32 @@ def library():
         params.append(f'%"{genre}"%')
     if request.args.get("favori") == "1":
         where.append("favori = 1")
+    recherche = request.args.get("q", "").strip()
+    if recherche:
+        where.append("titre LIKE ?")
+        params.append(f"%{recherche}%")
     order = TRIS.get(request.args.get("tri", "ajout"), TRIS["ajout"])
     rows = db.q(
         f"SELECT * FROM titres WHERE {' AND '.join(where)} ORDER BY {order}",
         params,
     )
-    return jsonify(titres=[_row(r) for r in rows])
+    # Progression des séries (épisodes vus / total) pour la barre sur l'affiche.
+    series_ids = [r["id"] for r in rows if r["type"] == "serie"]
+    prog = {}
+    if series_ids:
+        marks = ",".join("?" * len(series_ids))
+        for p in db.q(f"""SELECT titre_id, COUNT(*) AS total, SUM(vu) AS vus
+                          FROM episodes WHERE titre_id IN ({marks})
+                          GROUP BY titre_id""", series_ids):
+            prog[p["titre_id"]] = p
+    out = []
+    for r in rows:
+        row = _row(r)
+        if row["type"] == "serie" and row["id"] in prog:
+            row["total_ep"] = prog[row["id"]]["total"]
+            row["vus_ep"] = prog[row["id"]]["vus"] or 0
+        out.append(row)
+    return jsonify(titres=out)
 
 
 @bp.post("/library")
@@ -92,6 +112,12 @@ def add():
     if typ == "serie":
         try:
             sync.sync_episodes(titre_id, tmdb, tmdb_id, detail.get("saisons", []))
+            # Baseline anti-spam : les épisodes déjà diffusés ne déclenchent pas
+            # de notification « nouvel épisode ». Seuls les futurs le feront.
+            from datetime import date
+            db.run("UPDATE episodes SET notifie=1 WHERE titre_id=? AND "
+                   "date_diff IS NOT NULL AND date_diff <= ?",
+                   (titre_id, date.today().isoformat()))
         except TMDBError:
             pass  # les épisodes se compléteront à l'ouverture de la fiche
     return jsonify(ok=True, id=titre_id)
