@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>cinéthèque</title>
+  <meta name="theme-color" content="#0e0f11">
+  <link rel="icon" href="{{ asset('favicon.svg') }}" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ asset('fonts.css') }}">
+  <link rel="stylesheet" href="{{ asset('style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img class="logo-mark" src="{{ asset('logo.svg') }}" alt="" width="34" height="34">
+      <span class="logo"><span class="g">ciné</span><span class="i">thèque</span></span>
+    </div>
+
+    <div class="search">
+      <input id="search-input" type="search" placeholder="Rechercher un film ou une série…"
+             autocomplete="off">
+      <div id="search-results" class="search-results hidden"></div>
+    </div>
+
+    <form action="{{ url_for('pages.logout') }}" method="post" class="inline">
+      <button type="submit" class="btn ghost small">Déconnexion</button>
+    </form>
+  </header>
+
+  {% if not tmdb_ok %}
+  <div id="tmdb-banner" class="banner">
+    ⚙️ <b>Clé API TMDB non configurée.</b> Renseigne-la dans
+    <a href="#" data-goto="parametres">Paramètres</a> pour activer la recherche,
+    les suggestions et les fiches.
+  </div>
+  {% endif %}
+
+  <nav class="tabs" id="main-tabs">
+    <button class="tab active" data-tab="suggestions">Suggestions</button>
+    <button class="tab" data-tab="bibliotheque">Bibliothèque</button>
+    <button class="tab" data-tab="decouverte">Découverte</button>
+    <button class="tab" data-tab="futur">Futur</button>
+    <button class="tab" data-tab="listes">Listes</button>
+    <button class="tab" data-tab="profil">Profil</button>
+    <button class="tab" data-tab="parametres">Paramètres</button>
+  </nav>
+
+  <main>
+    <!-- Suggestions (accueil) : carrousels -->
+    <section id="page-suggestions" class="page active">
+      <div class="page-head">
+        <h2>Suggestions</h2>
+        <div class="chips" data-filter="suggestions">
+          <button class="chip active" data-media="all">Tout</button>
+          <button class="chip" data-media="movie">Films</button>
+          <button class="chip" data-media="tv">Séries</button>
+        </div>
+      </div>
+      <div id="suggestions-rows" class="rows"></div>
+    </section>
+
+    <!-- Bibliothèque -->
+    <section id="page-bibliotheque" class="page">
+      <div class="page-head">
+        <h2>Ma bibliothèque</h2>
+        <div class="toolbar">
+          <select id="lib-statut" class="select">
+            <option value="">Tous les statuts</option>
+            <option value="en_cours">En cours</option>
+            <option value="a_voir">À voir</option>
+            <option value="vu">Vu</option>
+            <option value="abandonne">Abandonné</option>
+          </select>
+          <select id="lib-type" class="select">
+            <option value="">Films &amp; séries</option>
+            <option value="film">Films</option>
+            <option value="serie">Séries</option>
+          </select>
+          <select id="lib-genre" class="select"><option value="">Tous genres</option></select>
+          <select id="lib-tri" class="select">
+            <option value="ajout">Ajout récent</option>
+            <option value="titre">Alphabétique</option>
+            <option value="annee">Année</option>
+            <option value="note">Note</option>
+          </select>
+          <button id="btn-manuel" class="btn small">+ Ajout manuel</button>
+        </div>
+      </div>
+      <div id="lib-grid" class="grid"></div>
+    </section>
+
+    <!-- Découverte -->
+    <section id="page-decouverte" class="page">
+      <div class="page-head">
+        <h2>Découverte</h2>
+        <div class="toolbar">
+          <div class="chips" data-filter="decouverte">
+            <button class="chip active" data-type="film">Films</button>
+            <button class="chip" data-type="serie">Séries</button>
+          </div>
+          <select id="dec-tri" class="select">
+            <option value="populaire">Populaires</option>
+            <option value="note">Mieux notés</option>
+            <option value="recent">Plus récents</option>
+          </select>
+          <select id="dec-genre" class="select"><option value="">Tous genres</option></select>
+          <input id="dec-annee" class="select" type="number" placeholder="Année" min="1900" max="2100">
+          <input id="dec-pays" class="select" type="text" placeholder="Pays (FR, US…)" maxlength="2">
+        </div>
+      </div>
+      <div id="dec-grid" class="grid"></div>
+      <div class="pager">
+        <button id="dec-prev" class="btn small">← Précédent</button>
+        <span id="dec-page" class="muted">Page 1</span>
+        <button id="dec-next" class="btn small">Suivant →</button>
+      </div>
+    </section>
+
+    <!-- Futur -->
+    <section id="page-futur" class="page">
+      <div class="page-head"><h2>Futur — sorties à venir</h2></div>
+      <div id="futur-grid" class="grid"></div>
+    </section>
+
+    <!-- Listes -->
+    <section id="page-listes" class="page">
+      <div class="page-head">
+        <h2>Mes listes</h2>
+        <div class="toolbar">
+          <button id="btn-liste-new" class="btn small">+ Nouvelle liste</button>
+          <button id="btn-liste-import" class="btn small">↧ Importer une liste</button>
+        </div>
+      </div>
+      <div id="listes-grid" class="cards-list"></div>
+      <div id="liste-detail" class="hidden">
+        <button class="btn ghost small" id="liste-back">← Retour aux listes</button>
+        <h3 id="liste-detail-nom" class="sub-title"></h3>
+        <div id="liste-detail-grid" class="grid"></div>
+      </div>
+    </section>
+
+    <!-- Profil / Statistiques -->
+    <section id="page-profil" class="page">
+      <div class="page-head"><h2>Profil &amp; statistiques</h2></div>
+      <div id="stats-content"></div>
+    </section>
+
+    <!-- Paramètres -->
+    <section id="page-parametres" class="page">
+      <div class="page-head"><h2>Paramètres</h2></div>
+      <div class="settings-grid">
+        <div class="card">
+          <h3 class="sub-title">Clé API TMDB</h3>
+          <p class="muted">Gratuite sur themoviedb.org (Paramètres → API). Nécessaire
+            pour la recherche, les fiches et les suggestions.</p>
+          <input id="set-tmdb-key" class="input" type="password" placeholder="Clé API TMDB">
+          <div class="row-inline">
+            <input id="set-region" class="input small-input" type="text" placeholder="Région (FR)" maxlength="2">
+            <button id="btn-save-tmdb" class="btn primary small">Enregistrer</button>
+            <button id="btn-test-tmdb" class="btn small">Tester</button>
+          </div>
+          <span id="tmdb-status" class="muted"></span>
+        </div>
+
+        <div class="card">
+          <h3 class="sub-title">Mot de passe</h3>
+          <p class="muted">Compte unique « admin ». 8 caractères minimum.</p>
+          <input id="set-password" class="input" type="password" placeholder="Nouveau mot de passe">
+          <button id="btn-save-password" class="btn primary small">Changer le mot de passe</button>
+          <span id="password-status" class="muted"></span>
+        </div>
+
+        <div class="card">
+          <h3 class="sub-title">Sauvegarde</h3>
+          <p class="muted">Exporte toutes tes données dans un fichier de secours,
+            ou restaure une sauvegarde.</p>
+          <div class="row-inline">
+            <a id="btn-export" class="btn small" href="/api/export">↥ Exporter</a>
+            <button id="btn-import" class="btn small">↧ Importer</button>
+            <input id="import-file" type="file" accept="application/json" class="hidden">
+          </div>
+          <span id="import-status" class="muted"></span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span>cinéthèque · ma bibliothèque de films &amp; séries</span>
+    <span class="muted tmdb-attr">This product uses the TMDb API but is not
+      endorsed or certified by TMDb.</span>
+  </footer>
+
+  <!-- Fenêtre modale : fiche détaillée -->
+  <div id="modal" class="modal hidden">
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-card">
+      <button class="modal-close" data-close aria-label="Fermer">✕</button>
+      <div id="modal-content"></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="{{ asset('app.js') }}"></script>
+</body>
+</html>

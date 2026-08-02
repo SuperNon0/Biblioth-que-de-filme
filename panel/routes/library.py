@@ -1,0 +1,162 @@
+"""Bibliothèque : recherche TMDB, ajout, listing filtré, statuts.
+
+Le cœur de l'app : chercher un titre, l'ajouter, lister sa collection avec
+tris/filtres, changer le statut ou le favori, supprimer.
+"""
+import json
+import time
+
+from flask import Blueprint, jsonify, request
+
+import auth
+import db
+from context import get_tmdb
+from services import sync
+from tmdb import TMDBError
+
+bp = Blueprint("library", __name__, url_prefix="/api")
+
+STATUTS = {"vu", "a_voir", "en_cours", "abandonne"}
+TRIS = {
+    "ajout": "date_ajout DESC",
+    "titre": "titre COLLATE NOCASE ASC",
+    "annee": "annee DESC",
+    "note": "note_tmdb DESC",
+}
+
+
+def _row(t):
+    """Sérialise une ligne de titre pour le front."""
+    t["genres"] = db.jload(t.get("genres"), [])
+    t["plateformes"] = db.jload(t.get("plateformes"), [])
+    t["favori"] = bool(t.get("favori"))
+    return t
+
+
+@bp.get("/search")
+@auth.login_required
+def search():
+    query = request.args.get("q", "").strip()
+    if not query:
+        return jsonify(results=[])
+    try:
+        return jsonify(results=get_tmdb().search(query))
+    except TMDBError as exc:
+        return jsonify(error=str(exc)), 502
+
+
+@bp.get("/library")
+@auth.login_required
+def library():
+    """Liste la bibliothèque avec filtres (statut, type, genre) et tri."""
+    where, params = ["1=1"], []
+    statut = request.args.get("statut")
+    if statut in STATUTS:
+        where.append("statut = ?")
+        params.append(statut)
+    typ = request.args.get("type")
+    if typ in ("film", "serie"):
+        where.append("type = ?")
+        params.append(typ)
+    genre = request.args.get("genre")
+    if genre:
+        where.append("genres LIKE ?")
+        params.append(f'%"{genre}"%')
+    if request.args.get("favori") == "1":
+        where.append("favori = 1")
+    order = TRIS.get(request.args.get("tri", "ajout"), TRIS["ajout"])
+    rows = db.q(
+        f"SELECT * FROM titres WHERE {' AND '.join(where)} ORDER BY {order}",
+        params,
+    )
+    return jsonify(titres=[_row(r) for r in rows])
+
+
+@bp.post("/library")
+@auth.login_required
+def add():
+    """Ajoute un titre depuis TMDB (par tmdb_id + type) à la bibliothèque."""
+    data = request.get_json(silent=True) or {}
+    tmdb_id, typ = data.get("tmdb_id"), data.get("type")
+    statut = data.get("statut", "a_voir")
+    if typ not in ("film", "serie") or not tmdb_id:
+        return jsonify(error="Titre invalide."), 400
+    if statut not in STATUTS:
+        statut = "a_voir"
+    tmdb = get_tmdb()
+    try:
+        detail = tmdb.movie(tmdb_id) if typ == "film" else tmdb.tv(tmdb_id)
+    except TMDBError as exc:
+        return jsonify(error=str(exc)), 502
+    titre_id = sync.upsert_titre(detail, statut)
+    if typ == "serie":
+        try:
+            sync.sync_episodes(titre_id, tmdb, tmdb_id, detail.get("saisons", []))
+        except TMDBError:
+            pass  # les épisodes se compléteront à l'ouverture de la fiche
+    return jsonify(ok=True, id=titre_id)
+
+
+@bp.post("/library/manual")
+@auth.login_required
+def add_manual():
+    """Ajout manuel d'un titre absent de TMDB."""
+    data = request.get_json(silent=True) or {}
+    titre = (data.get("titre") or "").strip()
+    typ = data.get("type")
+    if not titre or typ not in ("film", "serie"):
+        return jsonify(error="Titre et type requis."), 400
+    now = int(time.time())
+    titre_id = db.run(
+        """INSERT INTO titres (type, titre, annee, resume, duree, statut,
+                               ajout_manuel, date_ajout, maj)
+           VALUES (?,?,?,?,?,?,1,?,?)""",
+        (typ, titre, data.get("annee"), data.get("resume"),
+         data.get("duree"), data.get("statut", "a_voir"), now, now),
+    )
+    return jsonify(ok=True, id=titre_id)
+
+
+@bp.patch("/library/<int:titre_id>")
+@auth.login_required
+def update(titre_id):
+    """Change le statut ou le favori d'un titre."""
+    data = request.get_json(silent=True) or {}
+    if not db.q1("SELECT id FROM titres WHERE id = ?", (titre_id,)):
+        return jsonify(error="Titre introuvable."), 404
+    if "statut" in data and data["statut"] in STATUTS:
+        db.run("UPDATE titres SET statut = ? WHERE id = ?",
+               (data["statut"], titre_id))
+    if "favori" in data:
+        db.run("UPDATE titres SET favori = ? WHERE id = ?",
+               (1 if data["favori"] else 0, titre_id))
+    return jsonify(ok=True)
+
+
+@bp.delete("/library/<int:titre_id>")
+@auth.login_required
+def delete(titre_id):
+    db.run("DELETE FROM titres WHERE id = ?", (titre_id,))
+    return jsonify(ok=True)
+
+
+@bp.get("/to-add")
+@auth.login_required
+def to_add():
+    """Suggestions de films connus/classiques à ajouter (remplir vite).
+
+    Renvoie des populaires/mieux notés en excluant ce qui est déjà en base.
+    """
+    try:
+        pool = get_tmdb().top_rated("movie") + get_tmdb().popular("movie")
+    except TMDBError as exc:
+        return jsonify(error=str(exc)), 502
+    connus = {r["tmdb_id"] for r in
+              db.q("SELECT tmdb_id FROM titres WHERE tmdb_id IS NOT NULL")}
+    seen, out = set(), []
+    for r in pool:
+        if r["tmdb_id"] in connus or r["tmdb_id"] in seen:
+            continue
+        seen.add(r["tmdb_id"])
+        out.append(r)
+    return jsonify(results=out[:30])

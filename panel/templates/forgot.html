@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Mot de passe oublié — cinéthèque</title>
+  <meta name="theme-color" content="#0e0f11">
+  <link rel="icon" href="{{ asset('favicon.svg') }}" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ asset('fonts.css') }}">
+  <link rel="stylesheet" href="{{ asset('style.css') }}">
+</head>
+<body class="login-page">
+  <div class="login-card forgot-card">
+    <div class="login-logo">
+      <img class="logo-mark" src="{{ asset('logo.svg') }}" alt="" width="44" height="44">
+      <span class="logo"><span class="g">ciné</span><span class="i">thèque</span></span>
+    </div>
+    <span class="badge">mot de passe oublié</span>
+    <p class="forgot-intro">Le mot de passe se réinitialise <b>depuis le serveur</b>
+      (console Proxmox ou SSH), puisque tu ne peux plus te connecter.</p>
+    <ol class="forgot-steps">
+      <li>Ouvre un terminal du serveur (console Proxmox, ou <code>ssh …</code>).</li>
+      <li>Lance cette commande, puis choisis un nouveau mot de passe :
+        <pre class="forgot-cmd">sudo bash /opt/cinetheque/scripts/reset-admin-password.sh</pre>
+      </li>
+      <li>Reviens ici et connecte-toi avec le nouveau mot de passe.</li>
+    </ol>
+    <p class="forgot-note">Secours ultime :
+      <code>sudo rm /opt/cinetheque/data/users.json</code> puis
+      <code>sudo systemctl restart cinetheque-panel</code> remet le mot de passe
+      défini à l'installation.</p>
+    <a class="btn primary full" href="{{ url_for('pages.login') }}">← Retour à la connexion</a>
+  </div>
+</body>
+</html>

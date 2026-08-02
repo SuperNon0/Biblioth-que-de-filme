@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Connexion — cinéthèque</title>
+  <meta name="theme-color" content="#0e0f11">
+  <link rel="icon" href="{{ asset('favicon.svg') }}" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ asset('fonts.css') }}">
+  <link rel="stylesheet" href="{{ asset('style.css') }}">
+</head>
+<body class="login-page">
+  <form class="login-card" method="post" action="{{ url_for('pages.login') }}">
+    <div class="login-logo">
+      <img class="logo-mark" src="{{ asset('logo.svg') }}" alt="" width="44" height="44">
+      <span class="logo"><span class="g">ciné</span><span class="i">thèque</span></span>
+    </div>
+    <span class="badge">ma bibliothèque · films &amp; séries</span>
+    {% if error %}<p class="login-error">{{ error }}</p>{% endif %}
+    <input type="password" name="password" placeholder="Mot de passe"
+           autocomplete="current-password" autofocus required>
+    <button type="submit" class="btn primary full">Se connecter</button>
+    <a class="forgot-link" href="{{ url_for('pages.forgot_password') }}">Mot de passe oublié ?</a>
+  </form>
+</body>
+</html>

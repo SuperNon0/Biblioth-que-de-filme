@@ -1,0 +1,16 @@
+{
+  "secret_key": "…généré aléatoirement à l'installation…",
+  "panel_password_hash": "scrypt:32768:8:1$…généré à l'installation…",
+  "bind": "0.0.0.0",
+  "panel_port": 8080,
+  "data_dir": "/opt/cinetheque/data",
+  "db_file": "/opt/cinetheque/data/library.db",
+  "users_file": "/opt/cinetheque/data/users.json",
+  "posters_dir": "/opt/cinetheque/data/posters",
+  "source_dir": "/opt/cinetheque-src",
+  "panel_service_name": "cinetheque-panel",
+  "tmdb_api_key": "",
+  "tmdb_language": "fr-FR",
+  "tmdb_region": "FR",
+  "cf_access_email": ""
+}

@@ -1,0 +1,14 @@
+# Données et secrets — jamais committés
+config.json
+/panel/.data/
+*.db
+*.db-wal
+*.db-shm
+users.json
+settings.json
+posters/
+
+# Python
+__pycache__/
+*.pyc
+.venv/

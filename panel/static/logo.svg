@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40" role="img" aria-label="cinéthèque">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f2d76a"/><stop offset="1" stop-color="#e8c547"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="9" width="36" height="29" rx="7" fill="url(#g)"/>
+  <path d="M2 18 L38 12 L38 20 L2 26 Z" fill="#0e0f11" opacity="0.92"/>
+  <g fill="#e8c547">
+    <path d="M7 17 l4 -0.6 l-2.4 6 l-4 0.6 Z"/>
+    <path d="M16 15.5 l4 -0.6 l-2.4 6 l-4 0.6 Z"/>
+    <path d="M25 14 l4 -0.6 l-2.4 6 l-4 0.6 Z"/>
+    <path d="M34 12.5 l3 -0.45 l-2.4 6 l-3 0.45 Z"/>
+  </g>
+  <path d="M16 26 L27 32 L16 38 Z" fill="#0e0f11"/>
+</svg>
