@@ -352,6 +352,23 @@ main { padding: 20px; max-width: 1400px; margin: 0 auto; }
             border-radius: 8px; font-family: var(--font); font-size: 0.72rem;
             color: var(--console-text); overflow-x: auto; white-space: pre-wrap;
             margin-top: 6px; }
+.aide-wide { grid-column: 1 / -1; }
+
+/* modèles de notification (page Aide) */
+.notif-model { background: var(--bg-panel); border: 1px solid var(--border);
+               border-radius: 10px; padding: 14px; margin: 12px 0; }
+.notif-head { font-family: var(--font-serif); color: var(--accent);
+              font-size: 0.95rem; margin-bottom: 10px; }
+.notif-line { display: flex; align-items: baseline; gap: 10px; margin: 6px 0;
+              flex-wrap: wrap; }
+.notif-line > span { width: 66px; flex-shrink: 0; color: var(--muted);
+                     font-size: 0.72rem; text-transform: uppercase;
+                     letter-spacing: .04em; }
+.notif-line code { background: var(--console-bg); border: 1px solid var(--border);
+                   padding: 4px 8px; border-radius: 6px; font-size: 0.74rem; }
+.notif-vars { font-size: 0.74rem; color: var(--muted); margin-top: 8px; }
+.notif-vars code { background: rgba(232,197,71,0.1); color: var(--accent);
+                   padding: 1px 6px; }
 
 /* -------------------------------------------------------------- aide/help */
 .help { background: var(--bg-card); border: 1px solid var(--border);

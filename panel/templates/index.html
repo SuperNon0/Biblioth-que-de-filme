@@ -355,6 +355,51 @@
         </div>
       </div>
 
+      <div class="aide-cat">
+        <h3 class="aide-cat-title"><span>🔔</span> Configurer les notifications Discord (botpanel)</h3>
+        <article class="aide-card aide-wide">
+          <p>cinéthèque envoie ses notifications via <b>botpanel</b> (aucun réglage
+            Discord ici). À faire <b>une seule fois</b> :</p>
+          <ol class="aide-list">
+            <li>Dans <b>botpanel</b>, crée <b>3 notifications</b> avec des
+              emplacements <code>{var:nom}</code> (modèles ci-dessous) et note
+              le <b>slug</b> de chacune.</li>
+            <li>Dans <a href="#" data-goto="parametres">cinéthèque → Paramètres →
+              Notifications</a>, coche <b>Discord</b>, mets l'<b>URL de botpanel</b>
+              et reporte les <b>3 slugs</b>, puis « Tester l'envoi ».</li>
+          </ol>
+          <p class="aide-hint">💡 Le <b>slug se choisit dans botpanel</b> à la
+            création de la notif, et se renseigne (le <b>même</b>) dans les
+            Paramètres de cinéthèque. Modifiable des deux côtés tant qu'il reste
+            identique.</p>
+
+          <div class="notif-model">
+            <div class="notif-head">📺 Nouvel épisode d'une série</div>
+            <div class="notif-line"><span>Titre</span><code>📺 {var:serie}</code></div>
+            <div class="notif-line"><span>Message</span><code>Nouvel épisode {var:code}{var:titre| }</code></div>
+            <div class="notif-vars">Variables : <code>serie</code>, <code>code</code>, <code>titre</code>, <code>saison</code>, <code>episode</code></div>
+          </div>
+
+          <div class="notif-model">
+            <div class="notif-head">🎬 Film au cinéma</div>
+            <div class="notif-line"><span>Titre</span><code>🎬 {var:titre}</code></div>
+            <div class="notif-line"><span>Message</span><code>Maintenant au {var:canal} !</code></div>
+            <div class="notif-vars">Variables : <code>titre</code>, <code>canal</code></div>
+          </div>
+
+          <div class="notif-model">
+            <div class="notif-head">📺 Film disponible en streaming</div>
+            <div class="notif-line"><span>Titre</span><code>📺 {var:titre}</code></div>
+            <div class="notif-line"><span>Message</span><code>Disponible sur {var:plateformes|une plateforme}.</code></div>
+            <div class="notif-vars">Variables : <code>titre</code>, <code>plateformes</code></div>
+          </div>
+
+          <p class="aide-hint">La syntaxe <code>{var:nom|défaut}</code> affiche
+            « défaut » si la variable est absente. <b>ntfy</b> (autre canal, réglé
+            dans cinéthèque) reçoit déjà le texte complet, sans configuration.</p>
+        </article>
+      </div>
+
     </section>
   </main>
 
