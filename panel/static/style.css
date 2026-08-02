@@ -293,6 +293,28 @@ main { padding: 20px; max-width: 1400px; margin: 0 auto; }
 .switch-row input { width: 18px; height: 18px; accent-color: var(--accent);
                     cursor: pointer; }
 
+/* -------------------------------------------------------------- aide/help */
+.help { background: var(--bg-card); border: 1px solid var(--border);
+        border-radius: var(--radius); margin-bottom: 10px; overflow: hidden; }
+.help > summary { cursor: pointer; padding: 14px 16px; font-family: var(--font-serif);
+                  font-size: 1rem; color: var(--accent); list-style: none; }
+.help > summary::-webkit-details-marker { display: none; }
+.help > summary::before { content: "▸ "; color: var(--muted); }
+.help[open] > summary::before { content: "▾ "; }
+.help-body { padding: 4px 16px 16px; font-size: 0.82rem; line-height: 1.6; }
+.help-body p { margin: 8px 0; }
+.help-steps, .help-list { padding-left: 20px; display: flex; flex-direction: column;
+                          gap: 6px; margin: 8px 0; }
+.help-body pre { background: var(--bg-input); border: 1px solid var(--border);
+                 padding: 10px; border-radius: 8px; font-size: 0.74rem;
+                 overflow-x: auto; white-space: pre-wrap; }
+
+/* --------------------------------------------------------- accueil (onb.) */
+.onboarding-card { max-width: 520px; align-items: stretch; }
+.onb-intro { font-size: 0.82rem; line-height: 1.6; }
+.onb-steps { margin: 4px 0; }
+.onboarding-card .input { width: 100%; }
+
 /* ------------------------------------------------------------------ toast */
 .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
          background: var(--bg-card); border: 1px solid var(--accent);

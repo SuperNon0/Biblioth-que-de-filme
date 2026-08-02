@@ -43,6 +43,7 @@
     <button class="tab" data-tab="listes">Listes</button>
     <button class="tab" data-tab="profil">Profil</button>
     <button class="tab" data-tab="parametres">Paramètres</button>
+    <button class="tab" data-tab="aide">Aide</button>
   </nav>
 
   <main>
@@ -198,6 +199,100 @@
           <span id="import-status" class="muted"></span>
         </div>
       </div>
+    </section>
+    <!-- Aide / Support -->
+    <section id="page-aide" class="page">
+      <div class="page-head"><h2>Aide &amp; support</h2></div>
+      <p class="muted">Toutes les informations utiles pour gérer ta cinéthèque.</p>
+
+      <details class="help" open>
+        <summary>🔑 Clé API TMDB — créer, gérer, modifier</summary>
+        <div class="help-body">
+          <p>cinéthèque utilise l'API <b>TMDB</b> pour remplir les fiches
+            (affiches, résumés, durées, épisodes, sorties). Elle est
+            <b>gratuite et sans limite de durée</b> pour un usage personnel.</p>
+          <p><b>Créer la clé :</b></p>
+          <ol class="help-steps">
+            <li>Compte gratuit sur
+              <a href="https://www.themoviedb.org/signup" target="_blank" rel="noopener">themoviedb.org</a>.</li>
+            <li>Aller sur
+              <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">
+              themoviedb.org/settings/api</a> (Paramètres → API).</li>
+            <li>Demander une clé « Developer » (usage personnel), accepter les conditions.</li>
+            <li>Copier la <b>« API Key (v3 auth) »</b>.</li>
+          </ol>
+          <p><b>Renseigner / modifier :</b> onglet
+            <a href="#" data-goto="parametres">Paramètres → Clé API TMDB</a>,
+            colle la clé, choisis la région (FR), puis « Enregistrer » et « Tester ».
+            La clé est stockée dans le fichier <code>settings.json</code> du serveur.</p>
+        </div>
+      </details>
+
+      <details class="help">
+        <summary>🔒 Mot de passe — changer, oublier, réinitialiser</summary>
+        <div class="help-body">
+          <p>Compte unique <b>admin</b> (pas d'identifiant, juste un mot de passe).</p>
+          <p><b>Le changer :</b> onglet
+            <a href="#" data-goto="parametres">Paramètres → Mot de passe</a>
+            (8 caractères minimum).</p>
+          <p><b>Oublié ?</b> Depuis le serveur (console Proxmox ou SSH) :</p>
+          <pre class="forgot-cmd">sudo bash /opt/cinetheque/scripts/reset-admin-password.sh</pre>
+          <p><b>Secours ultime</b> (remet le mot de passe défini à l'installation) :</p>
+          <pre class="forgot-cmd">sudo rm /opt/cinetheque/data/users.json
+sudo systemctl restart cinetheque-panel</pre>
+        </div>
+      </details>
+
+      <details class="help">
+        <summary>🌐 Connexion automatique (Cloudflare Access)</summary>
+        <div class="help-body">
+          <p>Derrière <b>Cloudflare Access</b> (login Google), tu es connecté
+            automatiquement. En accès direct par l'<b>IP locale</b>, le mot de
+            passe reste exigé.</p>
+          <p>Active/désactive cette protection et restreins à ton email dans
+            <a href="#" data-goto="parametres">Paramètres → Connexion automatique</a>.</p>
+        </div>
+      </details>
+
+      <details class="help">
+        <summary>💾 Sauvegarde, export et restauration</summary>
+        <div class="help-body">
+          <p><b>Depuis le site :</b>
+            <a href="#" data-goto="parametres">Paramètres → Sauvegarde</a> —
+            « Exporter » télécharge toutes tes données en un fichier JSON,
+            « Importer » les restaure.</p>
+          <p><b>Depuis le serveur</b> (archive complète, incluant les affiches) :</p>
+          <pre class="forgot-cmd">sudo bash /opt/cinetheque/scripts/backup.sh
+sudo bash /opt/cinetheque/scripts/restore.sh cinetheque-AAAAMMJJ-HHMMSS.tar.gz</pre>
+        </div>
+      </details>
+
+      <details class="help">
+        <summary>⬆️ Mettre à jour le site</summary>
+        <div class="help-body">
+          <p>Depuis le serveur :</p>
+          <pre class="forgot-cmd">sudo /opt/cinetheque/scripts/update-panel.sh</pre>
+          <p>Récupère la dernière version depuis GitHub et redémarre le site sans
+            toucher à tes données.</p>
+        </div>
+      </details>
+
+      <details class="help">
+        <summary>📚 Comment utiliser cinéthèque</summary>
+        <div class="help-body">
+          <ul class="help-list">
+            <li><b>Ajouter</b> : tape un nom dans la recherche en haut → clique le
+              résultat. (Titre absent ? <a href="#" data-goto="bibliotheque">Ajout manuel</a>.)</li>
+            <li><b>Séries</b> : ouvre la fiche → déplie une saison → coche chaque
+              épisode « Vu » (ou « Tout marquer »).</li>
+            <li><b>Statuts</b> : Vu, À voir, En cours, Abandonné (sur chaque fiche).</li>
+            <li><b>Listes</b> : « À voir » et « Favoris » existent par défaut ;
+              crée les tiennes ou importe une liste toute prête.</li>
+            <li><b>Statistiques</b> : onglet <a href="#" data-goto="profil">Profil</a>
+              (temps total, compteurs, genres, temps par série).</li>
+          </ul>
+        </div>
+      </details>
     </section>
   </main>
 

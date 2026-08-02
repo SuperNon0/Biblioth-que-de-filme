@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Bienvenue — cinéthèque</title>
+  <meta name="theme-color" content="#0e0f11">
+  <link rel="icon" href="{{ asset('favicon.svg') }}" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ asset('fonts.css') }}">
+  <link rel="stylesheet" href="{{ asset('style.css') }}">
+</head>
+<body class="login-page">
+  <div class="login-card onboarding-card">
+    <div class="login-logo">
+      <img class="logo-mark" src="{{ asset('logo.svg') }}" alt="" width="44" height="44">
+      <span class="logo"><span class="g">ciné</span><span class="i">thèque</span></span>
+    </div>
+    <span class="badge">première configuration</span>
+
+    <p class="onb-intro">Bienvenue ! 🎬 Pour fonctionner, cinéthèque a besoin
+      d'une <b>clé API TMDB</b> — c'est ce qui remplit automatiquement les fiches
+      (affiches, résumés, durées, épisodes, sorties…). Elle est
+      <b>gratuite et sans limite de durée</b> pour un usage personnel.</p>
+
+    <div class="onb-steps">
+      <h3 class="sub-title">Créer ta clé (2 minutes)</h3>
+      <ol class="forgot-steps">
+        <li>Crée un compte gratuit sur
+          <a href="https://www.themoviedb.org/signup" target="_blank" rel="noopener">themoviedb.org</a>.</li>
+        <li>Va sur
+          <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">
+          themoviedb.org/settings/api</a> (Paramètres → API).</li>
+        <li>Demande une clé « Developer » (usage personnel), accepte les conditions.</li>
+        <li>Copie la <b>« API Key (v3 auth) »</b> et colle-la ci-dessous.</li>
+      </ol>
+    </div>
+
+    <input id="onb-key" class="input" type="text" placeholder="Colle ta clé API TMDB ici" autofocus>
+    <div class="row-inline">
+      <input id="onb-region" class="input small-input" type="text" value="FR" maxlength="2"
+             title="Région pour les plateformes de streaming">
+      <button id="onb-save" class="btn primary">Enregistrer et démarrer</button>
+    </div>
+    <span id="onb-status" class="muted"></span>
+
+    <a class="forgot-link" href="{{ url_for('pages.bienvenue', skip=1) }}">
+      Configurer plus tard (accès limité sans clé)</a>
+    <p class="muted tmdb-attr">This product uses the TMDb API but is not endorsed
+      or certified by TMDb.</p>
+  </div>
+
+  <script>
+    const $ = (s) => document.querySelector(s);
+    $("#onb-save").addEventListener("click", async () => {
+      const key = $("#onb-key").value.trim();
+      const status = $("#onb-status");
+      if (!key) { status.textContent = "⚠️ Colle d'abord ta clé."; return; }
+      status.textContent = "Enregistrement et vérification…";
+      try {
+        await fetch("/api/settings", { method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tmdb_api_key: key, tmdb_region: $("#onb-region").value.trim() || "FR" }) });
+        const test = await fetch("/api/settings/tmdb-test", { method: "POST" });
+        if (!test.ok) {
+          const d = await test.json().catch(() => ({}));
+          status.textContent = "❌ Clé enregistrée mais invalide : " + (d.error || "réessaie.");
+          return;
+        }
+        status.textContent = "✅ Clé valide. Démarrage…";
+        window.location.href = "/";
+      } catch (e) { status.textContent = "❌ " + e.message; }
+    });
+  </script>
+</body>
+</html>

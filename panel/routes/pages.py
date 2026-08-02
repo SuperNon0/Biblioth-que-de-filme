@@ -9,6 +9,7 @@ from flask import (Blueprint, redirect, render_template, request,
                    send_from_directory, session, url_for)
 
 import auth
+import settings_store
 from context import cfg
 
 bp = Blueprint("pages", __name__)
@@ -17,7 +18,21 @@ bp = Blueprint("pages", __name__)
 @bp.get("/")
 @auth.login_required
 def index():
+    # Première installation : si la clé TMDB n'est pas encore configurée, on
+    # dirige vers l'accueil de configuration (sauf si l'admin a choisi « plus tard »).
+    if not settings_store.get("tmdb_api_key") and not session.get("onboarding_skip"):
+        return redirect(url_for("pages.bienvenue"))
     return render_template("index.html")
+
+
+@bp.get("/bienvenue")
+@auth.login_required
+def bienvenue():
+    """Fiche d'aide de première installation : créer et saisir la clé TMDB."""
+    if request.args.get("skip"):
+        session["onboarding_skip"] = True
+        return redirect(url_for("pages.index"))
+    return render_template("bienvenue.html")
 
 
 @bp.route("/login", methods=["GET", "POST"])
