@@ -33,6 +33,24 @@ def _row(t):
     return t
 
 
+def annotate_library(items):
+    """Ajoute le statut local + l'id aux résultats TMDB déjà en bibliothèque.
+
+    Permet au front d'afficher le badge de statut sur les cartes et le menu
+    rapide (« déjà dans ta bibliothèque : … »).
+    """
+    if not items:
+        return items
+    lib = {(r["tmdb_id"], r["type"]): r for r in
+           db.q("SELECT id, tmdb_id, type, statut FROM titres WHERE tmdb_id IS NOT NULL")}
+    for it in items:
+        row = lib.get((it.get("tmdb_id"), it.get("type")))
+        if row:
+            it["statut"] = row["statut"]
+            it["local_id"] = row["id"]
+    return items
+
+
 @bp.get("/search")
 @auth.login_required
 def search():
@@ -40,7 +58,7 @@ def search():
     if not query:
         return jsonify(results=[])
     try:
-        return jsonify(results=get_tmdb().search(query))
+        return jsonify(results=annotate_library(get_tmdb().search(query)))
     except TMDBError as exc:
         return jsonify(error=str(exc)), 502
 
@@ -109,6 +127,9 @@ def add():
     except TMDBError as exc:
         return jsonify(error=str(exc)), 502
     titre_id = sync.upsert_titre(detail, statut)
+    # Applique le statut choisi même si le titre existait déjà (upsert ne le
+    # change pas à la mise à jour) — utile depuis le menu rapide.
+    db.run("UPDATE titres SET statut = ? WHERE id = ?", (statut, titre_id))
     if typ == "serie":
         try:
             sync.sync_episodes(titre_id, tmdb, tmdb_id, detail.get("saisons", []))

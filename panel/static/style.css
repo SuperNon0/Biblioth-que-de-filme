@@ -435,6 +435,10 @@ main { padding: 20px; max-width: 1400px; margin: 0 auto; }
                border: 1px solid var(--border); }
 .qm-title { font-family: var(--font-serif); font-size: 1.02rem; text-align: center;
             line-height: 1.2; }
+.qm-status { font-size: 0.74rem; color: var(--green); text-align: center;
+             border: 1px solid var(--green); border-radius: 999px; padding: 3px 12px; }
+.btn.current { border-color: var(--green); color: var(--green); }
+.btn.primary.current { background: var(--green); color: #10221c; border-color: var(--green); }
 
 /* genre principal coloré sur les cartes + marquage « ajouté » */
 .poster-genre { display: inline-block; margin-top: 5px; font-size: 0.62rem;

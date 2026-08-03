@@ -12,6 +12,7 @@ from flask import Blueprint, jsonify, request
 
 import auth
 from context import get_tmdb
+from routes.library import annotate_library
 from tmdb import TMDBError
 
 bp = Blueprint("discover", __name__, url_prefix="/api")
@@ -55,7 +56,8 @@ def suggestions():
             seen.add(tid)
             uniq.append(it)
         if len(uniq) >= 4:  # on n'affiche pas les rangées trop maigres
-            blocs.append({"cle": cle, "titre": titre, "items": uniq[:20]})
+            blocs.append({"cle": cle, "titre": titre,
+                          "items": annotate_library(uniq[:20])})
 
     # Reprendre (local) — marqués vus pour ne pas les reproposer ailleurs.
     reprendre = _reprendre()
@@ -147,6 +149,7 @@ def discover():
         )
     except TMDBError as exc:
         return jsonify(error=str(exc)), 502
+    data["results"] = annotate_library(data.get("results", []))
     return jsonify(data)
 
 
@@ -178,7 +181,7 @@ def roulette():
         return jsonify(error=str(exc)), 502
     items = data.get("results", [])
     random.shuffle(items)
-    return jsonify(results=items[:count])
+    return jsonify(results=annotate_library(items[:count]))
 
 
 @bp.get("/genres")

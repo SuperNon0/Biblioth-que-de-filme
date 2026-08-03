@@ -80,7 +80,8 @@ function posterCard(item) {
       <span style="width:${pct}%"></span></div>`;
   }
   return `<div class="poster" data-id="${item.id || ""}" data-tmdb="${item.tmdb_id || ""}"
-       data-type="${item.type || ""}">
+       data-type="${item.type || ""}" data-localid="${item.local_id || ""}"
+       data-statut="${item.statut || ""}">
     <img class="poster-img" loading="lazy" src="${posterSrc(item.affiche)}" alt="">
     ${statut}${fav}
     <div class="poster-body">
@@ -108,9 +109,21 @@ let qmContext = null;
 function openQuickMenu(el, tmdb, type) {
   const titleEl = el.querySelector(".poster-title, .sr-title");
   const imgEl = el.querySelector("img");
-  qmContext = { el, tmdb, type };
+  const statut = el.dataset.statut || "";
+  const localid = el.dataset.localid ? Number(el.dataset.localid) : null;
+  qmContext = { el, tmdb, type, localid };
   $("#qm-poster").src = imgEl ? imgEl.src : posterSrc(null);
   $("#qm-title").textContent = titleEl ? titleEl.textContent.trim() : "";
+  // Statut actuel (si déjà en bibliothèque) + surlignage du bon bouton.
+  const status = $("#qm-status");
+  if (statut) {
+    status.textContent = "Déjà dans ta bibliothèque : " + (STATUTS[statut] || statut);
+    status.classList.remove("hidden");
+  } else {
+    status.classList.add("hidden");
+  }
+  $$("#quick-menu [data-qm]").forEach((b) =>
+    b.classList.toggle("current", b.dataset.qm === statut));
   quickMenu.classList.remove("hidden");
 }
 function closeQuickMenu() { quickMenu.classList.add("hidden"); qmContext = null; }
@@ -119,12 +132,19 @@ quickMenu.addEventListener("click", async (e) => {
   if (e.target.closest("[data-qm-close]")) return closeQuickMenu();
   const btn = e.target.closest("[data-qm]");
   if (!btn || !qmContext) return;
-  const { el, tmdb, type } = qmContext;
-  if (btn.dataset.qm === "infos") { closeQuickMenu(); return openPreview(tmdb, type); }
+  const { el, tmdb, type, localid } = qmContext;
+  if (btn.dataset.qm === "infos") {
+    closeQuickMenu();
+    return localid ? openDetail(localid) : openPreview(tmdb, type);
+  }
   try {
-    await api("/api/library", { method: "POST",
+    const r = await api("/api/library", { method: "POST",
       body: { tmdb_id: tmdb, type, statut: btn.dataset.qm } });
-    if (el) el.classList.add("poster-added");
+    if (el) {  // mémorise le nouveau statut sur la carte (badge au prochain clic)
+      el.dataset.statut = btn.dataset.qm;
+      el.dataset.localid = r.id;
+      el.classList.add("poster-added");
+    }
     toast(btn.dataset.qm === "vu" ? "Marqué comme vu ✓" : "Ajouté à « À voir »");
     closeQuickMenu();
     // On ne recharge que la bibliothèque (ne pas casser les carrousels/roulette).
