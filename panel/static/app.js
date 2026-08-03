@@ -60,6 +60,7 @@ function posterCard(item) {
   // Note TMDB (communauté, sur 10) : à droite de la ligne d'infos, pour ne pas
   // chevaucher le badge de statut sur les cartes étroites.
   const note = item.note_tmdb ? `<span class="meta-note">★ ${item.note_tmdb}</span>` : "";
+  const vues = item.nb_vues > 1 ? `<span class="meta-vues">↻ ×${item.nb_vues}</span>` : "";
   const statut = item.statut
     ? `<span class="poster-badge badge-${item.statut}">${STATUTS[item.statut] || ""}</span>` : "";
   const fav = item.favori ? `<span class="poster-fav">♥</span>` : "";
@@ -86,7 +87,7 @@ function posterCard(item) {
     ${statut}${fav}
     <div class="poster-body">
       <div class="poster-title">${esc(item.titre)}</div>
-      <div class="poster-meta"><span>${type}${annee ? " · " + annee : ""}</span>${note}</div>
+      <div class="poster-meta"><span>${type}${annee ? " · " + annee : ""}</span><span class="meta-right">${vues}${note}</span></div>
       ${genre0}${prog}
     </div>
   </div>`;

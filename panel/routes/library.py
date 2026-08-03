@@ -58,13 +58,16 @@ def annotate_library(items):
     """
     if not items:
         return items
-    lib = {(r["tmdb_id"], r["type"]): r for r in
-           db.q("SELECT id, tmdb_id, type, statut FROM titres WHERE tmdb_id IS NOT NULL")}
+    lib = {(r["tmdb_id"], r["type"]): r for r in db.q(
+        """SELECT id, tmdb_id, type, statut,
+                  (SELECT COUNT(*) FROM visionnages v WHERE v.titre_id = t.id) AS nb_vues
+           FROM titres t WHERE tmdb_id IS NOT NULL""")}
     for it in items:
         row = lib.get((it.get("tmdb_id"), it.get("type")))
         if row:
             it["statut"] = row["statut"]
             it["local_id"] = row["id"]
+            it["nb_vues"] = row["nb_vues"]
     return items
 
 
@@ -117,12 +120,22 @@ def library():
                           FROM episodes WHERE titre_id IN ({marks})
                           GROUP BY titre_id""", series_ids):
             prog[p["titre_id"]] = p
+    # Nombre de visionnages des films (pour afficher « vu ×N »).
+    film_ids = [r["id"] for r in rows if r["type"] == "film"]
+    vues = {}
+    if film_ids:
+        marks = ",".join("?" * len(film_ids))
+        for v in db.q(f"""SELECT titre_id, COUNT(*) AS n FROM visionnages
+                          WHERE titre_id IN ({marks}) GROUP BY titre_id""", film_ids):
+            vues[v["titre_id"]] = v["n"]
     out = []
     for r in rows:
         row = _row(r)
         if row["type"] == "serie" and row["id"] in prog:
             row["total_ep"] = prog[row["id"]]["total"]
             row["vus_ep"] = prog[row["id"]]["vus"] or 0
+        elif row["type"] == "film":
+            row["nb_vues"] = vues.get(row["id"], 0)
         out.append(row)
     return jsonify(titres=out)
 
