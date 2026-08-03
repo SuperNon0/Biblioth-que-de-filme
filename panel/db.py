@@ -35,7 +35,8 @@ CREATE TABLE IF NOT EXISTS titres (
     pays          TEXT,
     plateformes   TEXT,                          -- JSON: [{"nom","logo"}]
     casting       TEXT,                          -- JSON: [{"id","nom","personnage","photo"}]
-    statut        TEXT DEFAULT 'a_voir',         -- vu|a_voir|en_cours|abandonne
+    equipe        TEXT,                          -- JSON: [{"id","nom","poste","photo"}]
+    statut        TEXT DEFAULT 'a_voir',         -- vu|a_voir|en_cours
     favori        INTEGER DEFAULT 0,
     ajout_manuel  INTEGER DEFAULT 0,
     date_ajout    INTEGER,
@@ -126,6 +127,8 @@ def _migrate(conn):
     cols = {r[1] for r in conn.execute("PRAGMA table_info(titres)")}
     if "casting" not in cols:
         conn.execute("ALTER TABLE titres ADD COLUMN casting TEXT")
+    if "equipe" not in cols:
+        conn.execute("ALTER TABLE titres ADD COLUMN equipe TEXT")
     ep_cols = {r[1] for r in conn.execute("PRAGMA table_info(episodes)")}
     if "notifie" not in ep_cols:
         conn.execute("ALTER TABLE episodes ADD COLUMN notifie INTEGER DEFAULT 0")

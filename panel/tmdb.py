@@ -174,11 +174,36 @@ class TMDB:
                 return c.get("name")
         return None
 
-    def _cast(self, d, limit=15):
+    def _cast(self, d, limit=20):
         return [{"id": c.get("id"), "nom": c.get("name"),
                  "personnage": c.get("character"),
                  "photo": self.image_url(c.get("profile_path"), "w185")}
                 for c in d.get("credits", {}).get("cast", [])[:limit]]
+
+    _JOB_FR = {
+        "Director": "Réalisateur", "Writer": "Scénariste",
+        "Screenplay": "Scénario", "Story": "Histoire", "Producer": "Producteur",
+        "Director of Photography": "Directeur photo",
+        "Original Music Composer": "Musique", "Creator": "Créateur",
+    }
+
+    def _crew(self, d, limit=8):
+        """Membres clés de l'équipe (réalisateur, scénariste, musique…)."""
+        seen, out = set(), []
+        for c in d.get("credits", {}).get("crew", []):
+            job = c.get("job")
+            if job not in self._JOB_FR:
+                continue
+            pid = c.get("id")
+            if pid in seen:
+                continue
+            seen.add(pid)
+            out.append({"id": pid, "nom": c.get("name"),
+                        "poste": self._JOB_FR[job],
+                        "photo": self.image_url(c.get("profile_path"), "w185")})
+            if len(out) >= limit:
+                break
+        return out
 
     def person(self, person_id):
         """Fiche d'une personne : infos + filmographie (films et séries)."""
@@ -220,6 +245,7 @@ class TMDB:
             "plateformes": self._providers(d),
             "realisateur": self._director(d),
             "casting": self._cast(d),
+            "equipe": self._crew(d),
         })
         return brief
 
@@ -243,6 +269,7 @@ class TMDB:
             "bande_annonce": self._trailer(d),
             "plateformes": self._providers(d),
             "casting": self._cast(d),
+            "equipe": self._crew(d),
             "saisons": saisons,
         })
         return brief

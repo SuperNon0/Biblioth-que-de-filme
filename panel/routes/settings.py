@@ -124,6 +124,25 @@ def update():
                    message="Mise à jour lancée. Le site redémarre dans quelques secondes.")
 
 
+@bp.post("/reset")
+@auth.login_required
+def reset_data():
+    """Réinitialise toute la bibliothèque (titres, visionnages, épisodes, listes
+    perso, alertes). Conserve les listes système « À voir » et « Favoris »."""
+    conn = db.connect()
+    try:
+        conn.execute("PRAGMA foreign_keys = OFF")
+        for table in ("liste_items", "alertes", "visionnages", "episodes", "titres"):
+            conn.execute(f"DELETE FROM {table}")
+        conn.execute("DELETE FROM listes WHERE systeme IS NULL")
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.commit()
+    except Exception as exc:  # noqa: BLE001
+        conn.rollback()
+        return jsonify(error=str(exc)), 500
+    return jsonify(ok=True)
+
+
 @bp.get("/export")
 @auth.login_required
 def export_data():

@@ -93,65 +93,13 @@ function posterCard(item) {
   </div>`;
 }
 
-/* Clic sur un titre :
-   - déjà en bibliothèque → sa fiche ;
-   - résultat TMDB → petit menu rapide (À voir / Déjà vu / Plus d'infos). */
+/* Clic sur un titre → sa page plein écran (fiche si en biblio, aperçu sinon). */
 function openItem(el) {
-  const id = el.dataset.id;
+  const id = el.dataset.id || el.dataset.localid;
   if (id) return openDetail(Number(id));
   const tmdb = Number(el.dataset.tmdb), type = el.dataset.type;
-  if (tmdb && type) openQuickMenu(el, tmdb, type);
+  if (tmdb && type) openPreview(tmdb, type);
 }
-
-/* ------------------------------------------------- menu rapide (affiches) */
-const quickMenu = $("#quick-menu");
-let qmContext = null;
-
-function openQuickMenu(el, tmdb, type) {
-  const titleEl = el.querySelector(".poster-title, .sr-title");
-  const imgEl = el.querySelector("img");
-  const statut = el.dataset.statut || "";
-  const localid = el.dataset.localid ? Number(el.dataset.localid) : null;
-  qmContext = { el, tmdb, type, localid };
-  $("#qm-poster").src = imgEl ? imgEl.src : posterSrc(null);
-  $("#qm-title").textContent = titleEl ? titleEl.textContent.trim() : "";
-  // Statut actuel (si déjà en bibliothèque) + surlignage du bon bouton.
-  const status = $("#qm-status");
-  if (statut) {
-    status.textContent = "Déjà dans ta bibliothèque : " + (STATUTS[statut] || statut);
-    status.classList.remove("hidden");
-  } else {
-    status.classList.add("hidden");
-  }
-  $$("#quick-menu [data-qm]").forEach((b) =>
-    b.classList.toggle("current", b.dataset.qm === statut));
-  quickMenu.classList.remove("hidden");
-}
-function closeQuickMenu() { quickMenu.classList.add("hidden"); qmContext = null; }
-
-quickMenu.addEventListener("click", async (e) => {
-  if (e.target.closest("[data-qm-close]")) return closeQuickMenu();
-  const btn = e.target.closest("[data-qm]");
-  if (!btn || !qmContext) return;
-  const { el, tmdb, type, localid } = qmContext;
-  if (btn.dataset.qm === "infos") {
-    closeQuickMenu();
-    return localid ? openDetail(localid) : openPreview(tmdb, type);
-  }
-  try {
-    const r = await api("/api/library", { method: "POST",
-      body: { tmdb_id: tmdb, type, statut: btn.dataset.qm } });
-    if (el) {  // mémorise le nouveau statut sur la carte (badge au prochain clic)
-      el.dataset.statut = btn.dataset.qm;
-      el.dataset.localid = r.id;
-      el.classList.add("poster-added");
-    }
-    toast(btn.dataset.qm === "vu" ? "Marqué comme vu ✓" : "Ajouté à « À voir »");
-    closeQuickMenu();
-    // On ne recharge que la bibliothèque (ne pas casser les carrousels/roulette).
-    if ($("#page-bibliotheque").classList.contains("active")) loadLibrary();
-  } catch (err) { toast(err.message); }
-});
 
 function bindGrid(container) {
   container.addEventListener("click", (e) => {
@@ -327,7 +275,7 @@ bindGrid($("#lib-grid"));
 
 /* -------------------------------------------------- roulette « que regarder » */
 async function openRoulette(source) {
-  modal.classList.remove("hidden");
+  modal.classList.remove("hidden"); modal.classList.remove("full");
   modalContent.innerHTML = `<div class="detail-body"><h2>🎲 Que regarder ?</h2>
     <p class="muted">Tirage en cours…</p></div>`;
   rollRoulette(source);
@@ -480,7 +428,7 @@ $("#btn-liste-import").addEventListener("click", openImportListModal);
 $("#btn-liste-presets").addEventListener("click", openPresetsModal);
 
 async function openPresetsModal() {
-  modal.classList.remove("hidden");
+  modal.classList.remove("hidden"); modal.classList.remove("full");
   modalContent.innerHTML = `<div class="detail-body"><h2>🎬 Listes prêtes</h2>
     <p class="muted">Choisis une saga : ses titres sont ajoutés à ta bibliothèque
       (« À voir ») et rangés dans une nouvelle liste, dans l'ordre.</p>
@@ -624,6 +572,16 @@ $("#btn-save-password").addEventListener("click", async () => {
     $("#password-status").textContent = "✅ Mot de passe changé.";
   } catch (e) { $("#password-status").textContent = "❌ " + e.message; }
 });
+$("#btn-reset").addEventListener("click", async () => {
+  if (!confirm("Effacer TOUTE ta bibliothèque ? Cette action est irréversible.")) return;
+  if (!confirm("Confirmer une dernière fois : tout supprimer ?")) return;
+  $("#reset-status").textContent = "Réinitialisation…";
+  try {
+    await api("/api/reset", { method: "POST" });
+    $("#reset-status").textContent = "✅ Bibliothèque réinitialisée.";
+    toast("Tout a été réinitialisé");
+  } catch (e) { $("#reset-status").textContent = "❌ " + e.message; }
+});
 $("#btn-import").addEventListener("click", () => $("#import-file").click());
 $("#import-file").addEventListener("change", async (e) => {
   const file = e.target.files[0]; if (!file) return;
@@ -638,84 +596,152 @@ $("#import-file").addEventListener("change", async (e) => {
 /* ========================= FICHE DÉTAILLÉE (modale) ==================== */
 const modal = $("#modal");
 const modalContent = $("#modal-content");
-function closeModal() { modal.classList.add("hidden"); modalContent.innerHTML = ""; }
+function closeModal() {
+  modal.classList.add("hidden"); modal.classList.remove("full");
+  modalContent.innerHTML = "";
+}
 modal.addEventListener("click", (e) => { if (e.target.closest("[data-close]")) closeModal(); });
-document.addEventListener("keydown", (e) => {
-  if (e.key !== "Escape") return;
-  if (!quickMenu.classList.contains("hidden")) return closeQuickMenu();
-  closeModal();
-});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
+
+const DV_LOADING = `<div class="dv-body"><p class="muted">Chargement…</p></div>`;
+const dvErr = (e) => `<div class="dv-body"><p class="muted">${esc(e.message)}</p></div>`;
 
 async function openDetail(id) {
-  modal.classList.remove("hidden");
-  modalContent.innerHTML = `<div class="detail-body"><p class="muted">Chargement…</p></div>`;
+  modal.classList.remove("hidden"); modal.classList.add("full");
+  modalContent.innerHTML = DV_LOADING;
   try {
-    const data = await api(`/api/title/${id}`);
-    modalContent.innerHTML = data.titre.type === "film"
-      ? renderFilm(data) : renderSerie(data);
-  } catch (e) { modalContent.innerHTML = `<div class="detail-body"><p class="muted">${esc(e.message)}</p></div>`; }
+    modalContent.innerHTML = renderTitlePage(normLocal(await api(`/api/title/${id}`)));
+  } catch (e) { modalContent.innerHTML = dvErr(e); }
 }
 
-function hero(t) {
-  const genres = (t.genres || []).map(genreTag).join("");
-  const note = t.note_tmdb ? `<span class="tag">★ ${t.note_tmdb}</span>` : "";
-  const trailer = t.bande_annonce
-    ? `<a class="btn small" target="_blank" rel="noopener"
-         href="https://www.youtube.com/watch?v=${t.bande_annonce}">▶ Bande-annonce</a>` : "";
-  return `<div class="detail-hero" style="background-image:url('${t.fond || ""}')">
-    <img class="detail-poster" src="${posterSrc(t.affiche)}" alt="">
-    <div class="detail-info">
-      <h2>${esc(t.titre)}</h2>
-      <div class="detail-tags"><span class="tag">${t.type === "serie" ? "Série" : "Film"}</span>
-        <span class="tag">${t.annee || "—"}</span>${note}${genres}</div>
-      <div class="detail-actions" data-id="${t.id}">
-        ${["en_cours", "a_voir", "vu"].map((s) =>
-          `<button class="btn small ${t.statut === s ? "primary" : ""}"
-             data-statut="${s}">${STATUTS[s]}</button>`).join("")}
-        <button class="btn small ${t.favori ? "primary" : ""}" data-fav>♥ Favori</button>
-        <button class="btn small" data-addlist>+ Liste</button>
-        ${trailer}
-        <button class="btn small danger" data-del>Supprimer</button>
-      </div>
-    </div></div>`;
+async function openPreview(tmdb, type) {
+  modal.classList.remove("hidden"); modal.classList.add("full");
+  modalContent.innerHTML = DV_LOADING;
+  try {
+    modalContent.innerHTML = renderTitlePage(normTmdb(await api(`/api/preview?tmdb_id=${tmdb}&type=${type}`)));
+  } catch (e) { modalContent.innerHTML = dvErr(e); }
 }
 
-function renderFilm(data) {
+function normLocal(data) {
   const t = data.titre;
-  const providers = (t.plateformes || []).length
-    ? `<h3 class="sub-title">Où le regarder</h3><div class="providers">
-       ${t.plateformes.map((p) => `<img title="${esc(p.nom)}" src="${p.logo}" alt="${esc(p.nom)}">`).join("")}</div>`
-    : "";
-  const watches = data.visionnages || [];
-  return hero(t) + `<div class="detail-body" data-id="${t.id}">
-    <p class="detail-resume">${esc(t.resume) || "Pas de résumé."}</p>
-    <p class="muted">${t.duree ? `Durée : ${t.duree} min · ` : ""}Vu ${watches.length} fois</p>
-    ${providers}
-    <h3 class="sub-title">Visionnages</h3>
-    <div class="row-inline">
-      <button class="btn small primary" data-addwatch>
-        ${watches.length ? "↻ J'ai revu aujourd'hui" : "✓ Marquer comme vu"}</button>
-    </div>
-    ${watches.length ? `<ul class="watch-list">${watches.map((w) =>
-      `<li><span>${w.date || "déjà vu"}</span>
-       <button class="ep-btn" data-delwatch="${w.id}">✕</button></li>`).join("")}</ul>` : ""}
-    ${castingBlock(t.casting)}
-  </div>`;
+  return { inLib: true, localId: t.id, tmdb: t.tmdb_id, type: t.type, titre: t.titre,
+    annee: t.annee, date_sortie: t.date_sortie, duree: t.duree, resume: t.resume,
+    genres: t.genres || [], note_tmdb: t.note_tmdb, fond: t.fond, affiche: t.affiche,
+    bande_annonce: t.bande_annonce, plateformes: t.plateformes || [], casting: t.casting || [],
+    equipe: t.equipe || [], statut: t.statut, favori: t.favori,
+    watches: data.visionnages || [], saisons: data.saisons || [], next: data.prochain_episode };
+}
+function normTmdb(t) {
+  return { inLib: false, localId: null, tmdb: t.tmdb_id, type: t.type, titre: t.titre,
+    annee: t.annee, date_sortie: t.date_sortie, duree: t.duree, resume: t.resume,
+    genres: t.genres || [], note_tmdb: t.note_tmdb, fond: t.fond, affiche: t.affiche,
+    bande_annonce: t.bande_annonce, plateformes: t.plateformes || [], casting: t.casting || [],
+    equipe: t.equipe || [], statut: null, favori: false, watches: [], saisons: [],
+    next: t.prochain_episode, nb_saisons: t.nb_saisons, nb_episodes: t.nb_episodes };
 }
 
-/* Grille du casting : clic sur un acteur → sa fiche (filmographie + infos). */
-function castingBlock(cast) {
-  if (!cast || !cast.length) return "";
-  return `<h3 class="sub-title">Casting</h3><div class="cast-row">${cast.map((c) => `
+function fmtRuntime(min) {
+  if (!min) return "";
+  const h = Math.floor(min / 60), m = min % 60;
+  return h ? (m ? `${h}h${String(m).padStart(2, "0")}` : `${h}h`) : `${m}min`;
+}
+const MOIS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août",
+              "sept.", "oct.", "nov.", "déc."];
+function fmtDate(s) {
+  if (!s) return "";
+  const p = s.split("-");
+  return p.length < 3 ? s : `${+p[2]} ${MOIS[+p[1] - 1] || ""} ${p[0]}`;
+}
+
+/* Page plein écran d'un titre (fiche si en biblio, aperçu sinon). */
+function renderTitlePage(n) {
+  const seen = n.watches.length > 0 || n.statut === "vu";
+  const genres = (n.genres || []).map(genreTag).join("");
+  const meta = [fmtRuntime(n.duree), n.type === "serie" ? "Série" : "Film"].filter(Boolean).join(" · ");
+  const trailer = n.bande_annonce ? `<a class="dv-trailer" target="_blank" rel="noopener"
+       href="https://www.youtube.com/watch?v=${n.bande_annonce}">▶ Bande-annonce</a>` : "";
+  const note = n.note_tmdb ? `<div class="dv-note">
+       <span class="dv-note-val">★ ${n.note_tmdb}</span><span class="muted">/ 10 · TMDB</span></div>` : "";
+  const providers = (n.plateformes || []).length ? `<h3 class="dv-h3">Où regarder</h3>
+       <div class="providers">${n.plateformes.map((p) => `<img title="${esc(p.nom)}" src="${p.logo}" alt="${esc(p.nom)}">`).join("")}</div>` : "";
+  const vuBlock = seen ? `<div class="dv-seen">
+      <span class="dv-seen-count">Vu ${n.watches.length || 1} fois</span>
+      ${n.watches.length ? `<span class="muted">${n.watches.map((w) => w.date ? fmtDate(w.date) : "déjà vu").join(" · ")}</span>` : ""}
+      <button class="btn small" data-act="revu">↻ J'ai revu</button></div>` : "";
+  const actions = `<div class="dv-actions" data-localid="${n.localId || ""}"
+       data-tmdb="${n.tmdb || ""}" data-type="${n.type}">
+    <button class="dv-act ${seen ? "done" : ""}" data-act="vu">
+      <span class="dv-ic">${seen ? "✓" : "○"}</span><span>${seen ? "Vu" : "Marquer comme vu"}</span></button>
+    <button class="dv-act ${n.statut === "a_voir" ? "done" : ""}" data-act="avoir">
+      <span class="dv-ic">＋</span><span>Liste de suivi</span></button>
+    <button class="dv-act" data-act="liste">
+      <span class="dv-ic">≣</span><span>Ajouter à la liste…</span></button>
+  </div>`;
+  return `<div class="dv-hero" style="background-image:url('${n.fond || n.affiche || ""}')">
+      <button class="dv-back" data-close aria-label="Retour">←</button>
+      ${n.inLib ? `<button class="dv-fav ${n.favori ? "on" : ""}" data-fav data-localid="${n.localId}">♥</button>` : ""}
+    </div>
+    <div class="dv-head">
+      <img class="dv-poster" src="${posterSrc(n.affiche)}" alt="">
+      <div class="dv-headinfo">
+        ${n.date_sortie ? `<div class="dv-date">${fmtDate(n.date_sortie)}</div>` : ""}
+        <div class="dv-sub">${meta}</div>
+        ${trailer}
+      </div>
+    </div>
+    <div class="dv-body" data-localid="${n.localId || ""}">
+      <h1 class="dv-title">${esc(n.titre)}</h1>
+      <div class="dv-genres">${genres}</div>
+      <p class="dv-resume">${esc(n.resume) || "Pas de résumé."}</p>
+      ${actions}${vuBlock}${note}${providers}
+      ${n.type === "serie" ? seasonsBlock(n) : ""}
+      ${renderCastCrew(n.casting, n.equipe)}
+      ${n.inLib ? `<div class="dv-remove"><button class="btn small danger" data-del data-localid="${n.localId}">Retirer de ma bibliothèque</button></div>` : ""}
+    </div>`;
+}
+
+/* Distribution & équipe : grandes vignettes d'acteurs + membres de l'équipe. */
+function renderCastCrew(cast, equipe) {
+  cast = cast || []; equipe = equipe || [];
+  if (!cast.length && !equipe.length) return "";
+  const castHtml = cast.length ? `<div class="cast-row">${cast.map((c) => `
     <div class="cast" data-person="${c.id}">
       <img loading="lazy" src="${posterSrc(c.photo)}" alt="">
       <div class="cast-name">${esc(c.nom)}</div>
       ${c.personnage ? `<div class="cast-role">${esc(c.personnage)}</div>` : ""}
-    </div>`).join("")}</div>`;
+    </div>`).join("")}</div>` : "";
+  const crewHtml = equipe.length ? `<div class="crew-row">${equipe.map((c) => `
+    <div class="crew" data-person="${c.id}">
+      <img loading="lazy" src="${posterSrc(c.photo)}" alt="">
+      <div><div class="crew-name">${esc(c.nom)}</div><div class="crew-role">${esc(c.poste)}</div></div>
+    </div>`).join("")}</div>` : "";
+  return `<h3 class="dv-h3">Distribution &amp; équipe</h3>${castHtml}${crewHtml}`;
+}
+
+function seasonsBlock(n) {
+  if (!n.inLib) {
+    return `<h3 class="dv-h3">Épisodes</h3>
+      <p class="muted">Ajoute la série pour suivre les épisodes.</p>`;
+  }
+  const next = n.next;
+  const seasons = (n.saisons || []).map((s) => `
+    <div class="season" data-season="${s.numero}">
+      <div class="season-head">
+        <span><span class="chevron">▸</span> <span class="season-title">Saison ${s.numero}</span></span>
+        <span class="season-prog">${s.vus}/${s.total} vus
+          <button class="ep-btn" data-markseason="${s.numero}" style="margin-left:8px">Tout marquer</button></span>
+      </div>
+      <div class="season-body">${s.episodes.map(episodeRow).join("")}</div>
+    </div>`).join("");
+  return `${next ? `<p class="muted">Prochain épisode : S${next.saison}E${next.numero}
+       « ${esc(next.nom || "")} » le ${fmtDate(next.date_diff)}</p>` : ""}
+    <div class="row-inline"><button class="btn small" data-markseries data-localid="${n.localId}">✓ Marquer la série vue</button></div>
+    <h3 class="dv-h3">Saisons &amp; épisodes</h3>
+    ${seasons || `<p class="muted">Épisodes indisponibles.</p>`}`;
 }
 
 async function openPerson(id) {
-  modal.classList.remove("hidden");
+  modal.classList.remove("hidden"); modal.classList.remove("full");
   modalContent.innerHTML = `<div class="detail-body"><p class="muted">Chargement…</p></div>`;
   try {
     const p = await api(`/api/person/${id}`);
@@ -737,80 +763,6 @@ function renderPerson(p) {
   <div class="detail-body">${bio}
     <h3 class="sub-title">Filmographie</h3>
     <div class="grid">${p.films.map(posterCard).join("")}</div>
-  </div>`;
-}
-
-/* Aperçu d'un titre pas encore en bibliothèque (ne l'ajoute pas). */
-async function openPreview(tmdb, type) {
-  modal.classList.remove("hidden");
-  modalContent.innerHTML = `<div class="detail-body"><p class="muted">Chargement…</p></div>`;
-  try {
-    const t = await api(`/api/preview?tmdb_id=${tmdb}&type=${type}`);
-    modalContent.innerHTML = renderPreview(t, tmdb, type);
-  } catch (e) {
-    modalContent.innerHTML = `<div class="detail-body"><p class="muted">${esc(e.message)}</p></div>`;
-  }
-}
-
-function renderPreview(t, tmdb, type) {
-  const genres = (t.genres || []).map(genreTag).join("");
-  const note = t.note_tmdb ? `<span class="tag">★ ${t.note_tmdb}</span>` : "";
-  const trailer = t.bande_annonce
-    ? `<a class="btn small" target="_blank" rel="noopener"
-         href="https://www.youtube.com/watch?v=${t.bande_annonce}">▶ Bande-annonce</a>` : "";
-  const providers = (t.plateformes || []).length
-    ? `<h3 class="sub-title">Où le regarder</h3><div class="providers">
-       ${t.plateformes.map((p) => `<img title="${esc(p.nom)}" src="${p.logo}" alt="${esc(p.nom)}">`).join("")}</div>` : "";
-  const saisonsInfo = (type === "serie" && t.nb_saisons)
-    ? `<p class="muted">${t.nb_saisons} saison(s) · ${t.nb_episodes || "?"} épisodes</p>` : "";
-  return `<div class="detail-hero" style="background-image:url('${t.fond || ""}')">
-    <img class="detail-poster" src="${posterSrc(t.affiche)}" alt="">
-    <div class="detail-info">
-      <h2>${esc(t.titre)}</h2>
-      <div class="detail-tags"><span class="tag">${type === "serie" ? "Série" : "Film"}</span>
-        <span class="tag">${t.annee || "—"}</span>${note}${genres}</div>
-      <div class="detail-actions preview-add" data-tmdb="${tmdb}" data-type="${type}">
-        <span class="preview-label">Ajouter :</span>
-        <button class="btn small primary" data-addstatus="en_cours">En cours</button>
-        <button class="btn small" data-addstatus="a_voir">À voir</button>
-        <button class="btn small" data-addstatus="vu">Vu</button>
-        ${trailer}
-      </div>
-    </div>
-  </div>
-  <div class="detail-body">
-    <p class="detail-resume">${esc(t.resume) || "Pas de résumé."}</p>
-    ${t.duree ? `<p class="muted">Durée : ${t.duree} min</p>` : ""}${saisonsInfo}
-    ${providers}
-    ${castingBlock(t.casting)}
-  </div>`;
-}
-
-function renderSerie(data) {
-  const t = data.titre;
-  const next = data.prochain_episode;
-  const providers = (t.plateformes || []).length
-    ? `<h3 class="sub-title">Où la regarder</h3><div class="providers">
-       ${t.plateformes.map((p) => `<img title="${esc(p.nom)}" src="${p.logo}" alt="${esc(p.nom)}">`).join("")}</div>`
-    : "";
-  const seasons = (data.saisons || []).map((s) => `
-    <div class="season" data-season="${s.numero}">
-      <div class="season-head">
-        <span><span class="chevron">▸</span> <span class="season-title">Saison ${s.numero}</span></span>
-        <span class="season-prog">${s.vus}/${s.total} vus
-          <button class="ep-btn" data-markseason="${s.numero}" style="margin-left:8px">Tout marquer</button></span>
-      </div>
-      <div class="season-body">${s.episodes.map(episodeRow).join("")}</div>
-    </div>`).join("");
-  return hero(t) + `<div class="detail-body" data-id="${t.id}">
-    <p class="detail-resume">${esc(t.resume) || "Pas de résumé."}</p>
-    ${next ? `<p class="muted">Prochain épisode : S${next.saison}E${next.numero}
-       « ${esc(next.nom || "")} » le ${next.date_diff}</p>` : ""}
-    ${providers}
-    <div class="row-inline"><button class="btn small" data-markseries>✓ Marquer la série vue</button></div>
-    <h3 class="sub-title">Saisons &amp; épisodes</h3>
-    ${seasons || `<p class="muted">Épisodes indisponibles.</p>`}
-    ${castingBlock(t.casting)}
   </div>`;
 }
 
@@ -846,51 +798,37 @@ modalContent.addEventListener("click", async (e) => {
     } catch (err) { toast(err.message); presetEl.disabled = false; presetEl.textContent = "Importer"; }
     return;
   }
-  const addEl = e.target.closest("[data-addstatus]");
-  if (addEl) {
-    const box = addEl.closest("[data-tmdb]");
-    try {
-      const r = await api("/api/library", { method: "POST", body: {
-        tmdb_id: Number(box.dataset.tmdb), type: box.dataset.type,
-        statut: addEl.dataset.addstatus } });
-      toast("Ajouté à ta bibliothèque"); refreshAll(); openDetail(r.id);
-    } catch (err) { toast(err.message); }
-    return;
-  }
+  if (e.target.closest("[data-close]")) return closeModal();
+  const actEl = e.target.closest("[data-act]");
+  if (actEl) return handleTitleAct(actEl);
   const posterEl = e.target.closest(".poster");
   if (posterEl) return openItem(posterEl);
 
-  const idEl = e.target.closest("[data-id]");
-  const id = idEl && Number(idEl.dataset.id);
+  const idFrom = (sel) => { const el = e.target.closest("[data-localid]");
+    return el && el.dataset.localid ? Number(el.dataset.localid) : null; };
   try {
-    if (e.target.closest("[data-statut]")) {
+    const favEl = e.target.closest("[data-fav]");
+    const delEl = e.target.closest("[data-del]");
+    if (favEl) {
+      const id = Number(favEl.dataset.localid);
       await api(`/api/library/${id}`, { method: "PATCH",
-        body: { statut: e.target.closest("[data-statut]").dataset.statut } });
-      openDetail(id); refreshAll();
-    } else if (e.target.closest("[data-fav]")) {
-      const on = !e.target.closest("[data-fav]").classList.contains("primary");
-      await api(`/api/library/${id}`, { method: "PATCH", body: { favori: on } });
+        body: { favori: !favEl.classList.contains("on") } });
       openDetail(id);
-    } else if (e.target.closest("[data-del]")) {
-      if (confirm("Supprimer ce titre de la bibliothèque ?")) {
-        await api(`/api/library/${id}`, { method: "DELETE" });
-        closeModal(); refreshAll(); toast("Titre supprimé");
+    } else if (delEl) {
+      if (confirm("Retirer ce titre de ta bibliothèque ?")) {
+        await api(`/api/library/${delEl.dataset.localid}`, { method: "DELETE" });
+        closeModal(); refreshAll(); toast("Titre retiré");
       }
-    } else if (e.target.closest("[data-addlist]")) {
-      addToListPrompt(id);
-    } else if (e.target.closest("[data-addwatch]")) {
-      await api(`/api/title/${id}/watch`, { method: "POST", body: {} });
-      openDetail(id); refreshAll();
-    } else if (e.target.closest("[data-delwatch]")) {
-      await api(`/api/watch/${e.target.closest("[data-delwatch]").dataset.delwatch}`,
-        { method: "DELETE" }); openDetail(id);
     } else if (e.target.closest("[data-ep]")) {
       await api(`/api/episode/${e.target.closest("[data-ep]").dataset.ep}/toggle`,
-        { method: "POST" }); openDetail(id);
+        { method: "POST" });
+      const id = idFrom(); if (id) openDetail(id);
     } else if (e.target.closest("[data-markseason]")) {
-      await api(`/api/title/${id}/season/${e.target.closest("[data-markseason]").dataset.markseason}/mark`,
+      const b = e.target.closest("[data-markseason]"), id = idFrom();
+      await api(`/api/title/${id}/season/${b.dataset.markseason}/mark`,
         { method: "POST", body: { vu: true } }); openDetail(id);
     } else if (e.target.closest("[data-markseries]")) {
+      const id = Number(e.target.closest("[data-markseries]").dataset.localid);
       await api(`/api/title/${id}/mark`, { method: "POST", body: { vu: true } });
       openDetail(id); refreshAll();
     } else {
@@ -899,6 +837,39 @@ modalContent.addEventListener("click", async (e) => {
     }
   } catch (err) { toast(err.message); }
 });
+
+/* Actions principales de la page titre (Vu / Revu / Liste de suivi / Liste). */
+async function handleTitleAct(actEl) {
+  const box = actEl.closest("[data-tmdb]") || actEl.closest("[data-localid]");
+  const localid = box && box.dataset.localid ? Number(box.dataset.localid) : null;
+  const tmdb = box && box.dataset.tmdb ? Number(box.dataset.tmdb) : null;
+  const type = box ? box.dataset.type : null;
+  const act = actEl.dataset.act;
+  try {
+    if (act === "liste") {
+      if (localid) return addToListPrompt(localid);
+      const r = await api("/api/library", { method: "POST",
+        body: { tmdb_id: tmdb, type, statut: "a_voir" } });
+      refreshAll(); return addToListPrompt(r.id);
+    }
+    if (act === "revu") {
+      if (localid) { await api(`/api/title/${localid}/watch`, { method: "POST", body: {} });
+        openDetail(localid); refreshAll(); }
+      return;
+    }
+    const statut = act === "vu" ? "vu" : "a_voir";
+    if (localid) {
+      await api(`/api/library/${localid}`, { method: "PATCH", body: { statut } });
+      openDetail(localid);
+    } else {
+      const r = await api("/api/library", { method: "POST",
+        body: { tmdb_id: tmdb, type, statut } });
+      toast(statut === "vu" ? "Marqué comme vu ✓" : "Ajouté à « À voir »");
+      openDetail(r.id);
+    }
+    refreshAll();
+  } catch (err) { toast(err.message); }
+}
 
 async function addToListPrompt(titreId) {
   try {
@@ -914,7 +885,7 @@ async function addToListPrompt(titreId) {
 
 /* ------------------------------------------- modales simples (ajout/import) */
 function openManualModal() {
-  modal.classList.remove("hidden");
+  modal.classList.remove("hidden"); modal.classList.remove("full");
   modalContent.innerHTML = `<div class="detail-body">
     <h2>Ajout manuel</h2>
     <p class="muted">Pour un titre absent de TMDB.</p>
@@ -939,7 +910,7 @@ function openManualModal() {
 }
 
 function openImportListModal() {
-  modal.classList.remove("hidden");
+  modal.classList.remove("hidden"); modal.classList.remove("full");
   modalContent.innerHTML = `<div class="detail-body">
     <h2>Importer une liste</h2>
     <p class="muted">Colle une liste de titres au format JSON, par exemple celle que

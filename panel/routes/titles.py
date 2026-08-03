@@ -24,6 +24,7 @@ def _titre(titre_id):
         t["genres"] = db.jload(t.get("genres"), [])
         t["plateformes"] = db.jload(t.get("plateformes"), [])
         t["casting"] = db.jload(t.get("casting"), [])
+        t["equipe"] = db.jload(t.get("equipe"), [])
         t["favori"] = bool(t["favori"])
     return t
 
@@ -75,6 +76,15 @@ def detail(titre_id):
     t = _titre(titre_id)
     if not t:
         return jsonify(error="Titre introuvable."), 404
+    # Complète casting/équipe pour les titres ajoutés avant cette fonctionnalité.
+    if t["tmdb_id"] and not t.get("casting"):
+        try:
+            tmdb = get_tmdb()
+            d = tmdb.movie(t["tmdb_id"]) if t["type"] == "film" else tmdb.tv(t["tmdb_id"])
+            sync.upsert_titre(d, t["statut"])
+            t = _titre(titre_id)
+        except TMDBError:
+            pass
     payload = {"titre": t}
     if t["type"] == "film":
         payload["visionnages"] = db.q(

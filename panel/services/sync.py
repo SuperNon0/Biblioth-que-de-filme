@@ -40,13 +40,14 @@ def upsert_titre(detail, statut="a_voir"):
         detail.get("pays"),
         json.dumps(detail.get("plateformes", []), ensure_ascii=False),
         json.dumps(detail.get("casting", []), ensure_ascii=False),
+        json.dumps(detail.get("equipe", []), ensure_ascii=False),
     )
     if existing:
         db.run(
             """UPDATE titres SET titre=?, annee=?, date_sortie=?, resume=?,
                genres=?, duree=?, affiche=COALESCE(?, affiche), fond=?,
                bande_annonce=?, note_tmdb=?, pays=?, plateformes=?, casting=?,
-               maj=? WHERE id=?""",
+               equipe=?, maj=? WHERE id=?""",
             fields[2:] + (now, existing["id"]),
         )
         return existing["id"]
@@ -54,8 +55,8 @@ def upsert_titre(detail, statut="a_voir"):
         """INSERT INTO titres
            (tmdb_id, type, titre, annee, date_sortie, resume, genres, duree,
             affiche, fond, bande_annonce, note_tmdb, pays, plateformes, casting,
-            statut, date_ajout, maj)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            equipe, statut, date_ajout, maj)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         fields + (statut, now, now),
     )
 
