@@ -49,6 +49,14 @@ code { font-family: var(--font); background: rgba(255,255,255,0.05);
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 img { max-width: 100%; }
 
+/* Barres de défilement au thème (dorées sur fond sombre, plus de blanc). */
+html { scrollbar-width: thin; scrollbar-color: rgba(232, 197, 71, 0.5) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(232, 197, 71, 0.45); border-radius: 999px;
+  border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
 /* --------------------------------------------------------------- logotype */
 .logo { font-family: var(--font-serif); font-weight: 400; font-size: 1.35rem;
         line-height: 1; display: inline-flex; align-items: baseline; }
@@ -513,10 +521,13 @@ input:-webkit-autofill, input:-webkit-autofill:focus, input:-webkit-autofill:hov
 .dv-back { left: 14px; }
 .dv-fav { right: 14px; color: rgba(255,255,255,0.85); font-size: 1rem; }
 .dv-fav.on { color: var(--red); }
-/* Boutons de fermeture toujours accessibles (fixés à l'écran) même en scrollant. */
 .modal.full .modal-close { display: none; }
-.modal.full .dv-back { position: fixed; top: 14px; left: 14px; z-index: 70; }
-.modal.full .dv-fav { position: fixed; top: 14px; right: 14px; z-index: 70; }
+/* Sur mobile (fiche plein écran) : boutons fixés à l'écran, toujours accessibles.
+   Sur ordinateur (fiche centrée) : ils restent sur la carte (positionnés sur le hero). */
+@media (max-width: 759px) {
+  .modal.full .dv-back { position: fixed; top: 14px; left: 14px; z-index: 70; }
+  .modal.full .dv-fav { position: fixed; top: 14px; right: 14px; z-index: 70; }
+}
 
 .dv-head { display: flex; gap: 16px; padding: 0 20px; margin-top: -70px;
            position: relative; z-index: 2; align-items: flex-end; }
