@@ -184,6 +184,22 @@ def roulette():
     return jsonify(results=annotate_library(items[:count]))
 
 
+@bp.get("/similar")
+@auth.login_required
+def similar():
+    """Titres similaires à un titre (pour le carrousel « Parce que tu as aimé »)."""
+    tmdb_id = request.args.get("tmdb_id")
+    typ = request.args.get("type")
+    if not tmdb_id or typ not in ("film", "serie"):
+        return jsonify(results=[])
+    media = "movie" if typ == "film" else "tv"
+    try:
+        items = get_tmdb().recommendations(media, int(tmdb_id))
+    except (TMDBError, ValueError):
+        return jsonify(results=[])
+    return jsonify(results=annotate_library(items[:15]))
+
+
 @bp.get("/genres")
 @auth.login_required
 def genres():

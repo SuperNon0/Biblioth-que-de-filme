@@ -648,6 +648,13 @@ $("#import-file").addEventListener("change", async (e) => {
 /* ========================= FICHE DÉTAILLÉE (modale) ==================== */
 const modal = $("#modal");
 const modalContent = $("#modal-content");
+/* Molette → défilement horizontal des carrousels de la fiche. */
+modalContent.addEventListener("wheel", (e) => {
+  const sc = e.target.closest(".row-scroll");
+  if (sc && Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+    sc.scrollLeft += e.deltaY; e.preventDefault();
+  }
+}, { passive: false });
 function closeModal() {
   modal.classList.add("hidden"); modal.classList.remove("full");
   modalContent.innerHTML = "";
@@ -662,7 +669,9 @@ async function openDetail(id) {
   modal.classList.remove("hidden"); modal.classList.add("full");
   modalContent.innerHTML = DV_LOADING;
   try {
-    modalContent.innerHTML = renderTitlePage(normLocal(await api(`/api/title/${id}`)));
+    const n = normLocal(await api(`/api/title/${id}`));
+    modalContent.innerHTML = renderTitlePage(n);
+    loadSimilar(n.tmdb, n.type);
   } catch (e) { modalContent.innerHTML = dvErr(e); }
 }
 
@@ -670,8 +679,21 @@ async function openPreview(tmdb, type) {
   modal.classList.remove("hidden"); modal.classList.add("full");
   modalContent.innerHTML = DV_LOADING;
   try {
-    modalContent.innerHTML = renderTitlePage(normTmdb(await api(`/api/preview?tmdb_id=${tmdb}&type=${type}`)));
+    const n = normTmdb(await api(`/api/preview?tmdb_id=${tmdb}&type=${type}`));
+    modalContent.innerHTML = renderTitlePage(n);
+    loadSimilar(n.tmdb, n.type);
   } catch (e) { modalContent.innerHTML = dvErr(e); }
+}
+
+/* Charge le carrousel « Parce que tu as aimé ce titre » (après affichage). */
+async function loadSimilar(tmdb, type) {
+  const box = $("#dv-similar");
+  if (!box || !tmdb) return;
+  try {
+    const { results } = await api(`/api/similar?tmdb_id=${tmdb}&type=${type}`);
+    box.innerHTML = results.length ? results.map(posterCard).join("")
+      : `<p class="muted">Aucune suggestion pour l'instant.</p>`;
+  } catch (_) { box.innerHTML = `<p class="muted">—</p>`; }
 }
 
 function normLocal(data) {
@@ -748,6 +770,12 @@ function renderTitlePage(n) {
       ${actions}${vuBlock}${note}${providers}
       ${n.type === "serie" ? seasonsBlock(n) : ""}
       ${renderCastCrew(n.casting, n.equipe)}
+      ${n.tmdb ? `<h3 class="dv-h3">Parce que tu as aimé « ${esc(n.titre)} »</h3>
+        <div class="row-wrap">
+          <button class="row-arrow left" aria-label="Précédent">‹</button>
+          <div class="row-scroll" id="dv-similar"><p class="muted">Chargement…</p></div>
+          <button class="row-arrow right" aria-label="Suivant">›</button>
+        </div>` : ""}
       ${n.inLib ? `<div class="dv-remove"><button class="btn small danger" data-del data-localid="${n.localId}">Retirer de ma bibliothèque</button></div>` : ""}
     </div>`;
 }
@@ -851,6 +879,13 @@ modalContent.addEventListener("click", async (e) => {
     return;
   }
   if (e.target.closest("[data-close]")) return closeModal();
+  const arrowEl = e.target.closest(".row-arrow");
+  if (arrowEl) {
+    const sc = arrowEl.parentElement.querySelector(".row-scroll");
+    if (sc) { const dx = sc.clientWidth * 0.85;
+      sc.scrollBy({ left: arrowEl.classList.contains("left") ? -dx : dx, behavior: "smooth" }); }
+    return;
+  }
   const actEl = e.target.closest("[data-act]");
   if (actEl) return handleTitleAct(actEl);
   const posterEl = e.target.closest(".poster");
