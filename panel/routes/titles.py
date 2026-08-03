@@ -112,9 +112,10 @@ def _prochain_episode(titre_id):
 @bp.post("/title/<int:titre_id>/watch")
 @auth.login_required
 def add_watch(titre_id):
-    """Ajoute une date de visionnage (revisionnage) et passe le titre en Vu."""
+    """Enregistre un visionnage (« vu » / « revu ») à la date du jour par défaut."""
     data = request.get_json(silent=True) or {}
-    jour = (data.get("date") or date.today().isoformat())[:10]
+    raw = (data.get("date") or "").strip()
+    jour = raw[:10] if raw else date.today().isoformat()
     db.run("INSERT OR IGNORE INTO visionnages (titre_id, date, cree) VALUES (?,?,?)",
            (titre_id, jour, int(time.time())))
     db.run("UPDATE titres SET statut = 'vu' WHERE id = ?", (titre_id,))

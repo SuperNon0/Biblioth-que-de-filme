@@ -33,6 +33,23 @@ def _row(t):
     return t
 
 
+def _mark_seen(titre_id, typ):
+    """Fait qu'un titre marqué « vu » compte dans les statistiques.
+
+    - Film : ajoute un visionnage « déjà vu » (date NULL) s'il n'y en a aucun,
+      donc sans forcer de date. Les re-visionnages s'ajoutent depuis la fiche.
+    - Série : marque tous les épisodes comme vus (comptent dans le temps passé).
+    """
+    if typ == "film":
+        if not db.q1("SELECT 1 FROM visionnages WHERE titre_id = ? LIMIT 1", (titre_id,)):
+            db.run("INSERT OR IGNORE INTO visionnages (titre_id, date, cree) VALUES (?,?,?)",
+                   (titre_id, time.strftime("%Y-%m-%d"), int(time.time())))
+    else:
+        db.run("""UPDATE episodes SET vu = 1,
+                  nb_vues = CASE WHEN nb_vues < 1 THEN 1 ELSE nb_vues END
+                  WHERE titre_id = ?""", (titre_id,))
+
+
 def annotate_library(items):
     """Ajoute le statut local + l'id aux résultats TMDB déjà en bibliothèque.
 
@@ -141,6 +158,8 @@ def add():
                    (titre_id, date.today().isoformat()))
         except TMDBError:
             pass  # les épisodes se compléteront à l'ouverture de la fiche
+    if statut == "vu":
+        _mark_seen(titre_id, typ)
     return jsonify(ok=True, id=titre_id)
 
 
@@ -169,11 +188,14 @@ def add_manual():
 def update(titre_id):
     """Change le statut ou le favori d'un titre."""
     data = request.get_json(silent=True) or {}
-    if not db.q1("SELECT id FROM titres WHERE id = ?", (titre_id,)):
+    row = db.q1("SELECT id, type FROM titres WHERE id = ?", (titre_id,))
+    if not row:
         return jsonify(error="Titre introuvable."), 404
     if "statut" in data and data["statut"] in STATUTS:
         db.run("UPDATE titres SET statut = ? WHERE id = ?",
                (data["statut"], titre_id))
+        if data["statut"] == "vu":
+            _mark_seen(titre_id, row["type"])
     if "favori" in data:
         db.run("UPDATE titres SET favori = ? WHERE id = ?",
                (1 if data["favori"] else 0, titre_id))

@@ -179,8 +179,15 @@ function showTab(name) {
   if (more) more.classList.toggle("active", !MAIN_TABS.includes(name));
   closeSheet(); closeToolbars();
   window.scrollTo(0, 0);
-  LOADERS[name] && LOADERS[name]();
+  // Ne recharge que les pages « vivantes » ; les autres sont mises en cache
+  // après la 1re visite (moins de chargements, notamment les Suggestions).
+  if (LOADERS[name] && (RELOAD_ALWAYS.has(name) || !_tabLoaded.has(name))) {
+    _tabLoaded.add(name);
+    LOADERS[name]();
+  }
 }
+const RELOAD_ALWAYS = new Set(["bibliotheque", "listes", "profil"]);
+const _tabLoaded = new Set();
 
 document.addEventListener("click", (e) => {
   const tab = e.target.closest("[data-tab]");
@@ -345,7 +352,10 @@ async function rollRoulette(source) {
   }
 }
 
+const _genresFilled = new Set();
 async function fillGenres(selectId, type = "movie") {
+  const key = selectId + ":" + type;
+  if (_genresFilled.has(key)) return;  // évite de recharger les genres à chaque visite
   try {
     const { genres } = await api(`/api/genres?type=${type === "movie" ? "film" : "serie"}`);
     const sel = $("#" + selectId);
@@ -353,6 +363,7 @@ async function fillGenres(selectId, type = "movie") {
     sel.innerHTML = `<option value="">Tous genres</option>` +
       genres.map((g) => `<option value="${g.id}">${esc(g.name)}</option>`).join("");
     sel.value = current;
+    _genresFilled.add(key);
   } catch (_) { /* TMDB non configuré : on garde le menu vide */ }
 }
 
@@ -677,16 +688,16 @@ function renderFilm(data) {
   const watches = data.visionnages || [];
   return hero(t) + `<div class="detail-body" data-id="${t.id}">
     <p class="detail-resume">${esc(t.resume) || "Pas de résumé."}</p>
-    ${t.duree ? `<p class="muted">Durée : ${t.duree} min · Vu ${watches.length} fois</p>` : ""}
+    <p class="muted">${t.duree ? `Durée : ${t.duree} min · ` : ""}Vu ${watches.length} fois</p>
     ${providers}
-    <h3 class="sub-title">Mes visionnages</h3>
+    <h3 class="sub-title">Visionnages</h3>
     <div class="row-inline">
-      <input type="date" class="input small-input" id="watch-date">
-      <button class="btn small primary" data-addwatch>+ Ajouter un visionnage</button>
+      <button class="btn small primary" data-addwatch>
+        ${watches.length ? "↻ J'ai revu aujourd'hui" : "✓ Marquer comme vu"}</button>
     </div>
-    <ul class="watch-list">${watches.map((w) => `<li><span>${w.date}</span>
-      <button class="ep-btn" data-delwatch="${w.id}">✕</button></li>`).join("")
-      || `<li class="muted">Aucun visionnage enregistré.</li>`}</ul>
+    ${watches.length ? `<ul class="watch-list">${watches.map((w) =>
+      `<li><span>${w.date || "déjà vu"}</span>
+       <button class="ep-btn" data-delwatch="${w.id}">✕</button></li>`).join("")}</ul>` : ""}
     ${castingBlock(t.casting)}
   </div>`;
 }
@@ -867,8 +878,7 @@ modalContent.addEventListener("click", async (e) => {
     } else if (e.target.closest("[data-addlist]")) {
       addToListPrompt(id);
     } else if (e.target.closest("[data-addwatch]")) {
-      await api(`/api/title/${id}/watch`, { method: "POST",
-        body: { date: $("#watch-date").value || undefined } });
+      await api(`/api/title/${id}/watch`, { method: "POST", body: {} });
       openDetail(id); refreshAll();
     } else if (e.target.closest("[data-delwatch]")) {
       await api(`/api/watch/${e.target.closest("[data-delwatch]").dataset.delwatch}`,
@@ -975,5 +985,6 @@ if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("/sw.js").catch(() => {}));
 }
 
-/* Au démarrage : onglet Suggestions. */
+/* Au démarrage : onglet Suggestions (marqué chargé pour éviter un rechargement). */
+_tabLoaded.add("suggestions");
 loadSuggestions();

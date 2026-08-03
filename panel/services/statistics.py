@@ -33,10 +33,16 @@ def _minutes_episodes():
 
 
 def duree_lisible(minutes):
-    """Convertit des minutes en un libellé heures + mois/années."""
-    heures = minutes / 60
-    jours = heures / 24
-    txt_heures = f"{int(round(heures))} h"
+    """Convertit des minutes en libellé précis « H h MM » + conversion mois/années."""
+    minutes = int(round(minutes))
+    h, m = divmod(minutes, 60)
+    if h and m:
+        texte = f"{h} h {m:02d}"
+    elif h:
+        texte = f"{h} h"
+    else:
+        texte = f"{m} min"
+    jours = minutes / 1440
     if jours >= 365:
         conv = f"{jours / 365:.1f} an(s)"
     elif jours >= 30:
@@ -44,9 +50,9 @@ def duree_lisible(minutes):
     elif jours >= 1:
         conv = f"{jours:.1f} jour(s)"
     else:
-        conv = f"{int(round(minutes))} min"
-    return {"minutes": minutes, "heures": round(heures, 1),
-            "texte": txt_heures, "converti": conv}
+        conv = f"{minutes} min"
+    return {"minutes": minutes, "heures": round(minutes / 60, 1),
+            "texte": texte, "converti": conv}
 
 
 def temps_par_serie():
