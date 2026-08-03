@@ -458,6 +458,18 @@
     </div>
   </div>
 
+  <!-- Menu rapide au clic sur une affiche -->
+  <div id="quick-menu" class="quick-menu hidden">
+    <div class="qm-backdrop" data-qm-close></div>
+    <div class="qm-card">
+      <img id="qm-poster" alt="">
+      <div id="qm-title" class="qm-title"></div>
+      <button class="btn full" data-qm="a_voir">➕ À voir</button>
+      <button class="btn full" data-qm="vu">Déjà vu</button>
+      <button class="btn full" data-qm="infos">ℹ️ Plus d'infos</button>
+    </div>
+  </div>
+
   <div id="toast" class="toast hidden"></div>
 
   <script src="{{ asset('app.js') }}"></script>

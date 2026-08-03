@@ -82,7 +82,7 @@ function posterCard(item) {
   }
   return `<div class="poster" data-id="${item.id || ""}" data-tmdb="${item.tmdb_id || ""}"
        data-type="${item.type || ""}" data-localid="${item.local_id || ""}"
-       data-statut="${item.statut || ""}">
+       data-statut="${item.statut || ""}" data-nbvues="${item.nb_vues || 0}">
     <img class="poster-img" loading="lazy" src="${posterSrc(item.affiche)}" alt="">
     ${statut}${fav}
     <div class="poster-body">
@@ -93,13 +93,65 @@ function posterCard(item) {
   </div>`;
 }
 
-/* Clic sur un titre → sa page plein écran (fiche si en biblio, aperçu sinon). */
+/* Clic sur un titre → petit menu 3 options (À voir / Déjà vu / Plus d'infos). */
 function openItem(el) {
-  const id = el.dataset.id || el.dataset.localid;
-  if (id) return openDetail(Number(id));
-  const tmdb = Number(el.dataset.tmdb), type = el.dataset.type;
-  if (tmdb && type) openPreview(tmdb, type);
+  const tmdb = Number(el.dataset.tmdb) || null, type = el.dataset.type || null;
+  const localid = Number(el.dataset.id || el.dataset.localid) || null;
+  if (!localid && !(tmdb && type)) return;
+  const titleEl = el.querySelector(".poster-title, .sr-title");
+  const imgEl = el.querySelector("img");
+  openQuickMenu({ el, tmdb, type, localid,
+    statut: el.dataset.statut || "", nbvues: Number(el.dataset.nbvues || 0),
+    titre: titleEl ? titleEl.textContent.trim() : "", affiche: imgEl ? imgEl.src : "" });
 }
+
+/* --------------------------------------------- menu rapide 3 options (clic) */
+const quickMenu = $("#quick-menu");
+let qmContext = null;
+function closeQuickMenu() { quickMenu.classList.add("hidden"); qmContext = null; }
+
+function openQuickMenu(ctx) {
+  qmContext = ctx;
+  $("#qm-poster").src = ctx.affiche || posterSrc(null);
+  $("#qm-title").textContent = ctx.titre || "";
+  const inAvoir = ctx.statut === "a_voir";
+  const seen = ctx.statut === "vu" || ctx.nbvues > 0;
+  const avoirBtn = $("#quick-menu [data-qm='a_voir']");
+  avoirBtn.textContent = inAvoir ? "✓ Dans « À voir »" : "➕ À voir";
+  avoirBtn.classList.toggle("current", inAvoir);
+  const vuBtn = $("#quick-menu [data-qm='vu']");
+  vuBtn.textContent = seen ? ("✓ Déjà vu" + (ctx.nbvues > 1 ? ` ×${ctx.nbvues}` : "")) : "Déjà vu";
+  vuBtn.classList.toggle("current", seen);
+  quickMenu.classList.remove("hidden");
+}
+
+quickMenu.addEventListener("click", async (e) => {
+  if (e.target.closest("[data-qm-close]")) return closeQuickMenu();
+  const btn = e.target.closest("[data-qm]");
+  if (!btn || !qmContext) return;
+  const { el, tmdb, type, localid } = qmContext;
+  const act = btn.dataset.qm;
+  if (act === "infos") { closeQuickMenu(); return localid ? openDetail(localid) : openPreview(tmdb, type); }
+  try {
+    let newId = localid;
+    if (act === "vu") {
+      if (localid) await api(`/api/title/${localid}/watch`, { method: "POST", body: {} });
+      else newId = (await api("/api/library", { method: "POST", body: { tmdb_id: tmdb, type, statut: "vu" } })).id;
+    } else {
+      if (localid) await api(`/api/library/${localid}`, { method: "PATCH", body: { statut: "a_voir" } });
+      else newId = (await api("/api/library", { method: "POST", body: { tmdb_id: tmdb, type, statut: "a_voir" } })).id;
+    }
+    if (el) {  // met à jour la carte source (statut + compteur) sans tout recharger
+      el.dataset.localid = newId || "";
+      el.dataset.statut = act === "vu" ? "vu" : "a_voir";
+      if (act === "vu") el.dataset.nbvues = String(Number(el.dataset.nbvues || 0) + 1);
+      el.classList.add("poster-added");
+    }
+    toast(act === "vu" ? "Marqué comme vu ✓" : "Ajouté à « À voir »");
+    closeQuickMenu();
+    if ($("#page-bibliotheque").classList.contains("active")) loadLibrary();
+  } catch (err) { toast(err.message); }
+});
 
 function bindGrid(container) {
   container.addEventListener("click", (e) => {

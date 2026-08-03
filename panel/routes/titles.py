@@ -76,13 +76,19 @@ def detail(titre_id):
     t = _titre(titre_id)
     if not t:
         return jsonify(error="Titre introuvable."), 404
-    # Complète casting/équipe pour les titres ajoutés avant cette fonctionnalité.
+    # Complète casting/équipe pour les titres ajoutés avant (mise à jour légère
+    # des seules colonnes concernées : pas de ré-écriture ni de re-téléchargement
+    # de l'affiche, pour un chargement rapide).
     if t["tmdb_id"] and not t.get("casting"):
         try:
             tmdb = get_tmdb()
             d = tmdb.movie(t["tmdb_id"]) if t["type"] == "film" else tmdb.tv(t["tmdb_id"])
-            sync.upsert_titre(d, t["statut"])
-            t = _titre(titre_id)
+            import json
+            db.run("UPDATE titres SET casting=?, equipe=? WHERE id=?", (
+                json.dumps(d.get("casting", []), ensure_ascii=False),
+                json.dumps(d.get("equipe", []), ensure_ascii=False), titre_id))
+            t["casting"] = d.get("casting", [])
+            t["equipe"] = d.get("equipe", [])
         except TMDBError:
             pass
     payload = {"titre": t}

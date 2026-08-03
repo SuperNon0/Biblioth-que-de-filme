@@ -437,6 +437,8 @@ main { padding: 20px; max-width: 1400px; margin: 0 auto; }
                border: 1px solid var(--border); }
 .qm-title { font-family: var(--font-serif); font-size: 1.02rem; text-align: center;
             line-height: 1.2; }
+.qm-card .btn.current { background: rgba(79, 195, 161, 0.16);
+            border-color: var(--green); color: var(--green); }
 .qm-status { font-size: 0.74rem; color: var(--green); text-align: center;
              border: 1px solid var(--green); border-radius: 999px; padding: 3px 12px; }
 .btn.current { border-color: var(--green); color: var(--green); }
@@ -509,8 +511,12 @@ input:-webkit-autofill, input:-webkit-autofill:focus, input:-webkit-autofill:hov
                     border-radius: 50%; border: none; background: rgba(14,15,17,0.55);
                     color: #fff; font-size: 1.2rem; cursor: pointer; backdrop-filter: blur(4px); }
 .dv-back { left: 14px; }
-.dv-fav { right: 62px; color: rgba(255,255,255,0.85); font-size: 1rem; }
+.dv-fav { right: 14px; color: rgba(255,255,255,0.85); font-size: 1rem; }
 .dv-fav.on { color: var(--red); }
+/* Boutons de fermeture toujours accessibles (fixés à l'écran) même en scrollant. */
+.modal.full .modal-close { display: none; }
+.modal.full .dv-back { position: fixed; top: 14px; left: 14px; z-index: 70; }
+.modal.full .dv-fav { position: fixed; top: 14px; right: 14px; z-index: 70; }
 
 .dv-head { display: flex; gap: 16px; padding: 0 20px; margin-top: -70px;
            position: relative; z-index: 2; align-items: flex-end; }
