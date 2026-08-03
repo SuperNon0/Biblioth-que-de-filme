@@ -40,52 +40,94 @@ def _reprendre():
 @bp.get("/suggestions")
 @auth.login_required
 def suggestions():
-    """Les carrousels de la page d'accueil, façon FilmNoir/Letterboxd."""
+    """Carrousels de l'accueil, variés et dé-dupliqués (chaque titre une fois)."""
     media = request.args.get("media", "all")  # all | movie | tv
+    mkey = "tv" if media == "tv" else "movie"
     tmdb = get_tmdb()
-    blocs = []
+    seen, blocs = set(), []
+
+    def add(cle, titre, items):
+        uniq = []
+        for it in items or []:
+            tid = it.get("tmdb_id")
+            if not tid or tid in seen:
+                continue
+            seen.add(tid)
+            uniq.append(it)
+        if len(uniq) >= 4:  # on n'affiche pas les rangées trop maigres
+            blocs.append({"cle": cle, "titre": titre, "items": uniq[:20]})
+
+    # Reprendre (local) — marqués vus pour ne pas les reproposer ailleurs.
     reprendre = _reprendre()
+    for r in reprendre:
+        if r.get("tmdb_id"):
+            seen.add(r["tmdb_id"])
     if reprendre:
         blocs.append({"cle": "reprendre", "titre": "Reprendre",
                       "local": True, "items": reprendre})
+
     try:
-        blocs += [
-            {"cle": "tendances", "titre": "Tendances cette semaine",
-             "items": tmdb.trending(media, "week")},
-            {"cle": "cinema", "titre": "Au cinéma en ce moment",
-             "items": tmdb.now_playing()},
-            {"cle": "populaires", "titre": "Populaires",
-             "items": tmdb.popular("movie" if media != "tv" else "tv")},
-            {"cle": "notes", "titre": "Mieux notés",
-             "items": tmdb.top_rated("movie" if media != "tv" else "tv")},
-        ]
-        recos = _recommande(tmdb)
-        if recos:
-            blocs.append({"cle": "pour_toi", "titre": "Recommandé pour toi",
-                          "items": recos})
+        add("tendances", "Tendances cette semaine", tmdb.trending(media, "week"))
+        if mkey == "movie":
+            add("cinema", "Au cinéma en ce moment", tmdb.now_playing())
+        # Personnalisé : « Parce que tu as aimé … » (par titre précis).
+        for base in _bases_perso():
+            bmedia = "movie" if base["type"] == "film" else "tv"
+            try:
+                recos = tmdb.recommendations(bmedia, base["tmdb_id"])
+            except TMDBError:
+                continue
+            add(f"perso_{base['tmdb_id']}",
+                f"Parce que tu as aimé « {base['titre']} »", recos)
+        # Par genre (tes goûts, sinon des genres par défaut).
+        for gid, gname in _top_genres(tmdb, mkey):
+            add(f"genre_{gid}", gname,
+                tmdb.discover(media=mkey, genre=gid,
+                              sort_by="popularity.desc")["results"])
+        # Pépites : très bien notées mais moins mainstream.
+        add("pepites", "Pépites à découvrir",
+            tmdb.discover(media=mkey, sort_by="vote_average.desc",
+                          vote_count_gte=800)["results"])
+        # Cultes d'une décennie.
+        add("annees90", "Cultes des années 90",
+            tmdb.discover(media=mkey, sort_by="vote_average.desc",
+                          vote_count_gte=1500, year_gte=1990, year_lte=1999)["results"])
+        add("populaires", "Populaires", tmdb.popular(mkey))
     except TMDBError as exc:
         if not blocs:
             return jsonify(error=str(exc)), 502
     return jsonify(blocs=blocs)
 
 
-def _recommande(tmdb):
-    """Recommandations basées sur les favoris/derniers titres de la biblio."""
-    bases = db.q(
-        """SELECT tmdb_id, type FROM titres
-           WHERE tmdb_id IS NOT NULL ORDER BY favori DESC, maj DESC LIMIT 3"""
-    )
-    seen, out = set(), []
-    for b in bases:
-        media = "movie" if b["type"] == "film" else "tv"
-        try:
-            for r in tmdb.recommendations(media, b["tmdb_id"]):
-                if r["tmdb_id"] not in seen:
-                    seen.add(r["tmdb_id"])
-                    out.append(r)
-        except TMDBError:
-            continue
-    return out[:20]
+def _bases_perso(limit=2):
+    """Titres de référence pour les recommandations personnalisées."""
+    return db.q(
+        """SELECT tmdb_id, type, titre FROM titres WHERE tmdb_id IS NOT NULL
+           ORDER BY favori DESC, maj DESC LIMIT ?""", (limit,))
+
+
+def _top_genres(tmdb, media="movie", limit=3):
+    """Genres les plus présents dans la bibliothèque (sinon des défauts)."""
+    import collections
+    counter = collections.Counter()
+    for r in db.q("SELECT genres FROM titres"):
+        for g in db.jload(r["genres"], []):
+            counter[g] += 1
+    try:
+        gmap = {g["name"]: g["id"] for g in tmdb.genres(media)}
+    except TMDBError:
+        return []
+    chosen = []
+    for name, _ in counter.most_common():
+        if name in gmap and (gmap[name], name) not in chosen:
+            chosen.append((gmap[name], name))
+        if len(chosen) >= limit:
+            break
+    if not chosen:
+        for name in ("Action", "Comédie", "Science-Fiction", "Aventure"):
+            if name in gmap:
+                chosen.append((gmap[name], name))
+    return chosen[:limit]
 
 
 @bp.get("/discover")

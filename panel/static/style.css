@@ -417,7 +417,34 @@ main { padding: 20px; max-width: 1400px; margin: 0 auto; }
 .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
          background: var(--bg-card); border: 1px solid var(--accent);
          color: var(--text); padding: 12px 20px; border-radius: var(--radius);
-         z-index: 80; box-shadow: var(--shadow); font-size: 0.8rem; }
+         z-index: 110; box-shadow: var(--shadow); font-size: 0.8rem; }
+
+/* -------------------------------------------------- menu rapide (affiches) */
+.quick-menu { position: fixed; inset: 0; z-index: 90; display: flex;
+              align-items: center; justify-content: center; padding: 20px; }
+.quick-menu.hidden { display: none; }
+.qm-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.65);
+               backdrop-filter: blur(3px); }
+.qm-card { position: relative; z-index: 2; background: var(--bg-panel);
+           border: 1px solid var(--border); border-radius: var(--radius);
+           padding: 18px; width: 100%; max-width: 300px; display: flex;
+           flex-direction: column; gap: 10px; align-items: center;
+           box-shadow: var(--shadow); }
+.qm-card img { width: 96px; aspect-ratio: 2/3; object-fit: cover;
+               border-radius: 8px; background: var(--bg-card);
+               border: 1px solid var(--border); }
+.qm-title { font-family: var(--font-serif); font-size: 1.02rem; text-align: center;
+            line-height: 1.2; }
+
+/* genre principal coloré sur les cartes + marquage « ajouté » */
+.poster-genre { display: inline-block; margin-top: 5px; font-size: 0.62rem;
+                padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border);
+                color: var(--muted); }
+.poster-added::after { content: "✓ ajouté"; position: absolute; inset: 0;
+                       display: flex; align-items: center; justify-content: center;
+                       background: rgba(79, 195, 161, 0.28); color: #fff;
+                       font-weight: 600; font-size: 0.82rem; border-radius: var(--radius);
+                       border: 2px solid var(--green); }
 
 /* ----------------------------------------------------------------- footer */
 .footer { border-top: 1px solid var(--border); margin-top: 40px; padding: 20px;

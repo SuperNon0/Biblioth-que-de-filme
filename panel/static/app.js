@@ -40,6 +40,21 @@ function toast(msg) {
 const STATUTS = { vu: "Vu", a_voir: "À voir", en_cours: "En cours", abandonne: "Abandonné" };
 const posterSrc = (u) => u || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E";
 
+/* Couleur par genre — un peu de vie dans les fiches et les cartes. */
+const GENRE_COLORS = {
+  "Action": "#e85c47", "Aventure": "#e8a24a", "Comédie": "#f2c14e",
+  "Drame": "#a78bfa", "Science-Fiction": "#4fc3a1", "Horreur": "#c0392b",
+  "Thriller": "#e87c47", "Romance": "#e86ea4", "Animation": "#5aa9e6",
+  "Fantastique": "#9b6dff", "Familial": "#5fce8f", "Crime": "#d1495b",
+  "Mystère": "#7c6df2", "Guerre": "#b08968", "Histoire": "#c9a26b",
+  "Documentaire": "#4fc3a1", "Musique": "#e86ea4", "Western": "#c98a3b",
+};
+function genreTag(name) {
+  const c = GENRE_COLORS[name];
+  const style = c ? ` style="color:${c};border-color:${c}66;background:${c}22"` : "";
+  return `<span class="tag"${style}>${esc(name)}</span>`;
+}
+
 /* Carte d'affiche réutilisée partout (bibliothèque, carrousels, découverte). */
 function posterCard(item) {
   // Note TMDB (communauté, sur 10) : à droite de la ligne d'infos, pour ne pas
@@ -50,6 +65,13 @@ function posterCard(item) {
   const fav = item.favori ? `<span class="poster-fav">♥</span>` : "";
   const annee = item.annee || "";
   const type = item.type === "serie" ? "Série" : "Film";
+  // Genre principal coloré (quand connu) — un peu de couleur dans la grille.
+  let genre0 = "";
+  if (item.genres && item.genres.length) {
+    const g = item.genres[0], c = GENRE_COLORS[g];
+    const st = c ? ` style="color:${c};border-color:${c}66;background:${c}22"` : "";
+    genre0 = `<span class="poster-genre"${st}>${esc(g)}</span>`;
+  }
   // Barre de progression pour les séries (épisodes vus / total).
   let prog = "";
   if (item.total_ep) {
@@ -64,19 +86,51 @@ function posterCard(item) {
     <div class="poster-body">
       <div class="poster-title">${esc(item.titre)}</div>
       <div class="poster-meta"><span>${type}${annee ? " · " + annee : ""}</span>${note}</div>
-      ${prog}
+      ${genre0}${prog}
     </div>
   </div>`;
 }
 
-/* Ouvre l'élément cliqué : titre déjà en bibliothèque → sa fiche ;
-   résultat TMDB → aperçu (SANS l'ajouter — l'ajout se fait via un statut). */
+/* Clic sur un titre :
+   - déjà en bibliothèque → sa fiche ;
+   - résultat TMDB → petit menu rapide (À voir / Déjà vu / Plus d'infos). */
 function openItem(el) {
   const id = el.dataset.id;
   if (id) return openDetail(Number(id));
   const tmdb = Number(el.dataset.tmdb), type = el.dataset.type;
-  if (tmdb && type) openPreview(tmdb, type);
+  if (tmdb && type) openQuickMenu(el, tmdb, type);
 }
+
+/* ------------------------------------------------- menu rapide (affiches) */
+const quickMenu = $("#quick-menu");
+let qmContext = null;
+
+function openQuickMenu(el, tmdb, type) {
+  const titleEl = el.querySelector(".poster-title, .sr-title");
+  const imgEl = el.querySelector("img");
+  qmContext = { el, tmdb, type };
+  $("#qm-poster").src = imgEl ? imgEl.src : posterSrc(null);
+  $("#qm-title").textContent = titleEl ? titleEl.textContent.trim() : "";
+  quickMenu.classList.remove("hidden");
+}
+function closeQuickMenu() { quickMenu.classList.add("hidden"); qmContext = null; }
+
+quickMenu.addEventListener("click", async (e) => {
+  if (e.target.closest("[data-qm-close]")) return closeQuickMenu();
+  const btn = e.target.closest("[data-qm]");
+  if (!btn || !qmContext) return;
+  const { el, tmdb, type } = qmContext;
+  if (btn.dataset.qm === "infos") { closeQuickMenu(); return openPreview(tmdb, type); }
+  try {
+    await api("/api/library", { method: "POST",
+      body: { tmdb_id: tmdb, type, statut: btn.dataset.qm } });
+    if (el) el.classList.add("poster-added");
+    toast(btn.dataset.qm === "vu" ? "Marqué comme vu ✓" : "Ajouté à « À voir »");
+    closeQuickMenu();
+    // On ne recharge que la bibliothèque (ne pas casser les carrousels/roulette).
+    if ($("#page-bibliotheque").classList.contains("active")) loadLibrary();
+  } catch (err) { toast(err.message); }
+});
 
 function bindGrid(container) {
   container.addEventListener("click", (e) => {
@@ -554,7 +608,11 @@ const modal = $("#modal");
 const modalContent = $("#modal-content");
 function closeModal() { modal.classList.add("hidden"); modalContent.innerHTML = ""; }
 modal.addEventListener("click", (e) => { if (e.target.closest("[data-close]")) closeModal(); });
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  if (!quickMenu.classList.contains("hidden")) return closeQuickMenu();
+  closeModal();
+});
 
 async function openDetail(id) {
   modal.classList.remove("hidden");
@@ -567,7 +625,7 @@ async function openDetail(id) {
 }
 
 function hero(t) {
-  const genres = (t.genres || []).map((g) => `<span class="tag">${esc(g)}</span>`).join("");
+  const genres = (t.genres || []).map(genreTag).join("");
   const note = t.note_tmdb ? `<span class="tag">★ ${t.note_tmdb}</span>` : "";
   const trailer = t.bande_annonce
     ? `<a class="btn small" target="_blank" rel="noopener"
@@ -663,7 +721,7 @@ async function openPreview(tmdb, type) {
 }
 
 function renderPreview(t, tmdb, type) {
-  const genres = (t.genres || []).map((g) => `<span class="tag">${esc(g)}</span>`).join("");
+  const genres = (t.genres || []).map(genreTag).join("");
   const note = t.note_tmdb ? `<span class="tag">★ ${t.note_tmdb}</span>` : "";
   const trailer = t.bande_annonce
     ? `<a class="btn small" target="_blank" rel="noopener"

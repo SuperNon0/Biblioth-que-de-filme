@@ -85,16 +85,24 @@ class TMDB:
         return [self._brief(r, media) for r in data.get("results", [])]
 
     def discover(self, media="movie", page=1, sort_by="popularity.desc",
-                 genre=None, year=None, country=None):
-        """Catalogue filtrable pour l'onglet Découverte."""
+                 genre=None, year=None, country=None, vote_count_gte=None,
+                 year_gte=None, year_lte=None):
+        """Catalogue filtrable pour l'onglet Découverte et les suggestions."""
         params = {"page": page, "sort_by": sort_by, "include_adult": "false"}
         if genre:
             params["with_genres"] = genre
         if country:
             params["with_origin_country"] = country
+        if vote_count_gte:
+            params["vote_count.gte"] = vote_count_gte
+        date_field = "primary_release_date" if media == "movie" else "first_air_date"
         if year:
             params["primary_release_year" if media == "movie"
                    else "first_air_date_year"] = year
+        if year_gte:
+            params[f"{date_field}.gte"] = f"{year_gte}-01-01"
+        if year_lte:
+            params[f"{date_field}.lte"] = f"{year_lte}-12-31"
         data = self._get(f"/discover/{media}", **params)
         return {
             "results": [self._brief(r, media) for r in data.get("results", [])],
