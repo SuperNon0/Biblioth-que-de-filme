@@ -116,7 +116,7 @@ def add_watch(titre_id):
     data = request.get_json(silent=True) or {}
     raw = (data.get("date") or "").strip()
     jour = raw[:10] if raw else date.today().isoformat()
-    db.run("INSERT OR IGNORE INTO visionnages (titre_id, date, cree) VALUES (?,?,?)",
+    db.run("INSERT INTO visionnages (titre_id, date, cree) VALUES (?,?,?)",
            (titre_id, jour, int(time.time())))
     db.run("UPDATE titres SET statut = 'vu' WHERE id = ?", (titre_id,))
     return jsonify(ok=True)

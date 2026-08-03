@@ -46,9 +46,8 @@ CREATE TABLE IF NOT EXISTS titres (
 CREATE TABLE IF NOT EXISTS visionnages (
     id       INTEGER PRIMARY KEY AUTOINCREMENT,
     titre_id INTEGER NOT NULL REFERENCES titres(id) ON DELETE CASCADE,
-    date     TEXT,                               -- 'YYYY-MM-DD'
-    cree     INTEGER,
-    UNIQUE(titre_id, date)
+    date     TEXT,                               -- 'YYYY-MM-DD' (plusieurs par jour possibles)
+    cree     INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS episodes (
@@ -130,6 +129,26 @@ def _migrate(conn):
     ep_cols = {r[1] for r in conn.execute("PRAGMA table_info(episodes)")}
     if "notifie" not in ep_cols:
         conn.execute("ALTER TABLE episodes ADD COLUMN notifie INTEGER DEFAULT 0")
+    # Supprime l'ancienne contrainte UNIQUE(titre_id, date) sur visionnages,
+    # pour autoriser plusieurs visionnages le même jour.
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='visionnages'"
+    ).fetchone()
+    if row and "UNIQUE" in (row[0] or ""):
+        conn.executescript("""
+            PRAGMA foreign_keys=OFF;
+            CREATE TABLE visionnages_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                titre_id INTEGER NOT NULL REFERENCES titres(id) ON DELETE CASCADE,
+                date TEXT, cree INTEGER
+            );
+            INSERT INTO visionnages_new (id, titre_id, date, cree)
+                SELECT id, titre_id, date, cree FROM visionnages;
+            DROP TABLE visionnages;
+            ALTER TABLE visionnages_new RENAME TO visionnages;
+            PRAGMA foreign_keys=ON;
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_vision_titre ON visionnages(titre_id)")
     conn.commit()
 
 
