@@ -37,7 +37,7 @@ function toast(msg) {
   toastTimer = setTimeout(() => el.classList.add("hidden"), 2800);
 }
 
-const STATUTS = { vu: "Vu", a_voir: "À voir", en_cours: "En cours", abandonne: "Abandonné" };
+const STATUTS = { vu: "Vu", a_voir: "À voir", en_cours: "En cours" };
 const posterSrc = (u) => u || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E";
 
 /* Couleur par genre — un peu de vie dans les fiches et les cartes. */
@@ -668,7 +668,7 @@ function hero(t) {
       <div class="detail-tags"><span class="tag">${t.type === "serie" ? "Série" : "Film"}</span>
         <span class="tag">${t.annee || "—"}</span>${note}${genres}</div>
       <div class="detail-actions" data-id="${t.id}">
-        ${["en_cours", "a_voir", "vu", "abandonne"].map((s) =>
+        ${["en_cours", "a_voir", "vu"].map((s) =>
           `<button class="btn small ${t.statut === s ? "primary" : ""}"
              data-statut="${s}">${STATUTS[s]}</button>`).join("")}
         <button class="btn small ${t.favori ? "primary" : ""}" data-fav>♥ Favori</button>

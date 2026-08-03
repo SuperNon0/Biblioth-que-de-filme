@@ -16,7 +16,7 @@ from tmdb import TMDBError
 
 bp = Blueprint("library", __name__, url_prefix="/api")
 
-STATUTS = {"vu", "a_voir", "en_cours", "abandonne"}
+STATUTS = {"vu", "a_voir", "en_cours"}
 TRIS = {
     "ajout": "date_ajout DESC",
     "titre": "titre COLLATE NOCASE ASC",
