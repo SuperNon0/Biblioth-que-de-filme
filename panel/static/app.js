@@ -573,13 +573,7 @@ async function loadStats() {
         ${s.genres.map((g) => `<div class="bar-row">
           <span class="bar-label">${esc(g.nom)}</span>
           <span class="bar-track"><span class="bar-fill" style="width:${g.n / maxG * 100}%"></span></span>
-          <span class="bar-num">${g.n}</span></div>`).join("")}` : ""}
-      ${s.series.length ? `<h3 class="sub-title">Temps par série</h3>
-        ${s.series.map((se) => `<div class="bar-row">
-          <span class="bar-label">${esc(se.titre)}</span>
-          <span class="bar-track"><span class="bar-fill"
-            style="width:${se.minutes / s.series[0].minutes * 100}%"></span></span>
-          <span class="bar-num">${se.duree.texte}</span></div>`).join("")}` : ""}`;
+          <span class="bar-num">${g.n}</span></div>`).join("")}` : ""}`;
   } catch (e) { wrap.innerHTML = `<p class="muted">${esc(e.message)}</p>`; }
 }
 
@@ -796,7 +790,7 @@ function normLocal(data) {
     bande_annonce: t.bande_annonce, plateformes: t.plateformes || [], casting: t.casting || [],
     equipe: t.equipe || [], statut: t.statut, favori: t.favori,
     watches: data.visionnages || [], saisons: data.saisons || [], next: data.prochain_episode,
-    syncPending: data.sync_pending || false };
+    temps: data.temps || null, syncPending: data.sync_pending || false };
 }
 function normTmdb(t) {
   return { inLib: false, localId: null, tmdb: t.tmdb_id, type: t.type, titre: t.titre,
@@ -922,6 +916,11 @@ function seasonsBlock(n) {
     && sais.every((s) => s.total > 0 && s.vus >= s.total);
   return `<div class="dv-seasons" data-localid="${n.localId || ""}"
        data-tmdb="${n.tmdb || ""}" data-type="${n.type}">
+    ${n.temps && n.temps.minutes > 0 ? `<div class="dv-timespent">
+       <span class="dv-time-ic">⏱</span>
+       <span><b>${n.temps.texte}</b> passés sur cette série
+         <span class="muted">· ${n.temps.episodes} épisode${n.temps.episodes > 1 ? "s" : ""} vu${n.temps.episodes > 1 ? "s" : ""}${n.temps.converti ? " · ≈ " + n.temps.converti : ""}</span></span>
+     </div>` : ""}
     ${next ? `<p class="muted">Prochain épisode : S${next.saison}E${next.numero}
        « ${esc(next.nom || "")} » le ${fmtDate(next.date_diff)}</p>` : ""}
     <h3 class="dv-h3">Saisons</h3>

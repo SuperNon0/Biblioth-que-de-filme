@@ -355,13 +355,25 @@ main { padding: 20px; max-width: 1400px; margin: 0 auto; }
 .stat-label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase;
               letter-spacing: .05em; margin-top: 4px; }
 .stat-sub { font-size: 0.74rem; color: var(--green); margin-top: 4px; }
-.bar-row { display: flex; align-items: center; gap: 10px; margin: 6px 0; }
-.bar-label { width: 130px; font-size: 0.74rem; flex-shrink: 0; text-align: right;
-             color: var(--muted); }
-.bar-track { flex: 1; background: var(--bg-card); border-radius: 999px; height: 14px;
-             overflow: hidden; border: 1px solid var(--border); }
-.bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-hover)); }
-.bar-num { width: 40px; font-size: 0.72rem; color: var(--muted); }
+.bar-row { display: flex; align-items: center; gap: 12px; margin: 9px 0; }
+.bar-label { width: 122px; font-size: 0.74rem; flex-shrink: 0; text-align: right;
+             color: var(--muted); line-height: 1.2; }
+.bar-track { flex: 1; background: rgba(255, 255, 255, 0.05); border-radius: 999px;
+             height: 16px; overflow: hidden; }
+/* display:block indispensable : sinon (span = inline) width/height sont ignorés
+   et la barre paraît vide. */
+.bar-fill { display: block; height: 100%; border-radius: 999px; min-width: 8px;
+            background: linear-gradient(90deg, var(--accent), var(--accent-hover)); }
+.bar-num { min-width: 58px; font-size: 0.74rem; color: var(--text); font-weight: 500;
+           white-space: nowrap; text-align: right; }
+
+/* Temps passé sur une série (affiché sur la fiche). */
+.dv-timespent { display: flex; align-items: center; gap: 10px; margin: 4px 0 18px;
+                padding: 12px 14px; border-radius: var(--radius);
+                background: rgba(79, 195, 161, 0.10);
+                border: 1px solid rgba(79, 195, 161, 0.30); font-size: 0.85rem; }
+.dv-time-ic { font-size: 1.2rem; }
+.dv-timespent b { color: var(--green); }
 
 /* ------------------------------------------------------------- paramètres */
 .settings-grid { display: grid; gap: 16px;

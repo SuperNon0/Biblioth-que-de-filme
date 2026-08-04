@@ -131,6 +131,8 @@ def detail(titre_id):
                 payload["sync_pending"] = True
         payload["saisons"] = _saisons(titre_id)
         payload["prochain_episode"] = _prochain_episode(titre_id)
+        from services import statistics
+        payload["temps"] = statistics.temps_serie(titre_id)
     payload["alerte"] = db.q1(
         "SELECT canal FROM alertes WHERE titre_id = ?", (titre_id,))
     return jsonify(payload)

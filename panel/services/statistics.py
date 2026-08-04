@@ -55,19 +55,19 @@ def duree_lisible(minutes):
             "texte": texte, "converti": conv}
 
 
-def temps_par_serie():
-    rows = db.q(
-        """SELECT t.id, t.titre, t.affiche,
-                  SUM(COALESCE(e.duree, ?)) AS minutes,
-                  COUNT(e.id) AS episodes
-           FROM titres t JOIN episodes e ON e.titre_id = t.id
-           WHERE t.type = 'serie' AND e.vu = 1
-           GROUP BY t.id ORDER BY minutes DESC""",
-        (DUREE_EPISODE_DEFAUT,),
+def temps_serie(titre_id):
+    """Temps passé (minutes vues, revisionnages inclus) sur une série précise,
+    pour l'afficher sur sa fiche. Renvoie le libellé + le nombre d'épisodes vus."""
+    row = db.q1(
+        """SELECT SUM(COALESCE(duree, ?) * MAX(nb_vues, 1)) AS minutes,
+                  COUNT(id) AS episodes
+           FROM episodes WHERE titre_id = ? AND vu = 1""",
+        (DUREE_EPISODE_DEFAUT, titre_id),
     )
-    for r in rows:
-        r["duree"] = duree_lisible(r["minutes"])
-    return rows
+    minutes = (row and row["minutes"]) or 0
+    info = duree_lisible(minutes)
+    info["episodes"] = (row and row["episodes"]) or 0
+    return info
 
 
 def _compte_genres():
@@ -104,5 +104,4 @@ def resume():
         "nb_episodes": nb_episodes,
         "genres": [{"nom": g, "n": n} for g, n in _compte_genres()],
         "par_annee": par_annee,
-        "series": temps_par_serie(),
     }
