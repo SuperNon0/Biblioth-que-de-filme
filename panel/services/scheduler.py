@@ -46,9 +46,8 @@ def _loop(app, interval):
 
 
 def run_checks():
-    """Un cycle : n'exécute rien si aucun canal de notification n'est activé."""
-    if not (settings_store.get("notif_discord_enabled")
-            or settings_store.get("notif_ntfy_enabled")):
+    """Un cycle : n'exécute rien si les notifications Discord ne sont pas activées."""
+    if not settings_store.get("notif_discord_enabled"):
         return
     _check_episodes()
     _check_alertes()

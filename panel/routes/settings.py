@@ -53,7 +53,7 @@ def set_settings():
 @bp.post("/settings/notif-test")
 @auth.login_required
 def notif_test():
-    """Envoie une notification de test sur les canaux activés (Discord/ntfy)."""
+    """Envoie une notification de test sur Discord (si activé)."""
     from services import notifications
     canaux = notifications.test()
     if not canaux:

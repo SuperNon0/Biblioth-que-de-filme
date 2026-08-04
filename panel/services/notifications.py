@@ -1,11 +1,8 @@
-"""Envoi des notifications : Discord (via botpanel) et ntfy (push mobile).
+"""Envoi des notifications : Discord (via botpanel).
 
 - **Discord** : on appelle l'API de botpanel `POST {url}/api/notify` avec un
-  slug pré-configuré côté botpanel. On envoie aussi ``title`` et ``message`` :
-  le botpanel actuel les ignore (déclenchement par slug), une future version
-  pourra les utiliser pour un contenu dynamique. Aucun jeton requis.
-- **ntfy** : push direct sur le téléphone avec le **texte complet** (titre
-  exact du film/épisode) — contenu dynamique.
+  slug pré-configuré côté botpanel et des ``vars`` qui remplissent le modèle.
+  Aucun jeton requis.
 
 Toutes les fonctions lisent la configuration via ``settings_store`` : elles
 doivent donc être appelées dans un contexte d'application Flask.
@@ -56,42 +53,16 @@ def send_discord(kind, variables=None):
         return False
 
 
-def send_ntfy(title, message):
-    """Envoie un push ntfy avec le contenu dynamique complet."""
-    if not settings_store.get("notif_ntfy_enabled"):
-        return False
-    base = (settings_store.get("ntfy_url") or "https://ntfy.sh").rstrip("/")
-    topic = (settings_store.get("ntfy_topic") or "").strip()
-    if not topic:
-        return False
-    headers = {"Content-Type": "text/plain; charset=utf-8"}
-    # L'en-tête HTTP ne supporte que le latin-1 : si le titre a des accents,
-    # on le laisse dans le corps et on met un titre ASCII de repli.
-    try:
-        title.encode("latin-1")
-        headers["Title"] = title
-    except (UnicodeEncodeError, AttributeError):
-        headers["Title"] = "cinetheque"
-        message = f"{title}\n{message}"
-    try:
-        _post(f"{base}/{topic}", data=message.encode("utf-8"), headers=headers)
-        return True
-    except (urllib.error.URLError, OSError, ValueError) as exc:
-        log.warning("Envoi ntfy échoué : %s", exc)
-        return False
-
-
 def notify(kind, title, message, variables=None):
-    """Envoie l'événement sur tous les canaux activés. Renvoie les canaux OK.
+    """Envoie l'événement sur Discord (si activé). Renvoie les canaux OK.
 
-    ``variables`` : dict de valeurs dynamiques (namespace ``vars`` côté botpanel)
-    — approche générale réutilisable par tous les projets.
+    ``title`` / ``message`` restent dans la signature pour la journalisation et
+    d'éventuels futurs canaux ; Discord est piloté par ``kind`` + ``variables``
+    (namespace ``vars`` côté botpanel).
     """
     ok = []
     if send_discord(kind, variables):
         ok.append("discord")
-    if send_ntfy(title, message):
-        ok.append("ntfy")
     return ok
 
 

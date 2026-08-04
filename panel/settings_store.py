@@ -30,10 +30,6 @@ EDITABLES = {
     "botpanel_slug_episode": "",
     "botpanel_slug_cine": "",
     "botpanel_slug_streaming": "",
-    # Notifications ntfy (push direct sur le téléphone, contenu dynamique).
-    "notif_ntfy_enabled": False,
-    "ntfy_url": "https://ntfy.sh",
-    "ntfy_topic": "",
 }
 
 # Ces clés sont renvoyées telles quelles à l'interface (pas de secret sensible).
@@ -41,7 +37,6 @@ PUBLIC_KEYS = (
     "tmdb_language", "tmdb_region", "cf_sso_enabled", "cf_access_email",
     "notif_discord_enabled", "botpanel_url", "botpanel_slug_episode",
     "botpanel_slug_cine", "botpanel_slug_streaming",
-    "notif_ntfy_enabled", "ntfy_url", "ntfy_topic",
 )
 
 

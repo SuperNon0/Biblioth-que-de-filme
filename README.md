@@ -24,8 +24,8 @@ Site mono-utilisateur (compte `admin`), thème sombre doré, construit avec
   listes toutes prêtes.
 - **Profil** : temps total regardé (heures → mois/années), compteurs, genres les
   plus vus, temps par série.
-- **Notifications** : Discord (via *botpanel*) et push mobile (*ntfy*) pour les
-  nouveaux épisodes et les sorties ciné/streaming —
+- **Notifications** : Discord (via *botpanel*) pour les nouveaux épisodes et les
+  sorties ciné/streaming —
   guide complet : [`docs/notifications.md`](docs/notifications.md).
 - **Sauvegarde** : export/import complet des données.
 

@@ -582,9 +582,6 @@ async function loadSettings() {
     $("#set-slug-episode").value = s.botpanel_slug_episode || "";
     $("#set-slug-cine").value = s.botpanel_slug_cine || "";
     $("#set-slug-streaming").value = s.botpanel_slug_streaming || "";
-    $("#set-ntfy-enabled").checked = !!s.notif_ntfy_enabled;
-    $("#set-ntfy-url").value = s.ntfy_url || "https://ntfy.sh";
-    $("#set-ntfy-topic").value = s.ntfy_topic || "";
   } catch (_) { /* ignore */ }
   loadVersion();
 }
@@ -616,9 +613,6 @@ $("#btn-save-notif").addEventListener("click", async () => {
       botpanel_slug_episode: $("#set-slug-episode").value.trim(),
       botpanel_slug_cine: $("#set-slug-cine").value.trim(),
       botpanel_slug_streaming: $("#set-slug-streaming").value.trim(),
-      notif_ntfy_enabled: $("#set-ntfy-enabled").checked,
-      ntfy_url: $("#set-ntfy-url").value.trim(),
-      ntfy_topic: $("#set-ntfy-topic").value.trim(),
     } });
     $("#notif-status").textContent = "✅ Enregistré."; toast("Notifications enregistrées");
   } catch (e) { $("#notif-status").textContent = "❌ " + e.message; }
