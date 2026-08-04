@@ -76,6 +76,13 @@ emplacements `{var:…}`), et recopie le slug dans cinéthèque.
 La syntaxe `{var:nom}` insère la variable ; `{var:nom|valeur par défaut}` affiche
 la valeur de repli si la variable est absente.
 
+> **Afficher l'affiche du film / de la série.** Chaque notification envoie aussi
+> une variable `affiche` (URL publique du poster TMDB) et `image` (vignette de
+> l'épisode pour les séries, poster sinon). Si ton botpanel permet de définir une
+> **image / miniature d'embed**, mets-y `{var:affiche}` (ou `{var:image}`) : tu
+> recevras la notification Discord **avec le poster**. Si botpanel ne gère pas les
+> images, ces variables sont simplement ignorées.
+
 ---
 
 ### 3.1 📺 Nouvel épisode d'une série
@@ -91,11 +98,14 @@ la valeur de repli si la variable est absente.
 | `titre` | Nom de l'épisode (peut être vide) | `Le sentier` |
 | `saison` | Numéro de saison | `2` |
 | `episode` | Numéro d'épisode | `3` |
+| `affiche` | Poster de la série (URL TMDB) | `https://image.tmdb.org/…jpg` |
+| `image` | Vignette de l'épisode (URL TMDB) | `https://image.tmdb.org/…jpg` |
 
 **À coller dans botpanel** (slug conseillé : `cinetheque_episode`)
 
 > **Titre :** `📺 {var:serie}`
 > **Message :** `Nouvel épisode {var:code} — {var:titre|à regarder} 🍿`
+> **Image / miniature** (si botpanel le permet) : `{var:affiche}`
 
 **Ce que tu reçois sur Discord :**
 
@@ -114,11 +124,13 @@ la valeur de repli si la variable est absente.
 |----------|---------------|---------|
 | `titre` | Nom du film | `Dune : Deuxième partie` |
 | `canal` | Toujours `cinéma` | `cinéma` |
+| `affiche` | Poster du film (URL TMDB) | `https://image.tmdb.org/…jpg` |
 
 **À coller dans botpanel** (slug conseillé : `cinetheque_cine`)
 
 > **Titre :** `🎬 {var:titre}`
 > **Message :** `C'est sorti — maintenant au {var:canal} ! 🎟️`
+> **Image / miniature** (si botpanel le permet) : `{var:affiche}`
 
 **Ce que tu reçois sur Discord :**
 
@@ -138,11 +150,13 @@ plateforme (détecté via TMDB).
 |----------|---------------|---------|
 | `titre` | Nom du film | `Oppenheimer` |
 | `plateformes` | 1 à 3 plateformes détectées | `Netflix, Canal+` |
+| `affiche` | Poster du film (URL TMDB) | `https://image.tmdb.org/…jpg` |
 
 **À coller dans botpanel** (slug conseillé : `cinetheque_streaming`)
 
 > **Titre :** `📺 {var:titre}`
 > **Message :** `Disponible en streaming sur {var:plateformes|une plateforme} 🎬`
+> **Image / miniature** (si botpanel le permet) : `{var:affiche}`
 
 **Ce que tu reçois sur Discord :**
 
@@ -173,9 +187,13 @@ que botpanel est joignable depuis le serveur cinéthèque.
 
 | Événement | Slug (réglage) | `kind` interne | Variables `vars` |
 |-----------|----------------|----------------|------------------|
-| Nouvel épisode | slug épisode | `episode` | `serie`, `code`, `titre`, `saison`, `episode` |
-| Film au cinéma | slug ciné | `cine` | `titre`, `canal` |
-| Film en streaming | slug streaming | `streaming` | `titre`, `plateformes` |
+| Nouvel épisode | slug épisode | `episode` | `serie`, `code`, `titre`, `saison`, `episode`, `affiche`, `image` |
+| Film au cinéma | slug ciné | `cine` | `titre`, `canal`, `affiche`, `image` |
+| Film en streaming | slug streaming | `streaming` | `titre`, `plateformes`, `affiche`, `image` |
+
+Les URLs `affiche` / `image` pointent vers `image.tmdb.org` (publiques, joignables
+par Discord). L'affiche locale mise en cache par l'app n'est **pas** utilisée ici
+car elle n'est pas accessible depuis l'extérieur.
 
 Code de référence : `panel/services/notifications.py` (envoi) et
 `panel/services/scheduler.py` (détection + déclenchement).

@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS titres (
     genres        TEXT,                          -- JSON: ["Action", ...]
     duree         INTEGER,                       -- minutes (films)
     affiche       TEXT,                          -- chemin local (cache) ou URL
+    affiche_url   TEXT,                          -- URL TMDB publique (notifs Discord)
     fond          TEXT,
     bande_annonce TEXT,                          -- clé/URL YouTube
     note_tmdb     REAL,
@@ -132,6 +133,8 @@ def _migrate(conn):
         conn.execute("ALTER TABLE titres ADD COLUMN equipe TEXT")
     if "nb_saisons" not in cols:
         conn.execute("ALTER TABLE titres ADD COLUMN nb_saisons INTEGER")
+    if "affiche_url" not in cols:
+        conn.execute("ALTER TABLE titres ADD COLUMN affiche_url TEXT")
     ep_cols = {r[1] for r in conn.execute("PRAGMA table_info(episodes)")}
     if "notifie" not in ep_cols:
         conn.execute("ALTER TABLE episodes ADD COLUMN notifie INTEGER DEFAULT 0")

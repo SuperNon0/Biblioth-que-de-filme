@@ -80,4 +80,7 @@ def test():
         "🎬 Notification de test depuis cinéthèque. Tout fonctionne !",
         {"serie": "Série de test", "code": "S01E01",
          "titre": "Épisode pilote", "saison": "1", "episode": "1",
-         "canal": "cinéma", "plateformes": "Netflix", "type": "test"})
+         "canal": "cinéma", "plateformes": "Netflix", "type": "test",
+         # Affiche d'exemple (publique TMDB) pour tester l'image dans botpanel.
+         "affiche": "https://image.tmdb.org/t/p/w500/qhb1qOilapbapxWQn9jtRCMwXJF.jpg",
+         "image": "https://image.tmdb.org/t/p/w500/qhb1qOilapbapxWQn9jtRCMwXJF.jpg"})

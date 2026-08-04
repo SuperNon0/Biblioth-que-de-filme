@@ -52,6 +52,8 @@ def upsert_titre(detail, statut="a_voir"):
         (detail.get("tmdb_id"), detail["type"]),
     )
     now = int(time.time())
+    # affiche = chemin local mis en cache (pour l'app) ; affiche_url = l'URL TMDB
+    # publique d'origine (pour les notifications Discord, joignables par Discord).
     affiche = _cache_affiche(detail.get("affiche"))
     fields = (
         detail.get("tmdb_id"), detail["type"], detail["titre"],
@@ -64,13 +66,15 @@ def upsert_titre(detail, statut="a_voir"):
         json.dumps(detail.get("casting", []), ensure_ascii=False),
         json.dumps(detail.get("equipe", []), ensure_ascii=False),
         detail.get("nb_saisons"),  # séries : sert à détecter une sync incomplète
+        detail.get("affiche"),     # URL TMDB publique (notifs Discord)
     )
     if existing:
         db.run(
             """UPDATE titres SET titre=?, annee=?, date_sortie=?, resume=?,
                genres=?, duree=?, affiche=COALESCE(?, affiche), fond=?,
                bande_annonce=?, note_tmdb=?, pays=?, plateformes=?, casting=?,
-               equipe=?, nb_saisons=COALESCE(?, nb_saisons), maj=? WHERE id=?""",
+               equipe=?, nb_saisons=COALESCE(?, nb_saisons),
+               affiche_url=COALESCE(?, affiche_url), maj=? WHERE id=?""",
             fields[2:] + (now, existing["id"]),
         )
         return existing["id"]
@@ -78,8 +82,8 @@ def upsert_titre(detail, statut="a_voir"):
         """INSERT INTO titres
            (tmdb_id, type, titre, annee, date_sortie, resume, genres, duree,
             affiche, fond, bande_annonce, note_tmdb, pays, plateformes, casting,
-            equipe, nb_saisons, statut, date_ajout, maj)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            equipe, nb_saisons, affiche_url, statut, date_ajout, maj)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         fields + (statut, now, now),
     )
 

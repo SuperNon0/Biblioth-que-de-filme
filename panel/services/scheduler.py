@@ -56,7 +56,7 @@ def run_checks():
 def _check_episodes():
     today = date.today().isoformat()
     series = db.q(
-        """SELECT id, tmdb_id, titre FROM titres
+        """SELECT id, tmdb_id, titre, affiche_url FROM titres
            WHERE type='serie' AND statut IN ('en_cours','a_voir')
            AND tmdb_id IS NOT NULL"""
     )
@@ -67,8 +67,14 @@ def _check_episodes():
             sync.sync_episodes(s["id"], tmdb, s["tmdb_id"], detail.get("saisons", []))
         except TMDBError:
             continue
+        # Renseigne l'URL publique de l'affiche pour les séries ajoutées avant
+        # (les notifications peuvent alors inclure le poster).
+        if not s["affiche_url"] and detail.get("affiche"):
+            db.run("UPDATE titres SET affiche_url=? WHERE id=?",
+                   (detail["affiche"], s["id"]))
+            s["affiche_url"] = detail["affiche"]
         nouveaux = db.q(
-            """SELECT id, saison, numero, nom FROM episodes
+            """SELECT id, saison, numero, nom, image FROM episodes
                WHERE titre_id=? AND notifie=0 AND date_diff IS NOT NULL
                AND date_diff != '' AND date_diff <= ?""",
             (s["id"], today),
@@ -80,6 +86,9 @@ def _check_episodes():
             notifications.notify("episode", titre, msg, {
                 "serie": s["titre"], "code": code, "titre": e["nom"] or "",
                 "saison": str(e["saison"]), "episode": str(e["numero"]),
+                # affiche = poster de la série ; image = vignette de l'épisode.
+                "affiche": s["affiche_url"] or "",
+                "image": e["image"] or s["affiche_url"] or "",
             })
             db.run("UPDATE episodes SET notifie=1 WHERE id=?", (e["id"],))
 
@@ -88,16 +97,19 @@ def _check_alertes():
     today = date.today().isoformat()
     tmdb = get_tmdb()
     alertes = db.q(
-        """SELECT a.id, a.canal, t.titre, t.tmdb_id, t.type, t.date_sortie
+        """SELECT a.id, a.canal, t.titre, t.tmdb_id, t.type, t.date_sortie,
+                  t.affiche_url
            FROM alertes a JOIN titres t ON t.id = a.titre_id
            WHERE a.vue = 0"""
     )
     for a in alertes:
+        affiche = a["affiche_url"] or ""
         if a["canal"] == "cine":
             if a["date_sortie"] and a["date_sortie"] <= today:
                 notifications.notify("cine", f"{a['titre']} — au cinéma",
                                      f"🎬 {a['titre']} est maintenant au cinéma !",
-                                     {"titre": a["titre"], "canal": "cinéma"})
+                                     {"titre": a["titre"], "canal": "cinéma",
+                                      "affiche": affiche, "image": affiche})
                 db.run("UPDATE alertes SET vue=1 WHERE id=?", (a["id"],))
         elif a["canal"] == "streaming" and a["tmdb_id"]:
             try:
@@ -105,10 +117,13 @@ def _check_alertes():
                           else tmdb.tv(a["tmdb_id"]))
             except TMDBError:
                 continue
+            if not affiche and detail.get("affiche"):
+                affiche = detail["affiche"]  # backfill pour un titre ajouté avant
             plateformes = detail.get("plateformes") or []
             if plateformes:
                 noms = ", ".join(p["nom"] for p in plateformes[:3])
                 notifications.notify("streaming", f"{a['titre']} — en streaming",
                                      f"📺 {a['titre']} est dispo sur {noms}.",
-                                     {"titre": a["titre"], "plateformes": noms})
+                                     {"titre": a["titre"], "plateformes": noms,
+                                      "affiche": affiche, "image": affiche})
                 db.run("UPDATE alertes SET vue=1 WHERE id=?", (a["id"],))
