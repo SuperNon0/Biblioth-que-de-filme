@@ -89,6 +89,14 @@ html { scrollbar-width: thin; scrollbar-color: rgba(232, 197, 71, 0.5) transpare
        padding: 8px 12px; border-radius: var(--radius); }
 .input { width: 100%; margin: 6px 0; }
 .small-input { width: 110px; }
+
+/* iOS zoome automatiquement sur les champs dont la police fait < 16px.
+   Sur mobile, on force 16px sur toutes les saisies → plus de zoom intempestif
+   au focus (le zoom manuel/pincement reste possible : accessibilité préservée). */
+@media (max-width: 759px) {
+  input, select, textarea,
+  .input, .select, .search input, .search-inline { font-size: 16px; }
+}
 .select:focus, .input:focus { border-color: var(--accent); }
 
 /* ------------------------------------------------------------- barre haut */
