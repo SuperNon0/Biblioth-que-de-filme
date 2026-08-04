@@ -92,7 +92,8 @@ html { scrollbar-width: thin; scrollbar-color: rgba(232, 197, 71, 0.5) transpare
 .select:focus, .input:focus { border-color: var(--accent); }
 
 /* ------------------------------------------------------------- barre haut */
-.topbar { display: flex; align-items: center; gap: 16px; padding: 12px 20px;
+.topbar { display: flex; align-items: center; gap: 16px;
+          padding: calc(12px + env(safe-area-inset-top)) 20px 12px;
           background: var(--bg-panel); border-bottom: 1px solid var(--border);
           position: sticky; top: 0; z-index: 30; }
 .brand { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
@@ -530,8 +531,12 @@ input:-webkit-autofill, input:-webkit-autofill:focus, input:-webkit-autofill:hov
 /* Sur mobile (fiche plein écran) : boutons fixés à l'écran, toujours accessibles.
    Sur ordinateur (fiche centrée) : ils restent sur la carte (positionnés sur le hero). */
 @media (max-width: 759px) {
-  .modal.full .dv-back { position: fixed; top: 14px; left: 14px; z-index: 70; }
-  .modal.full .dv-fav { position: fixed; top: 14px; right: 14px; z-index: 70; }
+  /* Décalés sous l'encoche / la barre d'état iOS (safe-area) pour rester
+     visibles et cliquables — sinon le « ← » se cache derrière l'heure. */
+  .modal.full .dv-back { position: fixed; top: calc(14px + env(safe-area-inset-top));
+                         left: 14px; z-index: 70; }
+  .modal.full .dv-fav { position: fixed; top: calc(14px + env(safe-area-inset-top));
+                        right: 14px; z-index: 70; }
 }
 
 .dv-head { display: flex; gap: 16px; padding: 0 20px; margin-top: -70px;
@@ -602,6 +607,7 @@ input:-webkit-autofill, input:-webkit-autofill:focus, input:-webkit-autofill:hov
         display: flex; flex-direction: column; align-items: center; gap: 2px;
         font-size: 0.6rem; padding: 4px 6px; cursor: pointer; flex: 1; }
 .bnav .bi { font-size: 1.15rem; line-height: 1; }
+.bnav .bi svg { width: 23px; height: 23px; display: block; }
 .bnav.active { color: var(--accent); }
 
 /* panneau « Plus » et panneau de filtres (feuilles du bas) */
@@ -619,6 +625,12 @@ input:-webkit-autofill, input:-webkit-autofill:focus, input:-webkit-autofill:hov
               font-family: var(--font); font-size: 0.95rem; padding: 15px 12px;
               border-radius: 10px; cursor: pointer; }
 .sheet-item:hover, .sheet-item.active { background: var(--bg-card); color: var(--accent); }
+.sheet-item svg { width: 20px; height: 20px; vertical-align: -5px; margin-right: 12px; }
+/* Icônes en ligne (remplacent les émojis, prennent la couleur du thème). */
+svg.ic { width: 15px; height: 15px; vertical-align: -2px; margin-right: 7px; }
+h2 svg.ic, h3 svg.ic { width: 18px; height: 18px; vertical-align: -3px; margin-right: 9px; }
+.banner svg.ic { width: 17px; height: 17px; vertical-align: -3px; }
+.chip svg.ic { width: 14px; height: 14px; vertical-align: -2px; }
 .filter-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6);
                    backdrop-filter: blur(2px); z-index: 65; }
 .filter-backdrop.hidden { display: none; }

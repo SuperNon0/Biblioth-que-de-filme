@@ -9,6 +9,14 @@
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
+/* Icônes SVG en ligne (au thème via currentColor) — remplacent les émojis. */
+const SVG = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"';
+const ICONS = {
+  bell: `<svg class="ic" ${SVG}><path d="M6.5 9.5a5.5 5.5 0 0 1 11 0c0 4.5 2 5.5 2 5.5H4.5s2-1 2-5.5z"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>`,
+  dice: `<svg class="ic" ${SVG}><rect x="4" y="4" width="16" height="16" rx="3.5"/><circle cx="8.5" cy="8.5" r="1" fill="currentColor" stroke="none"/><circle cx="15.5" cy="8.5" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="8.5" cy="15.5" r="1" fill="currentColor" stroke="none"/><circle cx="15.5" cy="15.5" r="1" fill="currentColor" stroke="none"/></svg>`,
+  film: `<svg class="ic" ${SVG}><rect x="3" y="4.5" width="18" height="15" rx="2"/><path d="M8 4.5v15M16 4.5v15M3 9.5h5M16 9.5h5M3 14.5h5M16 14.5h5"/></svg>`,
+};
+
 async function api(path, { method = "GET", body } = {}) {
   const opts = { method, headers: {} };
   if (body !== undefined) {
@@ -132,6 +140,13 @@ quickMenu.addEventListener("click", async (e) => {
   const { el, tmdb, type, localid } = qmContext;
   const act = btn.dataset.qm;
   if (act === "infos") { closeQuickMenu(); return localid ? openDetail(localid) : openPreview(tmdb, type); }
+  // Série + « Déjà vu » : on ouvre la fiche directement sur les Saisons, pour
+  // marquer saison par saison (au lieu de tout marquer d'un coup).
+  if (act === "vu" && type === "serie") {
+    closeQuickMenu();
+    return localid ? openDetail(localid, { seasons: true })
+                   : openPreview(tmdb, type, { seasons: true });
+  }
   try {
     let newId = localid;
     if (act === "vu") {
@@ -332,7 +347,7 @@ bindGrid($("#lib-grid"));
 /* -------------------------------------------------- roulette « que regarder » */
 async function openRoulette(source) {
   modal.classList.remove("hidden"); modal.classList.remove("full");
-  modalContent.innerHTML = `<div class="detail-body"><h2>🎲 Que regarder ?</h2>
+  modalContent.innerHTML = `<div class="detail-body"><h2>${ICONS.dice}Que regarder ?</h2>
     <p class="muted">Tirage en cours…</p></div>`;
   rollRoulette(source);
 }
@@ -346,13 +361,13 @@ async function rollRoulette(source) {
       : "Aucun résultat.";
     const intro = source === "library"
       ? "Piochés dans ta liste « À voir » :" : "Piochés au hasard dans le catalogue :";
-    modalContent.innerHTML = `<div class="detail-body"><h2>🎲 Que regarder ?</h2>
+    modalContent.innerHTML = `<div class="detail-body"><h2>${ICONS.dice}Que regarder ?</h2>
       ${(!results || !results.length) ? `<p class="muted">${vide}</p>`
         : `<p class="muted">${intro}</p><div class="grid">${results.map(posterCard).join("")}</div>
-           <div class="row-inline"><button class="btn primary" data-reroll="${source}">🎲 Relancer</button></div>`}
+           <div class="row-inline"><button class="btn primary" data-reroll="${source}">${ICONS.dice}Relancer</button></div>`}
     </div>`;
   } catch (e) {
-    modalContent.innerHTML = `<div class="detail-body"><h2>🎲 Que regarder ?</h2>
+    modalContent.innerHTML = `<div class="detail-body"><h2>${ICONS.dice}Que regarder ?</h2>
       <p class="muted">${esc(e.message)}</p></div>`;
   }
 }
@@ -420,7 +435,7 @@ async function loadFutur() {
           <div class="poster-title">${esc(r.titre)}</div>
           <div class="poster-meta"><span>${r.date_sortie || "—"}</span></div>
           <button class="ep-btn ${r.alerte ? "vu" : ""}" data-alert="${r.tmdb_id}"
-            style="margin-top:6px">${r.alerte ? "🔔 Alerte posée" : "🔔 M'alerter"}</button>
+            style="margin-top:6px">${ICONS.bell}${r.alerte ? "Alerte posée" : "M'alerter"}</button>
         </div>
       </div>`).join("");
   } catch (e) { grid.innerHTML = `<p class="muted">${esc(e.message)}</p>`; }
@@ -485,7 +500,7 @@ $("#btn-liste-presets").addEventListener("click", openPresetsModal);
 
 async function openPresetsModal() {
   modal.classList.remove("hidden"); modal.classList.remove("full");
-  modalContent.innerHTML = `<div class="detail-body"><h2>🎬 Listes prêtes</h2>
+  modalContent.innerHTML = `<div class="detail-body"><h2>${ICONS.film}Listes prêtes</h2>
     <p class="muted">Choisis une saga : ses titres sont ajoutés à ta bibliothèque
       (« À voir ») et rangés dans une nouvelle liste, dans l'ordre.</p>
     <div id="presets-list" class="muted">Chargement…</div></div>`;
@@ -669,15 +684,22 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal
 const DV_LOADING = `<div class="dv-body"><p class="muted">Chargement…</p></div>`;
 const dvErr = (e) => `<div class="dv-body"><p class="muted">${esc(e.message)}</p></div>`;
 
-async function openDetail(id) {
+async function openDetail(id, opts = {}) {
   modal.classList.remove("hidden"); modal.classList.add("full");
   modalContent.innerHTML = DV_LOADING;
   try {
     const n = normLocal(await api(`/api/title/${id}`));
     modalContent.innerHTML = renderTitlePage(n);
     loadSimilar(n.tmdb, n.type);
+    if (opts.seasons) scrollToSeasons();
     if (n.syncPending) pollSeasons(id);  // remplissage épisodes en arrière-plan
   } catch (e) { modalContent.innerHTML = dvErr(e); }
+}
+
+/* Fait défiler la fiche jusqu'à la section Saisons (ouverture « Déjà vu »). */
+function scrollToSeasons() {
+  const s = $(".dv-seasons");
+  if (s) s.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 /* Rafraîchit le bloc des saisons quand les épisodes finissent de se remplir. */
@@ -694,13 +716,14 @@ function pollSeasons(id) {
   }, 1500);
 }
 
-async function openPreview(tmdb, type) {
+async function openPreview(tmdb, type, opts = {}) {
   modal.classList.remove("hidden"); modal.classList.add("full");
   modalContent.innerHTML = DV_LOADING;
   try {
     const n = normTmdb(await api(`/api/preview?tmdb_id=${tmdb}&type=${type}`));
     modalContent.innerHTML = renderTitlePage(n);
     loadSimilar(n.tmdb, n.type);
+    if (opts.seasons) scrollToSeasons();
   } catch (e) { modalContent.innerHTML = dvErr(e); }
 }
 
