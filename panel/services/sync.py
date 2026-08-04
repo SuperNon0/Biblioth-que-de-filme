@@ -12,6 +12,7 @@ from flask import current_app
 
 import db
 from services import posters
+from tmdb import TMDBError
 
 # Séries dont les épisodes se remplissent en arrière-plan (ajout non bloquant).
 # Permet à la fiche de montrer « chargement… » au lieu de re-synchroniser.
@@ -62,13 +63,14 @@ def upsert_titre(detail, statut="a_voir"):
         json.dumps(detail.get("plateformes", []), ensure_ascii=False),
         json.dumps(detail.get("casting", []), ensure_ascii=False),
         json.dumps(detail.get("equipe", []), ensure_ascii=False),
+        detail.get("nb_saisons"),  # séries : sert à détecter une sync incomplète
     )
     if existing:
         db.run(
             """UPDATE titres SET titre=?, annee=?, date_sortie=?, resume=?,
                genres=?, duree=?, affiche=COALESCE(?, affiche), fond=?,
                bande_annonce=?, note_tmdb=?, pays=?, plateformes=?, casting=?,
-               equipe=?, maj=? WHERE id=?""",
+               equipe=?, nb_saisons=COALESCE(?, nb_saisons), maj=? WHERE id=?""",
             fields[2:] + (now, existing["id"]),
         )
         return existing["id"]
@@ -76,8 +78,8 @@ def upsert_titre(detail, statut="a_voir"):
         """INSERT INTO titres
            (tmdb_id, type, titre, annee, date_sortie, resume, genres, duree,
             affiche, fond, bande_annonce, note_tmdb, pays, plateformes, casting,
-            equipe, statut, date_ajout, maj)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            equipe, nb_saisons, statut, date_ajout, maj)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         fields + (statut, now, now),
     )
 
@@ -86,10 +88,19 @@ def sync_episodes(titre_id, tmdb, tmdb_id, saisons):
     """Remplit/complète les épisodes d'une série pour toutes ses saisons.
 
     Conserve l'état « vu » existant : on n'écrase que les métadonnées.
+    Résilient : si l'appel d'une saison échoue (réseau/timeout), on passe à la
+    suivante au lieu de tout interrompre — évite de n'avoir que la saison 1.
+    Renvoie le nombre de saisons effectivement récupérées.
     """
+    ok = 0
     for saison in saisons:
         num = saison["numero"]
-        for ep in tmdb.season(tmdb_id, num):
+        try:
+            episodes = tmdb.season(tmdb_id, num)
+        except TMDBError:
+            continue  # une saison qui échoue ne bloque pas les autres
+        ok += 1
+        for ep in episodes:
             db.run(
                 """INSERT INTO episodes
                    (titre_id, saison, numero, nom, resume, image, duree, date_diff)
@@ -101,3 +112,4 @@ def sync_episodes(titre_id, tmdb, tmdb_id, saisons):
                 (titre_id, ep["saison"], ep["numero"], ep["nom"],
                  ep["resume"], ep["image"], ep["duree"], ep["date_diff"]),
             )
+    return ok

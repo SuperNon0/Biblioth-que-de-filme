@@ -4,6 +4,7 @@
 - Série : saisons/épisodes (nom, image, résumé, durée), marquage Vu/Revu,
   « marquer la saison » et « marquer la série », prochain épisode.
 """
+import threading
 import time
 from datetime import date
 
@@ -113,26 +114,47 @@ def detail(titre_id):
             (titre_id,),
         )
     else:
-        # Complète les épisodes si la série vient d'être ajoutée sans détail.
-        if t["tmdb_id"] and not db.q1(
-                "SELECT 1 FROM episodes WHERE titre_id = ? LIMIT 1", (titre_id,)):
+        # Détecte une synchronisation incomplète (souvent « seule la saison 1 »
+        # à cause d'un appel TMDB qui a échoué) : on compte les saisons présentes
+        # et on compare au nombre attendu (nb_saisons). Si c'est incomplet — ou
+        # inconnu pour une série ajoutée avant cette détection — on (re)synchronise
+        # en arrière-plan et le front affiche « chargement » puis se rafraîchit.
+        have = db.q1("SELECT COUNT(DISTINCT saison) AS n FROM episodes "
+                     "WHERE titre_id = ?", (titre_id,))["n"] or 0
+        expected = t.get("nb_saisons")
+        incomplete = have == 0 or expected is None or (expected and have < expected)
+        if t["tmdb_id"] and incomplete:
             if sync.is_syncing(titre_id):
-                # Remplissage en arrière-plan en cours : le front affiche
-                # « chargement… » puis rafraîchit, au lieu de re-synchroniser.
                 payload["sync_pending"] = True
             else:
-                try:
-                    tmdb = get_tmdb()
-                    detail_tv = tmdb.tv(t["tmdb_id"])
-                    sync.sync_episodes(titre_id, tmdb, t["tmdb_id"],
-                                       detail_tv.get("saisons", []))
-                except TMDBError:
-                    pass
+                _resync_episodes_bg(get_tmdb(), titre_id, t["tmdb_id"])
+                payload["sync_pending"] = True
         payload["saisons"] = _saisons(titre_id)
         payload["prochain_episode"] = _prochain_episode(titre_id)
     payload["alerte"] = db.q1(
         "SELECT canal FROM alertes WHERE titre_id = ?", (titre_id,))
     return jsonify(payload)
+
+
+def _resync_episodes_bg(tmdb, titre_id, tmdb_id):
+    """(Re)synchronise en arrière-plan tous les épisodes d'une série et met à
+    jour ``nb_saisons``. Non bloquant : la fiche s'ouvre tout de suite et le
+    front rafraîchit les saisons au fur et à mesure (``sync_pending``)."""
+    sync.mark_syncing(titre_id)
+
+    def worker():
+        try:
+            detail_tv = tmdb.tv(tmdb_id)
+            nb = detail_tv.get("nb_saisons")
+            if nb:
+                db.run("UPDATE titres SET nb_saisons=? WHERE id=?", (nb, titre_id))
+            sync.sync_episodes(titre_id, tmdb, tmdb_id, detail_tv.get("saisons", []))
+        except TMDBError:
+            pass
+        finally:
+            sync.done_syncing(titre_id)
+
+    threading.Thread(target=worker, daemon=True).start()
 
 
 def _prochain_episode(titre_id):

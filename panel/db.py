@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS titres (
     plateformes   TEXT,                          -- JSON: [{"nom","logo"}]
     casting       TEXT,                          -- JSON: [{"id","nom","personnage","photo"}]
     equipe        TEXT,                          -- JSON: [{"id","nom","poste","photo"}]
+    nb_saisons    INTEGER,                       -- séries : nombre de saisons TMDB
     statut        TEXT DEFAULT 'a_voir',         -- vu|a_voir|en_cours
     favori        INTEGER DEFAULT 0,
     ajout_manuel  INTEGER DEFAULT 0,
@@ -129,6 +130,8 @@ def _migrate(conn):
         conn.execute("ALTER TABLE titres ADD COLUMN casting TEXT")
     if "equipe" not in cols:
         conn.execute("ALTER TABLE titres ADD COLUMN equipe TEXT")
+    if "nb_saisons" not in cols:
+        conn.execute("ALTER TABLE titres ADD COLUMN nb_saisons INTEGER")
     ep_cols = {r[1] for r in conn.execute("PRAGMA table_info(episodes)")}
     if "notifie" not in ep_cols:
         conn.execute("ALTER TABLE episodes ADD COLUMN notifie INTEGER DEFAULT 0")

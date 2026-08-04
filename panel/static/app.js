@@ -136,20 +136,13 @@ function openQuickMenu(ctx) {
   $("#qm-poster").src = ctx.affiche || posterSrc(null);
   $("#qm-title").textContent = ctx.titre || "";
   const inAvoir = ctx.statut === "a_voir";
-  const enCours = ctx.statut === "en_cours";
   const seen = ctx.statut === "vu" || ctx.nbvues > 0;
   const avoirBtn = $("#quick-menu [data-qm='a_voir']");
   avoirBtn.textContent = inAvoir ? "✓ Dans « À voir »" : "＋ À voir";
   avoirBtn.classList.toggle("current", inAvoir);
   const vuBtn = $("#quick-menu [data-qm='vu']");
-  if (enCours && ctx.type === "serie") {
-    // Série déjà commencée : on montre où reprendre, pas « Déjà vu ».
-    vuBtn.textContent = ctx.nextS ? `▸ Reprendre S${ctx.nextS} E${ctx.nextE}` : "▸ En cours";
-    vuBtn.classList.add("current");
-  } else {
-    vuBtn.textContent = seen ? ("✓ Déjà vu" + (ctx.nbvues > 1 ? ` ×${ctx.nbvues}` : "")) : "Déjà vu";
-    vuBtn.classList.toggle("current", seen);
-  }
+  vuBtn.textContent = seen ? ("✓ Déjà vu" + (ctx.nbvues > 1 ? ` ×${ctx.nbvues}` : "")) : "Déjà vu";
+  vuBtn.classList.toggle("current", seen);
   quickMenu.classList.remove("hidden");
 }
 
@@ -160,18 +153,17 @@ quickMenu.addEventListener("click", async (e) => {
   const { el, tmdb, type, localid } = qmContext;
   const act = btn.dataset.qm;
   if (act === "infos") { closeQuickMenu(); return localid ? openDetail(localid) : openPreview(tmdb, type); }
-  // Série + « Déjà vu » : on ouvre la fiche directement sur les Saisons, pour
-  // marquer saison par saison (au lieu de tout marquer d'un coup).
-  if (act === "vu" && type === "serie") {
-    closeQuickMenu();
-    return localid ? openDetail(localid, { seasons: true })
-                   : openPreview(tmdb, type, { seasons: true });
-  }
   try {
     let newId = localid;
     if (act === "vu") {
-      if (localid) await api(`/api/title/${localid}/watch`, { method: "POST", body: {} });
-      else newId = (await api("/api/library", { method: "POST", body: { tmdb_id: tmdb, type, statut: "vu" } })).id;
+      // « Déjà vu » marque le titre vu. Série : tous les épisodes d'un coup
+      // (le marquage saison par saison reste dans « Plus d'infos »).
+      if (localid) {
+        if (type === "serie") await api(`/api/title/${localid}/mark`, { method: "POST", body: { vu: true } });
+        else await api(`/api/title/${localid}/watch`, { method: "POST", body: {} });
+      } else {
+        newId = (await api("/api/library", { method: "POST", body: { tmdb_id: tmdb, type, statut: "vu" } })).id;
+      }
     } else {
       if (localid) await api(`/api/library/${localid}`, { method: "PATCH", body: { statut: "a_voir" } });
       else newId = (await api("/api/library", { method: "POST", body: { tmdb_id: tmdb, type, statut: "a_voir" } })).id;
@@ -935,6 +927,7 @@ function seasonsBlock(n) {
     <h3 class="dv-h3">Saisons</h3>
     ${seasons || `<p class="muted">${n.syncPending
         ? "Chargement des épisodes…" : "Épisodes indisponibles."}</p>`}
+    ${n.syncPending && sais.length ? `<p class="muted">Chargement des autres saisons…</p>` : ""}
     ${sais.length ? `<button class="btn full dv-serievue ${allSeen ? "" : "primary"}"
        data-markseries>
        ${allSeen ? "↻ J'ai revu toute la série" : "✓ J'ai vu toute la série"}</button>` : ""}
