@@ -9,8 +9,9 @@ Site mono-utilisateur (compte `admin`), thème sombre doré, construit avec
 
 ## Fonctionnalités
 
-- **Bibliothèque** : films et séries, statuts (Vu / À voir / En cours /
-  Abandonné), tri par date, genre, année, note, alphabétique.
+- **Bibliothèque** : films et séries, statuts (Vu / À voir / En cours),
+  progression des séries (« où j'en suis : S x E y »), tri par date, genre,
+  année, note, alphabétique.
 - **Fiches** : durée, résumé, plateformes de streaming, bande-annonce.
   - Films : dates de visionnage multiples + revisionnages.
   - Séries : saisons dépliables, épisodes (nom, image, résumé, durée), marquage
@@ -23,6 +24,9 @@ Site mono-utilisateur (compte `admin`), thème sombre doré, construit avec
   listes toutes prêtes.
 - **Profil** : temps total regardé (heures → mois/années), compteurs, genres les
   plus vus, temps par série.
+- **Notifications** : Discord (via *botpanel*) et push mobile (*ntfy*) pour les
+  nouveaux épisodes et les sorties ciné/streaming —
+  guide complet : [`docs/notifications.md`](docs/notifications.md).
 - **Sauvegarde** : export/import complet des données.
 
 ## Installation

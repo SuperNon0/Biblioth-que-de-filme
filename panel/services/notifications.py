@@ -96,7 +96,17 @@ def notify(kind, title, message, variables=None):
 
 
 def test():
-    """Envoie une notification de test sur les canaux activés."""
-    return notify("episode", "cinéthèque — test",
-                  "🎬 Notification de test depuis cinéthèque. Tout fonctionne !",
-                  {"type": "test"})
+    """Envoie une notification de test sur les canaux activés.
+
+    Pour Discord, on choisit le **premier slug configuré** (épisode, ciné ou
+    streaming) : le test fonctionne quel que soit celui qu'on a rempli. Les
+    variables couvrent tous les modèles pour que n'importe lequel s'affiche.
+    """
+    kind = next((k for k in ("episode", "cine", "streaming")
+                 if settings_store.get(SLUG_KEYS[k])), "episode")
+    return notify(
+        kind, "cinéthèque — test",
+        "🎬 Notification de test depuis cinéthèque. Tout fonctionne !",
+        {"serie": "Série de test", "code": "S01E01",
+         "titre": "Épisode pilote", "saison": "1", "episode": "1",
+         "canal": "cinéma", "plateformes": "Netflix", "type": "test"})
