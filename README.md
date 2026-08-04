@@ -71,6 +71,11 @@ pip install flask          # ou apt install python3-flask
 python3 app.py             # tourne sur http://127.0.0.1:8080 avec une base ./.data
 ```
 
+## Pistes d'évolution
+
+Idées envisagées pour de futures versions :
+[`docs/idees-futures.md`](docs/idees-futures.md).
+
 ## Licence & attribution
 
 Ce produit utilise l'API TMDb mais n'est ni approuvé ni certifié par TMDb.
