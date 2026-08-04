@@ -23,6 +23,12 @@ SLUG_KEYS = {
     "streaming": "botpanel_slug_streaming",
 }
 
+# Logo du site (PNG public, hébergé sur GitHub → joignable par Discord). Envoyé
+# dans chaque notification comme variable {var:logo} : à mettre dans le champ
+# « Thumbnail » de botpanel pour une petite icône cinéthèque dans l'embed.
+LOGO_URL = ("https://raw.githubusercontent.com/SuperNon0/"
+            "Biblioth-que-de-filme/main/panel/static/logo.png")
+
 
 def _post(url, data=None, headers=None, timeout=8):
     req = urllib.request.Request(url, data=data, headers=headers or {}, method="POST")
@@ -58,10 +64,13 @@ def notify(kind, title, message, variables=None):
 
     ``title`` / ``message`` restent dans la signature pour la journalisation et
     d'éventuels futurs canaux ; Discord est piloté par ``kind`` + ``variables``
-    (namespace ``vars`` côté botpanel).
+    (namespace ``vars`` côté botpanel). On ajoute automatiquement ``logo`` à
+    toutes les notifications.
     """
+    vars_ = dict(variables or {})
+    vars_.setdefault("logo", LOGO_URL)
     ok = []
-    if send_discord(kind, variables):
+    if send_discord(kind, vars_):
         ok.append("discord")
     return ok
 

@@ -76,12 +76,15 @@ emplacements `{var:…}`), et recopie le slug dans cinéthèque.
 La syntaxe `{var:nom}` insère la variable ; `{var:nom|valeur par défaut}` affiche
 la valeur de repli si la variable est absente.
 
-> **Afficher l'affiche du film / de la série.** Chaque notification envoie aussi
-> une variable `affiche` (URL publique du poster TMDB) et `image` (vignette de
-> l'épisode pour les séries, poster sinon). Si ton botpanel permet de définir une
-> **image / miniature d'embed**, mets-y `{var:affiche}` (ou `{var:image}`) : tu
-> recevras la notification Discord **avec le poster**. Si botpanel ne gère pas les
-> images, ces variables sont simplement ignorées.
+> **Images dans l'embed Discord.** Chaque notification envoie :
+> - `affiche` — poster du film / de la série (URL TMDB publique) ;
+> - `image` — vignette de l'épisode (séries), poster sinon ;
+> - `logo` — le logo de cinéthèque (PNG public).
+>
+> Dans le template botpanel (les champs `{var:…}` marchent dans *Title*,
+> *Message*, *Fields*, *Footer*, *Thumbnail* et *Large Image*) :
+> - mets `{var:affiche}` dans **« Large Image (URL) »** → grand poster ;
+> - mets `{var:logo}` dans **« Thumbnail »** → petite icône cinéthèque en coin.
 
 ---
 
@@ -190,6 +193,9 @@ que botpanel est joignable depuis le serveur cinéthèque.
 | Nouvel épisode | slug épisode | `episode` | `serie`, `code`, `titre`, `saison`, `episode`, `affiche`, `image` |
 | Film au cinéma | slug ciné | `cine` | `titre`, `canal`, `affiche`, `image` |
 | Film en streaming | slug streaming | `streaming` | `titre`, `plateformes`, `affiche`, `image` |
+
+Toutes les notifications reçoivent en plus `logo` (logo cinéthèque, PNG public
+sur GitHub) — pratique pour le champ *Thumbnail*.
 
 Les URLs `affiche` / `image` pointent vers `image.tmdb.org` (publiques, joignables
 par Discord). L'affiche locale mise en cache par l'app n'est **pas** utilisée ici
