@@ -12,6 +12,10 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="cinéthèque">
   <link rel="apple-touch-icon" href="{{ asset('favicon.svg') }}">
+  <!-- Connexion anticipée au CDN d'images TMDB : évite le lag au premier chargement
+       (le handshake TLS est fait pendant que la page se construit). -->
+  <link rel="preconnect" href="https://image.tmdb.org" crossorigin>
+  <link rel="dns-prefetch" href="https://image.tmdb.org">
   <link rel="stylesheet" href="{{ asset('fonts.css') }}">
   <link rel="stylesheet" href="{{ asset('style.css') }}">
 </head>

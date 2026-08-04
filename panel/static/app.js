@@ -101,8 +101,9 @@ function posterCard(item) {
   }
   return `<div class="poster" data-id="${item.id || ""}" data-tmdb="${item.tmdb_id || ""}"
        data-type="${item.type || ""}" data-localid="${item.local_id || ""}"
-       data-statut="${item.statut || ""}" data-nbvues="${item.nb_vues || 0}">
-    <img class="poster-img" loading="lazy" src="${posterSrc(item.affiche)}" alt="">
+       data-statut="${item.statut || ""}" data-nbvues="${item.nb_vues || 0}"
+       data-nexts="${item.next_saison || ""}" data-nexte="${item.next_numero || ""}">
+    <img class="poster-img" loading="lazy" decoding="async" src="${posterSrc(item.affiche)}" alt="">
     ${statut}${fav}
     <div class="poster-body">
       <div class="poster-title">${esc(item.titre)}</div>
@@ -121,6 +122,7 @@ function openItem(el) {
   const imgEl = el.querySelector("img");
   openQuickMenu({ el, tmdb, type, localid,
     statut: el.dataset.statut || "", nbvues: Number(el.dataset.nbvues || 0),
+    nextS: el.dataset.nexts || "", nextE: el.dataset.nexte || "",
     titre: titleEl ? titleEl.textContent.trim() : "", affiche: imgEl ? imgEl.src : "" });
 }
 
@@ -134,13 +136,20 @@ function openQuickMenu(ctx) {
   $("#qm-poster").src = ctx.affiche || posterSrc(null);
   $("#qm-title").textContent = ctx.titre || "";
   const inAvoir = ctx.statut === "a_voir";
+  const enCours = ctx.statut === "en_cours";
   const seen = ctx.statut === "vu" || ctx.nbvues > 0;
   const avoirBtn = $("#quick-menu [data-qm='a_voir']");
   avoirBtn.textContent = inAvoir ? "✓ Dans « À voir »" : "＋ À voir";
   avoirBtn.classList.toggle("current", inAvoir);
   const vuBtn = $("#quick-menu [data-qm='vu']");
-  vuBtn.textContent = seen ? ("✓ Déjà vu" + (ctx.nbvues > 1 ? ` ×${ctx.nbvues}` : "")) : "Déjà vu";
-  vuBtn.classList.toggle("current", seen);
+  if (enCours && ctx.type === "serie") {
+    // Série déjà commencée : on montre où reprendre, pas « Déjà vu ».
+    vuBtn.textContent = ctx.nextS ? `▸ Reprendre S${ctx.nextS} E${ctx.nextE}` : "▸ En cours";
+    vuBtn.classList.add("current");
+  } else {
+    vuBtn.textContent = seen ? ("✓ Déjà vu" + (ctx.nbvues > 1 ? ` ×${ctx.nbvues}` : "")) : "Déjà vu";
+    vuBtn.classList.toggle("current", seen);
+  }
   quickMenu.classList.remove("hidden");
 }
 

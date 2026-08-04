@@ -51,6 +51,35 @@ def _mark_seen(titre_id, typ):
                   WHERE titre_id = ?""", (titre_id,))
 
 
+def annotate_series_progress(rows):
+    """Ajoute à des lignes de séries : progression (``total_ep``/``vus_ep``) et
+    prochain épisode non vu (``next_saison``/``next_numero``) — pour afficher
+    « où j'en suis » sur les cartes (bibliothèque et « Reprendre »)."""
+    ids = [r["id"] for r in rows if r.get("type") == "serie"]
+    if not ids:
+        return rows
+    marks = ",".join("?" * len(ids))
+    prog = {p["titre_id"]: p for p in db.q(
+        f"""SELECT titre_id, COUNT(*) AS total, SUM(vu) AS vus
+            FROM episodes WHERE titre_id IN ({marks}) GROUP BY titre_id""", ids)}
+    nextep = {}
+    for e in db.q(f"""SELECT titre_id, saison, numero FROM episodes
+                      WHERE titre_id IN ({marks}) AND vu = 0
+                      ORDER BY titre_id, saison, numero""", ids):
+        nextep.setdefault(e["titre_id"], e)
+    for r in rows:
+        if r.get("type") != "serie":
+            continue
+        if r["id"] in prog:
+            r["total_ep"] = prog[r["id"]]["total"]
+            r["vus_ep"] = prog[r["id"]]["vus"] or 0
+        nx = nextep.get(r["id"])
+        if nx:
+            r["next_saison"] = nx["saison"]
+            r["next_numero"] = nx["numero"]
+    return rows
+
+
 def annotate_library(items):
     """Ajoute le statut local + l'id aux résultats TMDB déjà en bibliothèque.
 
@@ -112,21 +141,6 @@ def library():
         f"SELECT * FROM titres WHERE {' AND '.join(where)} ORDER BY {order}",
         params,
     )
-    # Progression des séries (épisodes vus / total) pour la barre sur l'affiche.
-    series_ids = [r["id"] for r in rows if r["type"] == "serie"]
-    prog, nextep = {}, {}
-    if series_ids:
-        marks = ",".join("?" * len(series_ids))
-        for p in db.q(f"""SELECT titre_id, COUNT(*) AS total, SUM(vu) AS vus
-                          FROM episodes WHERE titre_id IN ({marks})
-                          GROUP BY titre_id""", series_ids):
-            prog[p["titre_id"]] = p
-        # Prochain épisode non vu (où en est l'utilisateur) : trié par
-        # saison/numéro, on garde le premier de chaque série.
-        for e in db.q(f"""SELECT titre_id, saison, numero FROM episodes
-                          WHERE titre_id IN ({marks}) AND vu = 0
-                          ORDER BY titre_id, saison, numero""", series_ids):
-            nextep.setdefault(e["titre_id"], e)
     # Nombre de visionnages des films (pour afficher « vu ×N »).
     film_ids = [r["id"] for r in rows if r["type"] == "film"]
     vues = {}
@@ -135,19 +149,12 @@ def library():
         for v in db.q(f"""SELECT titre_id, COUNT(*) AS n FROM visionnages
                           WHERE titre_id IN ({marks}) GROUP BY titre_id""", film_ids):
             vues[v["titre_id"]] = v["n"]
-    out = []
-    for r in rows:
-        row = _row(r)
-        if row["type"] == "serie" and row["id"] in prog:
-            row["total_ep"] = prog[row["id"]]["total"]
-            row["vus_ep"] = prog[row["id"]]["vus"] or 0
-            nxt = nextep.get(row["id"])
-            if nxt:
-                row["next_saison"] = nxt["saison"]
-                row["next_numero"] = nxt["numero"]
-        elif row["type"] == "film":
+    out = [_row(r) for r in rows]
+    # Progression + prochain épisode des séries (barre + « où j'en suis »).
+    annotate_series_progress(out)
+    for row in out:
+        if row["type"] == "film":
             row["nb_vues"] = vues.get(row["id"], 0)
-        out.append(row)
     return jsonify(titres=out)
 
 

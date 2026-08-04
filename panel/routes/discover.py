@@ -12,7 +12,7 @@ from flask import Blueprint, jsonify, request
 
 import auth
 from context import get_tmdb
-from routes.library import annotate_library
+from routes.library import annotate_library, annotate_series_progress
 from tmdb import TMDBError
 
 bp = Blueprint("discover", __name__, url_prefix="/api")
@@ -30,12 +30,18 @@ SORTS_SERIE = {
 
 
 def _reprendre():
-    """Séries en cours à continuer (au moins un épisode vu, pas terminées)."""
-    return db.q(
-        """SELECT id, tmdb_id, type, titre, affiche, annee, note_tmdb
+    """Séries en cours à continuer (au moins un épisode vu, pas terminées).
+
+    On renvoie le statut et la progression (épisodes vus/total + prochain
+    épisode) pour que la carte affiche le badge « En cours » et « ▸ S x E y »,
+    et que le menu rapide sache que la série est déjà suivie.
+    """
+    rows = db.q(
+        """SELECT id, tmdb_id, type, titre, affiche, annee, note_tmdb, statut
            FROM titres WHERE type='serie' AND statut='en_cours'
            ORDER BY maj DESC LIMIT 20"""
     )
+    return annotate_series_progress(rows)
 
 
 @bp.get("/suggestions")
