@@ -82,19 +82,6 @@ la valeur de repli si la variable est absente.
 > **image / miniature d'embed**, mets-y `{var:affiche}` (ou `{var:image}`) : tu
 > recevras la notification Discord **avec le poster**. Si botpanel ne gère pas les
 > images, ces variables sont simplement ignorées.
->
-> **Comment savoir si ton botpanel gère les images ?** Aucune modification de
-> cinéthèque n'est nécessaire (l'image est déjà envoyée) — tout se règle côté
-> botpanel :
-> 1. Dans l'éditeur de notification de botpanel, cherche un champ **Image**,
->    **Thumbnail / Miniature**, **Embed image** ou **Média**. S'il existe, mets-y
->    `{var:affiche}`. Sinon, ta version ne gère pas les images.
-> 2. **Le plus rapide : teste.** Mets `{var:affiche}` dans le champ image, puis
->    clique **« Tester l'envoi »** dans cinéthèque (le test envoie une vraie
->    affiche d'exemple). Si l'image apparaît sur Discord → c'est bon ; sinon,
->    botpanel ne l'affiche pas.
-> 3. En dernier recours, la doc de botpanel (`docs/API.md` de son dépôt) indique
->    si l'API `/api/notify` accepte une image.
 
 ---
 
