@@ -70,6 +70,21 @@ def preview():
     return jsonify(detail)
 
 
+@bp.get("/preview/season")
+@auth.login_required
+def preview_season():
+    """Épisodes d'une saison d'une série **non ajoutée** (aperçu, lecture seule)."""
+    tmdb_id = request.args.get("tmdb_id")
+    saison = request.args.get("saison")
+    if not tmdb_id or saison is None:
+        return jsonify(episodes=[])
+    try:
+        eps = get_tmdb().season(int(tmdb_id), int(saison))
+    except (TMDBError, ValueError):
+        return jsonify(episodes=[])
+    return jsonify(episodes=eps)
+
+
 @bp.get("/title/<int:titre_id>")
 @auth.login_required
 def detail(titre_id):
@@ -141,7 +156,14 @@ def add_watch(titre_id):
 @bp.delete("/watch/<int:watch_id>")
 @auth.login_required
 def del_watch(watch_id):
+    row = db.q1("SELECT titre_id FROM visionnages WHERE id = ?", (watch_id,))
     db.run("DELETE FROM visionnages WHERE id = ?", (watch_id,))
+    # S'il n'y a plus aucun visionnage, le film n'est plus « vu » (correction
+    # d'un marquage par erreur) : on repasse le statut à « à voir ».
+    if row and not db.q1(
+            "SELECT 1 FROM visionnages WHERE titre_id = ? LIMIT 1", (row["titre_id"],)):
+        db.run("UPDATE titres SET statut = 'a_voir' WHERE id = ? AND type = 'film'",
+               (row["titre_id"],))
     return jsonify(ok=True)
 
 
@@ -166,6 +188,22 @@ def toggle_episode(ep_id):
         return jsonify(error="Épisode introuvable."), 404
     _set_episode(ep_id, not ep["vu"])
     _refresh_serie_statut(ep["titre_id"])
+    return jsonify(ok=True)
+
+
+@bp.post("/title/<int:titre_id>/episode/<int:saison>/<int:numero>/toggle")
+@auth.login_required
+def toggle_episode_num(titre_id, saison, numero):
+    """Bascule un épisode repéré par (saison, numéro) — utile après un ajout
+    depuis l'aperçu, où le front ne connaît pas encore l'id local de l'épisode."""
+    ep = db.q1(
+        "SELECT id, vu FROM episodes WHERE titre_id = ? AND saison = ? AND numero = ?",
+        (titre_id, saison, numero),
+    )
+    if not ep:
+        return jsonify(error="Épisode introuvable."), 404
+    _set_episode(ep["id"], not ep["vu"])
+    _refresh_serie_statut(titre_id)
     return jsonify(ok=True)
 
 

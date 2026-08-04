@@ -710,8 +710,9 @@ function normTmdb(t) {
     annee: t.annee, date_sortie: t.date_sortie, duree: t.duree, resume: t.resume,
     genres: t.genres || [], note_tmdb: t.note_tmdb, fond: t.fond, affiche: t.affiche,
     bande_annonce: t.bande_annonce, plateformes: t.plateformes || [], casting: t.casting || [],
-    equipe: t.equipe || [], statut: null, favori: false, watches: [], saisons: [],
-    next: t.prochain_episode, nb_saisons: t.nb_saisons, nb_episodes: t.nb_episodes };
+    equipe: t.equipe || [], statut: null, favori: false, watches: [],
+    saisons: t.saisons || [], next: t.prochain_episode,
+    nb_saisons: t.nb_saisons, nb_episodes: t.nb_episodes };
 }
 
 function fmtRuntime(min) {
@@ -738,9 +739,12 @@ function renderTitlePage(n) {
        <span class="dv-note-val">★ ${n.note_tmdb}</span><span class="muted">/ 10 · TMDB</span></div>` : "";
   const providers = (n.plateformes || []).length ? `<h3 class="dv-h3">Où regarder</h3>
        <div class="providers">${n.plateformes.map((p) => `<img title="${esc(p.nom)}" src="${p.logo}" alt="${esc(p.nom)}">`).join("")}</div>` : "";
+  const watchChips = n.watches.length ? `<div class="dv-watches">${n.watches.map((w) =>
+      `<span class="watch-chip">${w.date ? fmtDate(w.date) : "déjà vu"}<button
+         class="watch-del" data-delwatch="${w.id}" aria-label="Supprimer ce visionnage">✕</button></span>`).join("")}</div>` : "";
   const vuBlock = seen ? `<div class="dv-seen">
       <span class="dv-seen-count">Vu ${n.watches.length || 1} fois</span>
-      ${n.watches.length ? `<span class="muted">${n.watches.map((w) => w.date ? fmtDate(w.date) : "déjà vu").join(" · ")}</span>` : ""}
+      ${watchChips}
       <button class="btn small" data-act="revu">↻ J'ai revu</button></div>` : "";
   const actions = `<div class="dv-actions" data-localid="${n.localId || ""}"
        data-tmdb="${n.tmdb || ""}" data-type="${n.type}">
@@ -799,25 +803,40 @@ function renderCastCrew(cast, equipe) {
 }
 
 function seasonsBlock(n) {
-  if (!n.inLib) {
-    return `<h3 class="dv-h3">Épisodes</h3>
-      <p class="muted">Ajoute la série pour suivre les épisodes.</p>`;
-  }
   const next = n.next;
-  const seasons = (n.saisons || []).map((s) => `
-    <div class="season" data-season="${s.numero}">
+  const sais = n.saisons || [];
+  const seasons = sais.map((s) => {
+    // En biblio : chaque saison a ses épisodes (total/vus). En aperçu : seul
+    // le nombre d'épisodes est connu, les épisodes se chargent au dépliage.
+    const total = n.inLib ? (s.total || 0) : (s.nb_episodes || 0);
+    const vus = n.inLib ? (s.vus || 0) : 0;
+    const seen = n.inLib && total > 0 && vus >= total;
+    const body = n.inLib
+      ? (s.episodes || []).map((e) => episodeRow(e)).join("")
+      : `<p class="muted ep-loading">Chargement des épisodes…</p>`;
+    return `<div class="season" data-season="${s.numero}"${n.inLib ? "" : ' data-lazy="1"'}>
       <div class="season-head">
-        <span><span class="chevron">▸</span> <span class="season-title">Saison ${s.numero}</span></span>
-        <span class="season-prog">${s.vus}/${s.total} vus
-          <button class="ep-btn" data-markseason="${s.numero}" style="margin-left:8px">Tout marquer</button></span>
+        <span class="season-toggle"><span class="chevron">▸</span>
+          <span class="season-title">Saison ${s.numero}</span>
+          <span class="season-prog">${vus}/${total}</span></span>
+        <button class="ep-btn season-vu ${seen ? "vu" : ""}"
+          data-markseason="${s.numero}" data-seen="${seen ? 1 : 0}">${seen ? "✓ Vue" : "Déjà vu"}</button>
       </div>
-      <div class="season-body">${s.episodes.map(episodeRow).join("")}</div>
-    </div>`).join("");
-  return `${next ? `<p class="muted">Prochain épisode : S${next.saison}E${next.numero}
+      <div class="season-body">${body}</div>
+    </div>`;
+  }).join("");
+  const allSeen = n.inLib && sais.length > 0
+    && sais.every((s) => s.total > 0 && s.vus >= s.total);
+  return `<div class="dv-seasons" data-localid="${n.localId || ""}"
+       data-tmdb="${n.tmdb || ""}" data-type="${n.type}">
+    ${next ? `<p class="muted">Prochain épisode : S${next.saison}E${next.numero}
        « ${esc(next.nom || "")} » le ${fmtDate(next.date_diff)}</p>` : ""}
-    <div class="row-inline"><button class="btn small" data-markseries data-localid="${n.localId}">✓ Marquer la série vue</button></div>
-    <h3 class="dv-h3">Saisons &amp; épisodes</h3>
-    ${seasons || `<p class="muted">Épisodes indisponibles.</p>`}`;
+    <h3 class="dv-h3">Saisons</h3>
+    ${seasons || `<p class="muted">Épisodes indisponibles.</p>`}
+    ${sais.length ? `<button class="btn full dv-serievue ${allSeen ? "" : "primary"}"
+       data-markseries>
+       ${allSeen ? "↻ J'ai revu toute la série" : "✓ J'ai vu toute la série"}</button>` : ""}
+  </div>`;
 }
 
 async function openPerson(id) {
@@ -847,6 +866,12 @@ function renderPerson(p) {
 }
 
 function episodeRow(e) {
+  // En biblio : bouton lié à l'id local (bascule). En aperçu : pas encore
+  // d'id local → on repère l'épisode par (saison, numéro) et l'action ajoute
+  // d'abord la série à la bibliothèque.
+  const btn = e.id
+    ? `<button class="ep-btn ${e.vu ? "vu" : ""}" data-ep="${e.id}">${e.vu ? "✓ Revu" : "Vu"}</button>`
+    : `<button class="ep-btn" data-epnum="${e.numero}" data-season="${e.saison}">Vu</button>`;
   return `<div class="episode">
     <img loading="lazy" src="${posterSrc(e.image)}" alt="">
     <div class="ep-info">
@@ -855,9 +880,7 @@ function episodeRow(e) {
         ${e.nb_vues > 1 ? " · vu ×" + e.nb_vues : ""}</div>
       <div class="ep-resume">${esc(e.resume)}</div>
     </div>
-    <div class="ep-check">
-      <button class="ep-btn ${e.vu ? "vu" : ""}" data-ep="${e.id}">${e.vu ? "✓ Revu" : "Vu"}</button>
-    </div></div>`;
+    <div class="ep-check">${btn}</div></div>`;
 }
 
 /* Actions dans la fiche (délégation d'événements sur la modale). */
@@ -906,24 +929,75 @@ modalContent.addEventListener("click", async (e) => {
         await api(`/api/library/${delEl.dataset.localid}`, { method: "DELETE" });
         closeModal(); refreshAll(); toast("Titre retiré");
       }
+    } else if (e.target.closest("[data-delwatch]")) {
+      const w = e.target.closest("[data-delwatch]"), id = idFrom();
+      await api(`/api/watch/${w.dataset.delwatch}`, { method: "DELETE" });
+      if (id) openDetail(id); refreshAll();
     } else if (e.target.closest("[data-ep]")) {
       await api(`/api/episode/${e.target.closest("[data-ep]").dataset.ep}/toggle`,
         { method: "POST" });
       const id = idFrom(); if (id) openDetail(id);
+    } else if (e.target.closest("[data-epnum]")) {
+      // Épisode d'un aperçu : on ajoute d'abord la série, puis on marque.
+      const b = e.target.closest("[data-epnum]");
+      const id = await ensureInLib(seasonCtx(b));
+      await api(`/api/title/${id}/episode/${b.dataset.season}/${b.dataset.epnum}/toggle`,
+        { method: "POST" });
+      openDetail(id); refreshAll();
     } else if (e.target.closest("[data-markseason]")) {
-      const b = e.target.closest("[data-markseason]"), id = idFrom();
+      const b = e.target.closest("[data-markseason]");
+      const id = await ensureInLib(seasonCtx(b));
       await api(`/api/title/${id}/season/${b.dataset.markseason}/mark`,
-        { method: "POST", body: { vu: true } }); openDetail(id);
+        { method: "POST", body: { vu: b.dataset.seen !== "1" } });
+      openDetail(id); refreshAll();
     } else if (e.target.closest("[data-markseries]")) {
-      const id = Number(e.target.closest("[data-markseries]").dataset.localid);
+      const b = e.target.closest("[data-markseries]");
+      const id = await ensureInLib(seasonCtx(b));
       await api(`/api/title/${id}/mark`, { method: "POST", body: { vu: true } });
       openDetail(id); refreshAll();
     } else {
       const head = e.target.closest(".season-head");
-      if (head) head.parentElement.classList.toggle("open");
+      if (head) {
+        const season = head.parentElement;
+        season.classList.toggle("open");
+        if (season.classList.contains("open")) loadSeasonEpisodes(season);
+      }
     }
   } catch (err) { toast(err.message); }
 });
+
+/* Contexte série (id local / tmdb / type) partagé par les boutons de saison. */
+function seasonCtx(el) {
+  const box = el.closest(".dv-seasons") || {};
+  const d = box.dataset || {};
+  return { localid: d.localid ? Number(d.localid) : null,
+           tmdb: d.tmdb ? Number(d.tmdb) : null, type: d.type };
+}
+
+/* Ajoute la série à la bibliothèque si besoin et renvoie son id local. */
+async function ensureInLib(ctx) {
+  if (ctx.localid) return ctx.localid;
+  const r = await api("/api/library", { method: "POST",
+    body: { tmdb_id: ctx.tmdb, type: ctx.type, statut: "a_voir" } });
+  refreshAll();
+  return r.id;
+}
+
+/* Charge les épisodes d'une saison en aperçu (au premier dépliage). */
+async function loadSeasonEpisodes(season) {
+  if (season.dataset.lazy !== "1" || season.dataset.loaded === "1") return;
+  season.dataset.loaded = "1";
+  const ctx = seasonCtx(season), body = season.querySelector(".season-body");
+  try {
+    const { episodes } = await api(
+      `/api/preview/season?tmdb_id=${ctx.tmdb}&saison=${season.dataset.season}`);
+    body.innerHTML = episodes.length ? episodes.map(episodeRow).join("")
+      : `<p class="muted">Épisodes indisponibles.</p>`;
+  } catch (_) {
+    season.dataset.loaded = "0";
+    body.innerHTML = `<p class="muted">Impossible de charger les épisodes.</p>`;
+  }
+}
 
 /* Actions principales de la page titre (Vu / Revu / Liste de suivi / Liste). */
 async function handleTitleAct(actEl) {
