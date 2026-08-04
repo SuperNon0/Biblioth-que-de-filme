@@ -79,6 +79,7 @@ html { scrollbar-width: thin; scrollbar-color: rgba(232, 197, 71, 0.5) transpare
 .btn.primary:hover { background: var(--accent-hover); }
 .btn.ghost { background: transparent; }
 .btn.small { padding: 6px 12px; font-size: 0.75rem; }
+.btn.spin { opacity: 0.6; pointer-events: none; }
 .btn.full { width: 100%; text-align: center; }
 .btn.danger { color: var(--red); border-color: var(--red); }
 .btn.danger:hover { background: var(--red); color: #fff; }

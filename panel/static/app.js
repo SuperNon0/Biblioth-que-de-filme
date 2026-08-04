@@ -279,6 +279,10 @@ $("[data-filter='suggestions']").addEventListener("click", (e) => {
   sugMedia = chip.dataset.media;
   loadSuggestions();
 });
+$("#sug-refresh").addEventListener("click", async (e) => {
+  const b = e.currentTarget; b.disabled = true; b.classList.add("spin");
+  try { await loadSuggestions(); } finally { b.disabled = false; b.classList.remove("spin"); }
+});
 bindGrid($("#suggestions-rows"));
 
 /* Carrousels : flèches gauche/droite + défilement à la molette. */

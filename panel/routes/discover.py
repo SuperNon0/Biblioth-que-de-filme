@@ -41,9 +41,16 @@ def _reprendre():
 @bp.get("/suggestions")
 @auth.login_required
 def suggestions():
-    """Carrousels de l'accueil, variés et dé-dupliqués (chaque titre une fois)."""
+    """Carrousels de l'accueil : personnalisés d'abord, variés, dé-dupliqués.
+
+    - Les rangées « Parce que tu as aimé … » (basées sur des titres vus/favoris,
+      films **et** séries) passent en tête et changent à chaque rafraîchissement.
+    - En mode « Tout », films et séries sont représentés à parts égales.
+    - Les pages/genres sont tirés au hasard pour renouveler les propositions.
+    """
     media = request.args.get("media", "all")  # all | movie | tv
-    mkey = "tv" if media == "tv" else "movie"
+    mkeys = ["movie", "tv"] if media == "all" else \
+        (["tv"] if media == "tv" else ["movie"])
     tmdb = get_tmdb()
     seen, blocs = set(), []
 
@@ -68,44 +75,86 @@ def suggestions():
         blocs.append({"cle": "reprendre", "titre": "Reprendre",
                       "local": True, "items": reprendre})
 
+    # Personnalisé EN PREMIER : « Parce que tu as aimé … » (titres vus/favoris,
+    # tirés au hasard → propositions renouvelées à chaque rafraîchissement).
+    for base in _bases_perso(media, limit=4):
+        bmedia = "movie" if base["type"] == "film" else "tv"
+        try:
+            recos = tmdb.recommendations(bmedia, base["tmdb_id"],
+                                         page=random.randint(1, 2))
+        except TMDBError:
+            continue
+        quoi = "regardé la série" if base["type"] == "serie" else "aimé"
+        add(f"perso_{base['tmdb_id']}",
+            f"Parce que tu as {quoi} « {base['titre']} »", recos)
+
+    def label(mk, txt):
+        return (("Séries" if mk == "tv" else "Films") + " · " + txt
+                if media == "all" else txt)
+
     try:
         add("tendances", "Tendances cette semaine", tmdb.trending(media, "week"))
-        if mkey == "movie":
-            add("cinema", "Au cinéma en ce moment", tmdb.now_playing())
-        # Personnalisé : « Parce que tu as aimé … » (par titre précis).
-        for base in _bases_perso():
-            bmedia = "movie" if base["type"] == "film" else "tv"
-            try:
-                recos = tmdb.recommendations(bmedia, base["tmdb_id"])
-            except TMDBError:
-                continue
-            add(f"perso_{base['tmdb_id']}",
-                f"Parce que tu as aimé « {base['titre']} »", recos)
-        # Par genre (tes goûts, sinon des genres par défaut).
-        for gid, gname in _top_genres(tmdb, mkey):
-            add(f"genre_{gid}", gname,
-                tmdb.discover(media=mkey, genre=gid,
-                              sort_by="popularity.desc")["results"])
-        # Pépites : très bien notées mais moins mainstream.
-        add("pepites", "Pépites à découvrir",
-            tmdb.discover(media=mkey, sort_by="vote_average.desc",
-                          vote_count_gte=800)["results"])
-        # Cultes d'une décennie.
-        add("annees90", "Cultes des années 90",
-            tmdb.discover(media=mkey, sort_by="vote_average.desc",
-                          vote_count_gte=1500, year_gte=1990, year_lte=1999)["results"])
-        add("populaires", "Populaires", tmdb.popular(mkey))
+        if "movie" in mkeys:
+            add("cinema", "Au cinéma en ce moment",
+                tmdb.now_playing(random.randint(1, 3)))
+        if "tv" in mkeys and media == "all":
+            add("tv_tendances", "Séries tendances", tmdb.trending("tv", "week"))
+        # Par genre (tes goûts, mélangés) — pour chaque média demandé.
+        for mk in mkeys:
+            genres = _top_genres(tmdb, mk, limit=4)
+            random.shuffle(genres)
+            for gid, gname in genres[:(1 if media == "all" else 3)]:
+                add(f"genre_{mk}_{gid}", label(mk, gname),
+                    tmdb.discover(media=mk, genre=gid, sort_by="popularity.desc",
+                                  page=random.randint(1, 3))["results"])
+        # Pépites, populaires et mieux notés — films ET séries.
+        for mk in mkeys:
+            add(f"pepites_{mk}", label(mk, "Pépites à découvrir"),
+                tmdb.discover(media=mk, sort_by="vote_average.desc",
+                              vote_count_gte=600,
+                              page=random.randint(1, 4))["results"])
+            add(f"top_{mk}", label(mk, "Les mieux notés"),
+                tmdb.top_rated(mk, page=random.randint(1, 3)))
+            add(f"pop_{mk}", label(mk, "Populaires"),
+                tmdb.popular(mk, page=random.randint(1, 4)))
+        # Cultes d'une décennie (sur le premier média).
+        add("annees90", label(mkeys[0], "Cultes des années 90"),
+            tmdb.discover(media=mkeys[0], sort_by="vote_average.desc",
+                          vote_count_gte=1200, year_gte=1990,
+                          year_lte=1999)["results"])
     except TMDBError as exc:
         if not blocs:
             return jsonify(error=str(exc)), 502
     return jsonify(blocs=blocs)
 
 
-def _bases_perso(limit=2):
-    """Titres de référence pour les recommandations personnalisées."""
-    return db.q(
-        """SELECT tmdb_id, type, titre FROM titres WHERE tmdb_id IS NOT NULL
-           ORDER BY favori DESC, maj DESC LIMIT ?""", (limit,))
+def _bases_perso(media="all", limit=4):
+    """Titres de référence pour les recommandations, tirés au hasard.
+
+    Priorité aux titres **vus / en cours / favoris** (ce que l'utilisateur a
+    réellement regardé), films et séries mêlés ; complété au besoin par
+    n'importe quels titres de la bibliothèque. L'ordre aléatoire fait varier
+    les rangées « Parce que tu as aimé … » d'un rafraîchissement à l'autre.
+    """
+    cond, params = ["tmdb_id IS NOT NULL"], []
+    if media in ("movie", "tv"):
+        cond.append("type = ?")
+        params.append("film" if media == "movie" else "serie")
+    where = " AND ".join(cond)
+    rows = db.q(
+        f"""SELECT tmdb_id, type, titre FROM titres WHERE {where}
+            AND (statut IN ('vu', 'en_cours') OR favori = 1)
+            ORDER BY RANDOM() LIMIT ?""", params + [limit])
+    if len(rows) < limit:  # pas assez de titres vus : on complète librement
+        have = {r["tmdb_id"] for r in rows}
+        for r in db.q(f"""SELECT tmdb_id, type, titre FROM titres WHERE {where}
+                          ORDER BY RANDOM() LIMIT ?""", params + [limit]):
+            if r["tmdb_id"] not in have:
+                rows.append(r)
+                have.add(r["tmdb_id"])
+            if len(rows) >= limit:
+                break
+    return rows[:limit]
 
 
 def _top_genres(tmdb, media="movie", limit=3):
@@ -125,10 +174,13 @@ def _top_genres(tmdb, media="movie", limit=3):
             chosen.append((gmap[name], name))
         if len(chosen) >= limit:
             break
-    if not chosen:
-        for name in ("Action", "Comédie", "Science-Fiction", "Aventure"):
-            if name in gmap:
+    if len(chosen) < limit:  # complète avec des genres grand public par défaut
+        for name in ("Action", "Comédie", "Science-Fiction", "Aventure",
+                     "Drame", "Thriller", "Animation", "Fantastique"):
+            if name in gmap and (gmap[name], name) not in chosen:
                 chosen.append((gmap[name], name))
+            if len(chosen) >= limit:
+                break
     return chosen[:limit]
 
 

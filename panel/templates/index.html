@@ -57,10 +57,13 @@
     <section id="page-suggestions" class="page active">
       <div class="page-head">
         <h2>Suggestions</h2>
-        <div class="chips" data-filter="suggestions">
-          <button class="chip active" data-media="all">Tout</button>
-          <button class="chip" data-media="movie">Films</button>
-          <button class="chip" data-media="tv">Séries</button>
+        <div class="row-inline">
+          <div class="chips" data-filter="suggestions">
+            <button class="chip active" data-media="all">Tout</button>
+            <button class="chip" data-media="movie">Films</button>
+            <button class="chip" data-media="tv">Séries</button>
+          </div>
+          <button id="sug-refresh" class="btn small" title="Renouveler les suggestions">↻ Actualiser</button>
         </div>
       </div>
       <div id="suggestions-rows" class="rows"></div>
