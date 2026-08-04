@@ -176,17 +176,30 @@ quickMenu.addEventListener("click", async (e) => {
       if (localid) await api(`/api/library/${localid}`, { method: "PATCH", body: { statut: "a_voir" } });
       else newId = (await api("/api/library", { method: "POST", body: { tmdb_id: tmdb, type, statut: "a_voir" } })).id;
     }
-    if (el) {  // met à jour la carte source (statut + compteur) sans tout recharger
+    if (el) {  // met à jour la carte source (statut + badge) sans tout recharger
+      const st = act === "vu" ? "vu" : "a_voir";
       el.dataset.localid = newId || "";
-      el.dataset.statut = act === "vu" ? "vu" : "a_voir";
+      el.dataset.statut = st;
       if (act === "vu") el.dataset.nbvues = String(Number(el.dataset.nbvues || 0) + 1);
       el.classList.add("poster-added");
+      updateCardBadge(el, st);  // badge visible à jour immédiatement (pas de reshuffle)
     }
     toast(act === "vu" ? "Marqué comme vu ✓" : "Ajouté à « À voir »");
     closeQuickMenu();
-    if ($("#page-bibliotheque").classList.contains("active")) loadLibrary();
+    refreshAll();  // biblio uniquement, en silence (défilement conservé)
   } catch (err) { toast(err.message); }
 });
+
+/* Met à jour (ou crée) le badge de statut visible sur une carte, sur place. */
+function updateCardBadge(el, statut) {
+  let badge = el.querySelector(".poster-badge");
+  if (!badge) {
+    badge = document.createElement("span");
+    el.insertBefore(badge, el.firstChild);
+  }
+  badge.className = `poster-badge badge-${statut}`;
+  badge.textContent = STATUTS[statut] || "";
+}
 
 function bindGrid(container) {
   container.addEventListener("click", (e) => {
@@ -290,12 +303,16 @@ searchBox.addEventListener("click", (e) => {
 
 /* ============================ SUGGESTIONS ============================== */
 let sugMedia = "all";
-async function loadSuggestions() {
+async function loadSuggestions(silent = false) {
   const wrap = $("#suggestions-rows");
-  wrap.innerHTML = `<p class="muted">Chargement…</p>`;
+  const y = window.scrollY;
+  if (!silent) wrap.innerHTML = `<p class="muted">Chargement…</p>`;
   try {
     const { blocs } = await api(`/api/suggestions?media=${sugMedia}`);
-    if (!blocs || !blocs.length) { wrap.innerHTML = `<p class="muted">Rien à afficher.</p>`; return; }
+    if (!blocs || !blocs.length) {
+      if (!silent) wrap.innerHTML = `<p class="muted">Rien à afficher.</p>`;
+      return;
+    }
     wrap.innerHTML = blocs.map((b) => `
       <div class="row-block">
         <h3>${esc(b.titre)}</h3>
@@ -305,7 +322,8 @@ async function loadSuggestions() {
           <button class="row-arrow right" aria-label="Suivant">›</button>
         </div>
       </div>`).join("");
-  } catch (e) { wrap.innerHTML = `<p class="muted">${esc(e.message)}</p>`; }
+  } catch (e) { if (!silent) wrap.innerHTML = `<p class="muted">${esc(e.message)}</p>`; return; }
+  if (silent) window.scrollTo(0, y);
 }
 $("[data-filter='suggestions']").addEventListener("click", (e) => {
   const chip = e.target.closest(".chip"); if (!chip) return;
@@ -338,28 +356,32 @@ $("#suggestions-rows").addEventListener("wheel", (e) => {
 }, { passive: false });
 
 /* ============================ BIBLIOTHÈQUE ============================= */
-async function loadLibrary() {
+async function loadLibrary(silent = false) {
   const grid = $("#lib-grid");
   const params = new URLSearchParams({
     statut: $("#lib-statut").value, type: $("#lib-type").value,
     genre: $("#lib-genre").value, tri: $("#lib-tri").value,
     q: $("#lib-search").value.trim(),
   });
-  grid.innerHTML = `<p class="muted">Chargement…</p>`;
+  const y = window.scrollY;
+  if (!silent) grid.innerHTML = `<p class="muted">Chargement…</p>`;
   try {
     const { titres } = await api(`/api/library?${params}`);
     grid.innerHTML = titres.length
       ? titres.map(posterCard).join("")
       : `<p class="muted">Bibliothèque vide — cherche un film ou une série en haut,
          ou explore l'onglet Découverte.</p>`;
-  } catch (e) { grid.innerHTML = `<p class="muted">${esc(e.message)}</p>`; }
+  } catch (e) { if (!silent) grid.innerHTML = `<p class="muted">${esc(e.message)}</p>`; return; }
+  if (silent) window.scrollTo(0, y);
 }
+// () => loadLibrary() : sinon l'objet Event passé par addEventListener serait
+// interprété comme « silent » (donc pas d'indicateur de chargement au filtrage).
 ["lib-statut", "lib-type", "lib-genre", "lib-tri"].forEach((id) =>
-  $("#" + id).addEventListener("change", loadLibrary));
+  $("#" + id).addEventListener("change", () => loadLibrary()));
 let libSearchTimer;
 $("#lib-search").addEventListener("input", () => {
   clearTimeout(libSearchTimer);
-  libSearchTimer = setTimeout(loadLibrary, 300);
+  libSearchTimer = setTimeout(() => loadLibrary(), 300);
 });
 $("#lib-roulette").addEventListener("click", () => openRoulette("library"));
 bindGrid($("#lib-grid"));
@@ -716,6 +738,28 @@ function scrollToSeasons() {
   if (s) s.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
+/* Rafraîchit UNIQUEMENT le bloc des Saisons sur place, en conservant la
+   position de défilement et les saisons dépliées. Évite le saut vers le haut
+   qu'un re-rendu complet de la fiche (openDetail) provoquerait. */
+async function refreshSeasons(id) {
+  const old = $(".dv-seasons");
+  if (!old) return openDetail(id);  // pas en mode série : re-rendu complet
+  const opened = [...old.querySelectorAll(".season.open")].map((s) => s.dataset.season);
+  try {
+    const n = normLocal(await api(`/api/title/${id}`));
+    const cur = $(".dv-seasons");
+    if (!cur) return;
+    const tmp = document.createElement("div");
+    tmp.innerHTML = seasonsBlock(n);
+    const fresh = tmp.firstElementChild;
+    opened.forEach((num) => {  // ré-ouvre les saisons qui l'étaient
+      const s = fresh.querySelector(`.season[data-season="${num}"]`);
+      if (s) s.classList.add("open");
+    });
+    cur.replaceWith(fresh);
+  } catch (_) { /* on laisse la fiche telle quelle */ }
+}
+
 /* Rafraîchit le bloc des saisons quand les épisodes finissent de se remplir. */
 function pollSeasons(id) {
   setTimeout(async () => {
@@ -978,10 +1022,11 @@ modalContent.addEventListener("click", async (e) => {
     const favEl = e.target.closest("[data-fav]");
     const delEl = e.target.closest("[data-del]");
     if (favEl) {
+      // Bascule le cœur sur place (pas de re-rendu → pas de saut vers le haut).
       const id = Number(favEl.dataset.localid);
-      await api(`/api/library/${id}`, { method: "PATCH",
-        body: { favori: !favEl.classList.contains("on") } });
-      openDetail(id);
+      const on = !favEl.classList.contains("on");
+      await api(`/api/library/${id}`, { method: "PATCH", body: { favori: on } });
+      favEl.classList.toggle("on", on);
     } else if (delEl) {
       if (confirm("Retirer ce titre de ta bibliothèque ?")) {
         await api(`/api/library/${delEl.dataset.localid}`, { method: "DELETE" });
@@ -992,27 +1037,29 @@ modalContent.addEventListener("click", async (e) => {
       await api(`/api/watch/${w.dataset.delwatch}`, { method: "DELETE" });
       if (id) openDetail(id); refreshAll();
     } else if (e.target.closest("[data-ep]")) {
+      // Épisode déjà en biblio : bascule + refresh du bloc Saisons sur place.
+      const id = idFrom();
       await api(`/api/episode/${e.target.closest("[data-ep]").dataset.ep}/toggle`,
         { method: "POST" });
-      const id = idFrom(); if (id) openDetail(id);
+      if (id) refreshSeasons(id); refreshAll();
     } else if (e.target.closest("[data-epnum]")) {
       // Épisode d'un aperçu : on ajoute d'abord la série, puis on marque.
-      const b = e.target.closest("[data-epnum]");
-      const id = await ensureInLib(seasonCtx(b));
+      const b = e.target.closest("[data-epnum]"), ctx = seasonCtx(b), wasIn = !!ctx.localid;
+      const id = await ensureInLib(ctx);
       await api(`/api/title/${id}/episode/${b.dataset.season}/${b.dataset.epnum}/toggle`,
         { method: "POST" });
-      openDetail(id); refreshAll();
+      wasIn ? refreshSeasons(id) : openDetail(id, { seasons: true }); refreshAll();
     } else if (e.target.closest("[data-markseason]")) {
-      const b = e.target.closest("[data-markseason]");
-      const id = await ensureInLib(seasonCtx(b));
+      const b = e.target.closest("[data-markseason]"), ctx = seasonCtx(b), wasIn = !!ctx.localid;
+      const id = await ensureInLib(ctx);
       await api(`/api/title/${id}/season/${b.dataset.markseason}/mark`,
         { method: "POST", body: { vu: b.dataset.seen !== "1" } });
-      openDetail(id); refreshAll();
+      wasIn ? refreshSeasons(id) : openDetail(id, { seasons: true }); refreshAll();
     } else if (e.target.closest("[data-markseries]")) {
-      const b = e.target.closest("[data-markseries]");
-      const id = await ensureInLib(seasonCtx(b));
+      const b = e.target.closest("[data-markseries]"), ctx = seasonCtx(b), wasIn = !!ctx.localid;
+      const id = await ensureInLib(ctx);
       await api(`/api/title/${id}/mark`, { method: "POST", body: { vu: true } });
-      openDetail(id); refreshAll();
+      wasIn ? refreshSeasons(id) : openDetail(id, { seasons: true }); refreshAll();
     } else {
       const head = e.target.closest(".season-head");
       if (head) {
@@ -1164,10 +1211,12 @@ const LOADERS = {
   parametres: loadSettings,
 };
 
-/* Rafraîchit les vues potentiellement impactées par une modif. */
+/* Rafraîchit les vues impactées par une modif — en silence (pas d'indicateur
+   « Chargement… », position de défilement conservée). On NE recharge PAS les
+   Suggestions : elles sont aléatoires et se re-mélangeraient à chaque clic
+   (agaçant). Les cartes concernées sont mises à jour sur place. */
 function refreshAll() {
-  if ($("#page-bibliotheque").classList.contains("active")) loadLibrary();
-  if ($("#page-suggestions").classList.contains("active")) loadSuggestions();
+  if ($("#page-bibliotheque").classList.contains("active")) loadLibrary(true);
 }
 
 /* Service worker (PWA : app installable + démarrage rapide). */
