@@ -117,7 +117,7 @@ function openQuickMenu(ctx) {
   const inAvoir = ctx.statut === "a_voir";
   const seen = ctx.statut === "vu" || ctx.nbvues > 0;
   const avoirBtn = $("#quick-menu [data-qm='a_voir']");
-  avoirBtn.textContent = inAvoir ? "✓ Dans « À voir »" : "➕ À voir";
+  avoirBtn.textContent = inAvoir ? "✓ Dans « À voir »" : "＋ À voir";
   avoirBtn.classList.toggle("current", inAvoir);
   const vuBtn = $("#quick-menu [data-qm='vu']");
   vuBtn.textContent = seen ? ("✓ Déjà vu" + (ctx.nbvues > 1 ? ` ×${ctx.nbvues}` : "")) : "Déjà vu";
