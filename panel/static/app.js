@@ -81,12 +81,23 @@ function posterCard(item) {
     const st = c ? ` style="color:${c};border-color:${c}66;background:${c}22"` : "";
     genre0 = `<span class="poster-genre"${st}>${esc(g)}</span>`;
   }
-  // Barre de progression pour les séries (épisodes vus / total).
+  // Barre de progression pour les séries (épisodes vus / total) + où j'en suis.
   let prog = "";
   if (item.total_ep) {
     const pct = Math.round((item.vus_ep || 0) / item.total_ep * 100);
-    prog = `<div class="poster-prog" title="${item.vus_ep || 0}/${item.total_ep} épisodes">
-      <span style="width:${pct}%"></span></div>`;
+    // Position courante : prochain épisode non vu (sinon série terminée).
+    // Compact (« ▸ S2 E5 ») pour que la saison/épisode reste toujours lisible.
+    let pos = "";
+    if (item.next_saison) {
+      const started = (item.vus_ep || 0) > 0;
+      pos = `<span class="poster-pos" title="${started ? "Reprendre à" : "Commencer par"} la saison ${item.next_saison}, épisode ${item.next_numero}">` +
+        `${started ? "▸" : "○"} S${item.next_saison} E${item.next_numero}</span>`;
+    } else if ((item.vus_ep || 0) >= item.total_ep) {
+      pos = `<span class="poster-pos done">✓ Terminée</span>`;
+    }
+    prog = `<div class="poster-progline">${pos}<span class="poster-epcount">${item.vus_ep || 0}/${item.total_ep}</span></div>
+      <div class="poster-prog" title="${item.vus_ep || 0}/${item.total_ep} épisodes">
+        <span style="width:${pct}%"></span></div>`;
   }
   return `<div class="poster" data-id="${item.id || ""}" data-tmdb="${item.tmdb_id || ""}"
        data-type="${item.type || ""}" data-localid="${item.local_id || ""}"

@@ -114,13 +114,19 @@ def library():
     )
     # Progression des séries (épisodes vus / total) pour la barre sur l'affiche.
     series_ids = [r["id"] for r in rows if r["type"] == "serie"]
-    prog = {}
+    prog, nextep = {}, {}
     if series_ids:
         marks = ",".join("?" * len(series_ids))
         for p in db.q(f"""SELECT titre_id, COUNT(*) AS total, SUM(vu) AS vus
                           FROM episodes WHERE titre_id IN ({marks})
                           GROUP BY titre_id""", series_ids):
             prog[p["titre_id"]] = p
+        # Prochain épisode non vu (où en est l'utilisateur) : trié par
+        # saison/numéro, on garde le premier de chaque série.
+        for e in db.q(f"""SELECT titre_id, saison, numero FROM episodes
+                          WHERE titre_id IN ({marks}) AND vu = 0
+                          ORDER BY titre_id, saison, numero""", series_ids):
+            nextep.setdefault(e["titre_id"], e)
     # Nombre de visionnages des films (pour afficher « vu ×N »).
     film_ids = [r["id"] for r in rows if r["type"] == "film"]
     vues = {}
@@ -135,6 +141,10 @@ def library():
         if row["type"] == "serie" and row["id"] in prog:
             row["total_ep"] = prog[row["id"]]["total"]
             row["vus_ep"] = prog[row["id"]]["vus"] or 0
+            nxt = nextep.get(row["id"])
+            if nxt:
+                row["next_saison"] = nxt["saison"]
+                row["next_numero"] = nxt["numero"]
         elif row["type"] == "film":
             row["nb_vues"] = vues.get(row["id"], 0)
         out.append(row)

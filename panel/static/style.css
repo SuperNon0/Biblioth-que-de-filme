@@ -183,7 +183,13 @@ main { padding: 20px; max-width: 1400px; margin: 0 auto; }
 .poster-fav { position: absolute; top: 8px; right: 8px; font-size: 0.95rem;
               color: var(--accent); text-shadow: 0 1px 5px #000, 0 0 3px #000; }
 
-.poster-prog { margin-top: 6px; height: 4px; border-radius: 999px;
+.poster-progline { display: flex; align-items: baseline; justify-content: space-between;
+                   gap: 6px; margin-top: 6px; font-size: 0.64rem; }
+.poster-pos { color: var(--green); font-weight: 500; white-space: nowrap;
+              overflow: hidden; text-overflow: ellipsis; }
+.poster-pos.done { color: var(--muted); }
+.poster-epcount { color: var(--muted); flex-shrink: 0; }
+.poster-prog { margin-top: 4px; height: 4px; border-radius: 999px;
                background: var(--border); overflow: hidden; }
 .poster-prog span { display: block; height: 100%;
                     background: linear-gradient(90deg, var(--green), #6fe0c0); }
