@@ -4,6 +4,7 @@ Le cœur de l'app : chercher un titre, l'ajouter, lister sa collection avec
 tris/filtres, changer le statut ou le favori, supprimer.
 """
 import json
+import threading
 import time
 
 from flask import Blueprint, jsonify, request
@@ -161,19 +162,42 @@ def add():
     # change pas à la mise à jour) — utile depuis le menu rapide.
     db.run("UPDATE titres SET statut = ? WHERE id = ?", (statut, titre_id))
     if typ == "serie":
+        # Les épisodes (un appel TMDB par saison) se remplissent en arrière-plan
+        # pour que l'ajout réponde instantanément, même pour les longues séries.
+        _sync_episodes_bg(tmdb, titre_id, tmdb_id, detail.get("saisons", []), statut)
+    elif statut == "vu":
+        _mark_seen(titre_id, typ)
+    return jsonify(ok=True, id=titre_id)
+
+
+def _sync_episodes_bg(tmdb, titre_id, tmdb_id, saisons, statut):
+    """Remplit les épisodes d'une série dans un thread détaché (non bloquant).
+
+    Le client TMDB et ``db`` ne dépendent pas du contexte de requête : on peut
+    donc travailler hors requête. La fiche affiche « chargement… » tant que
+    ``sync.is_syncing`` est vrai.
+    """
+    from datetime import date
+
+    sync.mark_syncing(titre_id)
+
+    def worker():
         try:
-            sync.sync_episodes(titre_id, tmdb, tmdb_id, detail.get("saisons", []))
+            sync.sync_episodes(titre_id, tmdb, tmdb_id, saisons)
             # Baseline anti-spam : les épisodes déjà diffusés ne déclenchent pas
             # de notification « nouvel épisode ». Seuls les futurs le feront.
-            from datetime import date
             db.run("UPDATE episodes SET notifie=1 WHERE titre_id=? AND "
                    "date_diff IS NOT NULL AND date_diff <= ?",
                    (titre_id, date.today().isoformat()))
+            if statut == "vu":
+                _mark_seen(titre_id, "serie")
+                db.run("UPDATE titres SET statut='vu' WHERE id=?", (titre_id,))
         except TMDBError:
             pass  # les épisodes se compléteront à l'ouverture de la fiche
-    if statut == "vu":
-        _mark_seen(titre_id, typ)
-    return jsonify(ok=True, id=titre_id)
+        finally:
+            sync.done_syncing(titre_id)
+
+    threading.Thread(target=worker, daemon=True).start()
 
 
 @bp.post("/library/manual")

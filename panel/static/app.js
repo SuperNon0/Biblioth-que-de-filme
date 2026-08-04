@@ -672,7 +672,22 @@ async function openDetail(id) {
     const n = normLocal(await api(`/api/title/${id}`));
     modalContent.innerHTML = renderTitlePage(n);
     loadSimilar(n.tmdb, n.type);
+    if (n.syncPending) pollSeasons(id);  // remplissage épisodes en arrière-plan
   } catch (e) { modalContent.innerHTML = dvErr(e); }
+}
+
+/* Rafraîchit le bloc des saisons quand les épisodes finissent de se remplir. */
+function pollSeasons(id) {
+  setTimeout(async () => {
+    const box = document.querySelector(`.dv-seasons[data-localid="${id}"]`);
+    if (!box || modal.classList.contains("hidden")) return;  // fiche fermée/changée
+    try {
+      const n = normLocal(await api(`/api/title/${id}`));
+      const fresh = document.querySelector(`.dv-seasons[data-localid="${id}"]`);
+      if (fresh) fresh.outerHTML = seasonsBlock(n);
+      if (n.syncPending) pollSeasons(id);
+    } catch (_) { /* on réessaiera à la prochaine ouverture */ }
+  }, 1500);
 }
 
 async function openPreview(tmdb, type) {
@@ -703,7 +718,8 @@ function normLocal(data) {
     genres: t.genres || [], note_tmdb: t.note_tmdb, fond: t.fond, affiche: t.affiche,
     bande_annonce: t.bande_annonce, plateformes: t.plateformes || [], casting: t.casting || [],
     equipe: t.equipe || [], statut: t.statut, favori: t.favori,
-    watches: data.visionnages || [], saisons: data.saisons || [], next: data.prochain_episode };
+    watches: data.visionnages || [], saisons: data.saisons || [], next: data.prochain_episode,
+    syncPending: data.sync_pending || false };
 }
 function normTmdb(t) {
   return { inLib: false, localId: null, tmdb: t.tmdb_id, type: t.type, titre: t.titre,
@@ -832,7 +848,8 @@ function seasonsBlock(n) {
     ${next ? `<p class="muted">Prochain épisode : S${next.saison}E${next.numero}
        « ${esc(next.nom || "")} » le ${fmtDate(next.date_diff)}</p>` : ""}
     <h3 class="dv-h3">Saisons</h3>
-    ${seasons || `<p class="muted">Épisodes indisponibles.</p>`}
+    ${seasons || `<p class="muted">${n.syncPending
+        ? "Chargement des épisodes…" : "Épisodes indisponibles."}</p>`}
     ${sais.length ? `<button class="btn full dv-serievue ${allSeen ? "" : "primary"}"
        data-markseries>
        ${allSeen ? "↻ J'ai revu toute la série" : "✓ J'ai vu toute la série"}</button>` : ""}

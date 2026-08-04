@@ -5,12 +5,33 @@ titre, mise en cache de l'affiche, et pour les séries, remplissage des
 épisodes saison par saison (nom, résumé, image, durée, date de diffusion).
 """
 import json
+import threading
 import time
 
 from flask import current_app
 
 import db
 from services import posters
+
+# Séries dont les épisodes se remplissent en arrière-plan (ajout non bloquant).
+# Permet à la fiche de montrer « chargement… » au lieu de re-synchroniser.
+_syncing = set()
+_syncing_lock = threading.Lock()
+
+
+def mark_syncing(titre_id):
+    with _syncing_lock:
+        _syncing.add(titre_id)
+
+
+def done_syncing(titre_id):
+    with _syncing_lock:
+        _syncing.discard(titre_id)
+
+
+def is_syncing(titre_id):
+    with _syncing_lock:
+        return titre_id in _syncing
 
 
 def _cache_affiche(url):

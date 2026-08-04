@@ -116,13 +116,18 @@ def detail(titre_id):
         # Complète les épisodes si la série vient d'être ajoutée sans détail.
         if t["tmdb_id"] and not db.q1(
                 "SELECT 1 FROM episodes WHERE titre_id = ? LIMIT 1", (titre_id,)):
-            try:
-                tmdb = get_tmdb()
-                detail_tv = tmdb.tv(t["tmdb_id"])
-                sync.sync_episodes(titre_id, tmdb, t["tmdb_id"],
-                                   detail_tv.get("saisons", []))
-            except TMDBError:
-                pass
+            if sync.is_syncing(titre_id):
+                # Remplissage en arrière-plan en cours : le front affiche
+                # « chargement… » puis rafraîchit, au lieu de re-synchroniser.
+                payload["sync_pending"] = True
+            else:
+                try:
+                    tmdb = get_tmdb()
+                    detail_tv = tmdb.tv(t["tmdb_id"])
+                    sync.sync_episodes(titre_id, tmdb, t["tmdb_id"],
+                                       detail_tv.get("saisons", []))
+                except TMDBError:
+                    pass
         payload["saisons"] = _saisons(titre_id)
         payload["prochain_episode"] = _prochain_episode(titre_id)
     payload["alerte"] = db.q1(
