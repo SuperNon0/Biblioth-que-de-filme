@@ -246,8 +246,10 @@ class TMDB:
             seen.add(key)
             brief = self._brief(c, media)
             brief["personnage"] = c.get("character")
+            brief["_pop"] = c.get("popularity") or 0
             films.append(brief)
-        films.sort(key=lambda x: (x.get("annee") or 0), reverse=True)
+        # Tri par popularité décroissante (les titres les plus connus d'abord).
+        films.sort(key=lambda x: x.pop("_pop"), reverse=True)
         return {
             "id": d.get("id"),
             "nom": d.get("name"),
