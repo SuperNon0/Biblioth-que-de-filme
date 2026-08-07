@@ -57,16 +57,22 @@ def duree_lisible(minutes):
 
 def temps_serie(titre_id):
     """Temps passé (minutes vues, revisionnages inclus) sur une série précise,
-    pour l'afficher sur sa fiche. Renvoie le libellé + le nombre d'épisodes vus."""
+    pour l'afficher sur sa fiche. Renvoie le libellé, le nombre d'épisodes vus,
+    et ``fois`` = nombre de fois où la série entière a été vue (comme « vu ×N »
+    pour les films) — le min des revisionnages, uniquement si elle est complète."""
     row = db.q1(
         """SELECT SUM(COALESCE(duree, ?) * MAX(nb_vues, 1)) AS minutes,
-                  COUNT(id) AS episodes
+                  COUNT(id) AS episodes, MIN(nb_vues) AS mini
            FROM episodes WHERE titre_id = ? AND vu = 1""",
         (DUREE_EPISODE_DEFAUT, titre_id),
     )
+    total = db.q1("SELECT COUNT(*) AS n FROM episodes WHERE titre_id = ?",
+                  (titre_id,))["n"] or 0
     minutes = (row and row["minutes"]) or 0
+    seen = (row and row["episodes"]) or 0
     info = duree_lisible(minutes)
-    info["episodes"] = (row and row["episodes"]) or 0
+    info["episodes"] = seen
+    info["fois"] = (row["mini"] or 0) if (total and seen >= total) else 0
     return info
 
 

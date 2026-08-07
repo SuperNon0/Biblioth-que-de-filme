@@ -946,7 +946,7 @@ function seasonsBlock(n) {
     ${n.temps && n.temps.minutes > 0 ? `<div class="dv-timespent">
        <span class="dv-time-ic">⏱</span>
        <span><b>${n.temps.texte}</b> passés sur cette série
-         <span class="muted">· ${n.temps.episodes} épisode${n.temps.episodes > 1 ? "s" : ""} vu${n.temps.episodes > 1 ? "s" : ""}${n.temps.converti ? " · ≈ " + n.temps.converti : ""}</span></span>
+         <span class="muted">· ${n.temps.episodes} épisode${n.temps.episodes > 1 ? "s" : ""} vu${n.temps.episodes > 1 ? "s" : ""}${n.temps.fois > 1 ? ` · <b class="dv-revu">↻ série revue ×${n.temps.fois}</b>` : ""}${n.temps.converti ? " · ≈ " + n.temps.converti : ""}</span></span>
      </div>` : ""}
     ${next ? `<p class="muted">Prochain épisode : S${next.saison}E${next.numero}
        « ${esc(next.nom || "")} » le ${fmtDate(next.date_diff)}</p>` : ""}

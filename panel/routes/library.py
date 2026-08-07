@@ -60,7 +60,7 @@ def annotate_series_progress(rows):
         return rows
     marks = ",".join("?" * len(ids))
     prog = {p["titre_id"]: p for p in db.q(
-        f"""SELECT titre_id, COUNT(*) AS total, SUM(vu) AS vus
+        f"""SELECT titre_id, COUNT(*) AS total, SUM(vu) AS vus, MIN(nb_vues) AS mini
             FROM episodes WHERE titre_id IN ({marks}) GROUP BY titre_id""", ids)}
     nextep = {}
     for e in db.q(f"""SELECT titre_id, saison, numero FROM episodes
@@ -70,9 +70,14 @@ def annotate_series_progress(rows):
     for r in rows:
         if r.get("type") != "serie":
             continue
-        if r["id"] in prog:
-            r["total_ep"] = prog[r["id"]]["total"]
-            r["vus_ep"] = prog[r["id"]]["vus"] or 0
+        p = prog.get(r["id"])
+        if p:
+            r["total_ep"] = p["total"]
+            r["vus_ep"] = p["vus"] or 0
+            # Série entièrement vue N fois (min des revisionnages) → « ↻ ×N »
+            # sur la carte, comme les films.
+            if p["total"] and (p["vus"] or 0) >= p["total"]:
+                r["nb_vues"] = p["mini"] or 0
         nx = nextep.get(r["id"])
         if nx:
             r["next_saison"] = nx["saison"]
