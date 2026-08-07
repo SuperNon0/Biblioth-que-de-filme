@@ -204,11 +204,23 @@ def discover():
             genre=request.args.get("genre") or None,
             year=request.args.get("annee") or None,
             country=request.args.get("pays") or None,
+            provider=request.args.get("plateforme") or None,
         )
     except TMDBError as exc:
         return jsonify(error=str(exc)), 502
     data["results"] = annotate_library(data.get("results", []))
     return jsonify(data)
+
+
+@bp.get("/providers")
+@auth.login_required
+def providers():
+    """Liste des plateformes de streaming disponibles (filtre Découverte)."""
+    media = "tv" if request.args.get("type") == "serie" else "movie"
+    try:
+        return jsonify(providers=get_tmdb().watch_providers(media))
+    except TMDBError as exc:
+        return jsonify(error=str(exc)), 502
 
 
 @bp.get("/roulette")

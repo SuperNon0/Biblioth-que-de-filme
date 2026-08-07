@@ -430,6 +430,7 @@ async function loadDiscover() {
   const params = new URLSearchParams({
     type: dec.type, page: dec.page, tri: $("#dec-tri").value,
     genre: $("#dec-genre").value, annee: $("#dec-annee").value, pays: $("#dec-pays").value,
+    plateforme: $("#dec-plateforme").value,
   });
   grid.innerHTML = `<p class="muted">Chargement…</p>`;
   try {
@@ -445,11 +446,27 @@ $("[data-filter='decouverte']").addEventListener("click", (e) => {
   $$("[data-filter='decouverte'] .chip").forEach((c) => c.classList.remove("active"));
   chip.classList.add("active");
   dec.type = chip.dataset.type; dec.page = 1;
-  fillGenres("dec-genre", dec.type === "film" ? "movie" : "tv");
+  const mk = dec.type === "film" ? "movie" : "tv";
+  fillGenres("dec-genre", mk);
+  fillProviders(mk);  // les plateformes diffèrent entre films et séries
   loadDiscover();
 });
-["dec-tri", "dec-genre", "dec-annee", "dec-pays"].forEach((id) =>
+["dec-tri", "dec-genre", "dec-plateforme", "dec-annee", "dec-pays"].forEach((id) =>
   $("#" + id).addEventListener("change", () => { dec.page = 1; loadDiscover(); }));
+
+/* Remplit le filtre « Plateforme » (une fois par média). */
+const _provFilled = new Set();
+async function fillProviders(media = "movie") {
+  if (_provFilled.has(media)) return;
+  try {
+    const { providers } = await api(`/api/providers?type=${media === "movie" ? "film" : "serie"}`);
+    const sel = $("#dec-plateforme"), current = sel.value;
+    sel.innerHTML = `<option value="">Toutes plateformes</option>` +
+      providers.map((p) => `<option value="${p.id}">${esc(p.nom)}</option>`).join("");
+    sel.value = current;
+    _provFilled.add(media);
+  } catch (_) { /* TMDB non configuré : menu plateformes vide */ }
+}
 $("#dec-prev").addEventListener("click", () => { if (dec.page > 1) { dec.page--; loadDiscover(); } });
 $("#dec-next").addEventListener("click", () => { dec.page++; loadDiscover(); });
 $("#dec-roulette").addEventListener("click", () => openRoulette("catalog"));
@@ -1231,7 +1248,7 @@ function openImportListModal() {
 const LOADERS = {
   suggestions: loadSuggestions,
   bibliotheque: () => { fillGenres("lib-genre"); loadLibrary(); },
-  decouverte: () => { fillGenres("dec-genre"); loadDiscover(); },
+  decouverte: () => { fillGenres("dec-genre"); fillProviders("movie"); loadDiscover(); },
   futur: loadFutur,
   listes: loadListes,
   profil: loadStats,

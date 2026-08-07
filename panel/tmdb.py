@@ -86,7 +86,7 @@ class TMDB:
 
     def discover(self, media="movie", page=1, sort_by="popularity.desc",
                  genre=None, year=None, country=None, vote_count_gte=None,
-                 year_gte=None, year_lte=None):
+                 year_gte=None, year_lte=None, provider=None):
         """Catalogue filtrable pour l'onglet Découverte et les suggestions."""
         params = {"page": page, "sort_by": sort_by, "include_adult": "false"}
         if genre:
@@ -95,6 +95,10 @@ class TMDB:
             params["with_origin_country"] = country
         if vote_count_gte:
             params["vote_count.gte"] = vote_count_gte
+        if provider:
+            # Filtre par plateforme de streaming (région requise par TMDB).
+            params["with_watch_providers"] = provider
+            params["watch_region"] = self.region
         date_field = "primary_release_date" if media == "movie" else "first_air_date"
         if year:
             params["primary_release_year" if media == "movie"
@@ -113,6 +117,23 @@ class TMDB:
     def genres(self, media="movie"):
         data = self._get(f"/genre/{media}/list")
         return data.get("genres", [])
+
+    def watch_providers(self, media="movie"):
+        """Plateformes de streaming disponibles dans la région, triées par
+        priorité d'affichage (pour le filtre « Plateforme » de Découverte)."""
+        data = self._get(f"/watch/providers/{media}", watch_region=self.region)
+        provs = []
+        for p in data.get("results", []):
+            prio = (p.get("display_priorities") or {}).get(self.region,
+                    p.get("display_priority", 999))
+            provs.append({
+                "id": p.get("provider_id"),
+                "nom": p.get("provider_name"),
+                "logo": self.image_url(p.get("logo_path"), "w92"),
+                "prio": prio,
+            })
+        provs.sort(key=lambda x: x["prio"])
+        return provs
 
     # -- fiches détaillées -------------------------------------------------
     def movie(self, tmdb_id):
