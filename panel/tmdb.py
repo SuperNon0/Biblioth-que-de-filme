@@ -235,6 +235,7 @@ class TMDB:
 
     def _movie_detail(self, d):
         brief = self._brief(d, "movie")
+        coll = d.get("belongs_to_collection")
         brief.update({
             "duree": d.get("runtime"),
             "genres": [g["name"] for g in d.get("genres", [])],
@@ -246,8 +247,18 @@ class TMDB:
             "realisateur": self._director(d),
             "casting": self._cast(d),
             "equipe": self._crew(d),
+            # Saga / chronologie (ex. « Le Labyrinthe » 1-2-3) si le film en fait partie.
+            "collection": ({"id": coll.get("id"), "nom": coll.get("name")}
+                           if coll else None),
         })
         return brief
+
+    def collection(self, collection_id):
+        """Films d'une saga (collection TMDB), triés par date de sortie."""
+        d = self._get(f"/collection/{collection_id}")
+        films = [self._brief(p, "movie") for p in d.get("parts", [])]
+        films.sort(key=lambda f: f.get("date_sortie") or "9999")
+        return {"nom": d.get("name"), "films": films}
 
     def _tv_detail(self, d):
         brief = self._brief(d, "tv")

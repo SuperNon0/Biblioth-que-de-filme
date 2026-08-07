@@ -258,6 +258,30 @@ def similar():
     return jsonify(results=annotate_library(items[:15]))
 
 
+@bp.get("/collection")
+@auth.login_required
+def collection():
+    """Saga d'un film : les autres films de la même collection (chronologie).
+
+    Pour le carrousel « La saga » sur la fiche d'un film (ex. « Le Labyrinthe »).
+    """
+    tmdb_id = request.args.get("tmdb_id")
+    if not tmdb_id:
+        return jsonify(results=[], nom=None)
+    tmdb = get_tmdb()
+    try:
+        detail = tmdb.movie(int(tmdb_id))
+        coll = detail.get("collection")
+        if not coll or not coll.get("id"):
+            return jsonify(results=[], nom=None)
+        data = tmdb.collection(coll["id"])
+    except (TMDBError, ValueError):
+        return jsonify(results=[], nom=None)
+    # On retire le film courant de la liste.
+    films = [f for f in data["films"] if f.get("tmdb_id") != int(tmdb_id)]
+    return jsonify(results=annotate_library(films), nom=data.get("nom"))
+
+
 @bp.get("/genres")
 @auth.login_required
 def genres():

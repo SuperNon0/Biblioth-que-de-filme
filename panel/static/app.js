@@ -707,13 +707,19 @@ const DV_LOADING = `<div class="dv-body"><p class="muted">Chargement…</p></div
 const dvErr = (e) => `<div class="dv-body"><p class="muted">${esc(e.message)}</p></div>`;
 
 async function openDetail(id, opts = {}) {
+  // keepScroll : conserve la position dans la fiche lors d'un re-rendu (marquage)
+  // → pas de saut vers le haut.
+  const card = modal.querySelector(".modal-card");
+  const keepY = opts.keepScroll && card ? card.scrollTop : null;
   modal.classList.remove("hidden"); modal.classList.add("full");
-  modalContent.innerHTML = DV_LOADING;
+  if (!opts.keepScroll) modalContent.innerHTML = DV_LOADING;
   try {
     const n = normLocal(await api(`/api/title/${id}`));
     modalContent.innerHTML = renderTitlePage(n);
     loadSimilar(n.tmdb, n.type);
+    if (n.type === "film") loadSaga(n.tmdb);
     if (opts.seasons) scrollToSeasons();
+    else if (keepY != null && card) card.scrollTop = keepY;
     if (n.syncPending) pollSeasons(id);  // remplissage épisodes en arrière-plan
   } catch (e) { modalContent.innerHTML = dvErr(e); }
 }
@@ -767,8 +773,22 @@ async function openPreview(tmdb, type, opts = {}) {
     const n = normTmdb(await api(`/api/preview?tmdb_id=${tmdb}&type=${type}`));
     modalContent.innerHTML = renderTitlePage(n);
     loadSimilar(n.tmdb, n.type);
+    if (n.type === "film") loadSaga(n.tmdb);
     if (opts.seasons) scrollToSeasons();
   } catch (e) { modalContent.innerHTML = dvErr(e); }
+}
+
+/* Charge le carrousel « La saga » (autres films de la collection) — films only. */
+async function loadSaga(tmdb) {
+  const block = $("#dv-saga-block"), box = $("#dv-saga");
+  if (!block || !box || !tmdb) return;
+  try {
+    const { results, nom } = await api(`/api/collection?tmdb_id=${tmdb}`);
+    if (!results || !results.length) return;  // pas de saga → le bloc reste caché
+    $("#dv-saga-title").textContent = nom ? `La saga « ${nom} »` : "Dans la même saga";
+    box.innerHTML = results.map(posterCard).join("");
+    block.classList.remove("hidden");
+  } catch (_) { /* pas de saga disponible */ }
 }
 
 /* Charge le carrousel « Parce que tu as aimé ce titre » (après affichage). */
@@ -867,6 +887,13 @@ function renderTitlePage(n) {
           <div class="row-scroll" id="dv-similar"><p class="muted">Chargement…</p></div>
           <button class="row-arrow right" aria-label="Suivant">›</button>
         </div>` : ""}
+      ${n.type === "film" && n.tmdb ? `<div id="dv-saga-block" class="hidden">
+        <h3 class="dv-h3" id="dv-saga-title">La saga</h3>
+        <div class="row-wrap">
+          <button class="row-arrow left" aria-label="Précédent">‹</button>
+          <div class="row-scroll" id="dv-saga"></div>
+          <button class="row-arrow right" aria-label="Suivant">›</button>
+        </div></div>` : ""}
       ${n.inLib ? `<div class="dv-remove"><button class="btn small danger" data-del data-localid="${n.localId}">Retirer de ma bibliothèque</button></div>` : ""}
     </div>`;
 }
@@ -1027,7 +1054,7 @@ modalContent.addEventListener("click", async (e) => {
     } else if (e.target.closest("[data-delwatch]")) {
       const w = e.target.closest("[data-delwatch]"), id = idFrom();
       await api(`/api/watch/${w.dataset.delwatch}`, { method: "DELETE" });
-      if (id) openDetail(id); refreshAll();
+      if (id) openDetail(id, { keepScroll: true }); refreshAll();
     } else if (e.target.closest("[data-ep]")) {
       // Épisode déjà en biblio : bascule + refresh du bloc Saisons sur place.
       const id = idFrom();
@@ -1043,15 +1070,19 @@ modalContent.addEventListener("click", async (e) => {
       wasIn ? refreshSeasons(id) : openDetail(id, { seasons: true }); refreshAll();
     } else if (e.target.closest("[data-markseason]")) {
       const b = e.target.closest("[data-markseason]"), ctx = seasonCtx(b), wasIn = !!ctx.localid;
+      const vu = b.dataset.seen !== "1";
       const id = await ensureInLib(ctx);
       await api(`/api/title/${id}/season/${b.dataset.markseason}/mark`,
-        { method: "POST", body: { vu: b.dataset.seen !== "1" } });
+        { method: "POST", body: { vu } });
       wasIn ? refreshSeasons(id) : openDetail(id, { seasons: true }); refreshAll();
+      toast(vu ? "Saison marquée vue ✓" : "Saison décochée");
     } else if (e.target.closest("[data-markseries]")) {
       const b = e.target.closest("[data-markseries]"), ctx = seasonCtx(b), wasIn = !!ctx.localid;
+      const revu = b.classList.contains("dv-serievue") && !b.classList.contains("primary");
       const id = await ensureInLib(ctx);
       await api(`/api/title/${id}/mark`, { method: "POST", body: { vu: true } });
       wasIn ? refreshSeasons(id) : openDetail(id, { seasons: true }); refreshAll();
+      toast(revu ? "Revisionnage de la série enregistré ✓" : "Toute la série marquée vue ✓");
     } else {
       const head = e.target.closest(".season-head");
       if (head) {
@@ -1112,18 +1143,22 @@ async function handleTitleAct(actEl) {
     }
     if (act === "revu") {
       if (localid) { await api(`/api/title/${localid}/watch`, { method: "POST", body: {} });
-        openDetail(localid); refreshAll(); }
+        openDetail(localid, { keepScroll: true }); refreshAll();
+        toast("Revisionnage enregistré ✓"); }
       return;
     }
     const statut = act === "vu" ? "vu" : "a_voir";
+    // Feedback immédiat + re-rendu sur place (la position dans la fiche est
+    // conservée, la pastille/état du bouton se met à jour tout de suite).
     if (localid) {
       await api(`/api/library/${localid}`, { method: "PATCH", body: { statut } });
-      openDetail(localid);
+      toast(statut === "vu" ? "Marqué comme vu ✓" : "Ajouté à « À voir »");
+      openDetail(localid, { keepScroll: true });
     } else {
       const r = await api("/api/library", { method: "POST",
         body: { tmdb_id: tmdb, type, statut } });
       toast(statut === "vu" ? "Marqué comme vu ✓" : "Ajouté à « À voir »");
-      openDetail(r.id);
+      openDetail(r.id, { keepScroll: true });
     }
     refreshAll();
   } catch (err) { toast(err.message); }
