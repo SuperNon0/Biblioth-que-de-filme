@@ -283,7 +283,7 @@ main { padding: 20px; max-width: 1400px; margin: 0 auto; }
 .modal-close:hover { border-color: var(--accent); color: var(--accent); }
 
 /* fiche détaillée */
-.detail-hero { position: relative; padding: 24px; display: flex; gap: 22px;
+.detail-hero { position: relative; padding: 64px 24px 24px; display: flex; gap: 22px;
                background-size: cover; background-position: center; }
 .detail-hero::before { content: ""; position: absolute; inset: 0;
                background: linear-gradient(180deg, rgba(14,15,17,0.75),
@@ -563,6 +563,8 @@ input:-webkit-autofill, input:-webkit-autofill:focus, input:-webkit-autofill:hov
                          left: 14px; z-index: 70; }
   .modal.full .dv-fav { position: fixed; top: calc(14px + env(safe-area-inset-top));
                         right: 14px; z-index: 70; }
+  /* Fiche personne (plein écran) : laisse la place au « ← » sous l'encoche. */
+  .modal.full .detail-hero { padding-top: calc(60px + env(safe-area-inset-top)); }
 }
 
 .dv-head { display: flex; gap: 16px; padding: 0 20px; margin-top: -70px;

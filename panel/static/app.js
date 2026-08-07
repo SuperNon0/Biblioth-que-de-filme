@@ -152,7 +152,10 @@ quickMenu.addEventListener("click", async (e) => {
   if (!btn || !qmContext) return;
   const { el, tmdb, type, localid } = qmContext;
   const act = btn.dataset.qm;
-  if (act === "infos") { closeQuickMenu(); return localid ? openDetail(localid) : openPreview(tmdb, type); }
+  if (act === "infos") {
+    closeQuickMenu(); pushHistoryIfOpen();  // mémorise la page en cours (retour)
+    return localid ? openDetail(localid) : openPreview(tmdb, type);
+  }
   try {
     let newId = localid;
     if (act === "vu") {
@@ -713,11 +716,34 @@ modalContent.addEventListener("wheel", (e) => {
     sc.scrollLeft += e.deltaY; e.preventDefault();
   }
 }, { passive: false });
+/* Historique de navigation dans la modale (fiche → acteur → fiche…) :
+   le bouton retour « ← » revient à la page précédente, jusqu'à 5 en arrière. */
+let viewStack = [];
+function pushHistoryIfOpen() {
+  if (modal.classList.contains("hidden")) { viewStack = []; return; }  // ouverture fraîche
+  const card = modal.querySelector(".modal-card");
+  viewStack.push({ html: modalContent.innerHTML,
+                   full: modal.classList.contains("full"),
+                   y: card ? card.scrollTop : 0 });
+  if (viewStack.length > 5) viewStack.shift();
+}
+function navBack() {
+  if (!viewStack.length) return closeModal();  // plus d'historique → on ferme
+  const v = viewStack.pop();
+  modal.classList.remove("hidden");
+  modal.classList.toggle("full", v.full);
+  modalContent.innerHTML = v.html;
+  const card = modal.querySelector(".modal-card");
+  if (card) card.scrollTop = v.y;
+}
 function closeModal() {
   modal.classList.add("hidden"); modal.classList.remove("full");
-  modalContent.innerHTML = "";
+  modalContent.innerHTML = ""; viewStack = [];
 }
-modal.addEventListener("click", (e) => { if (e.target.closest("[data-close]")) closeModal(); });
+modal.addEventListener("click", (e) => {
+  if (e.target.closest("[data-back]")) return navBack();
+  if (e.target.closest("[data-close]")) closeModal();
+});
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
 
 const DV_LOADING = `<div class="dv-body"><p class="muted">Chargement…</p></div>`;
@@ -880,7 +906,7 @@ function renderTitlePage(n) {
       <span class="dv-ic">≣</span><span>Ajouter à la liste…</span></button>
   </div>`;
   return `<div class="dv-hero" style="background-image:url('${n.fond || n.affiche || ""}')">
-      <button class="dv-back" data-close aria-label="Retour">←</button>
+      <button class="dv-back" data-back aria-label="Retour">←</button>
       ${n.inLib ? `<button class="dv-fav ${n.favori ? "on" : ""}" data-fav data-localid="${n.localId}">♥</button>` : ""}
     </div>
     <div class="dv-head">
@@ -978,7 +1004,8 @@ function seasonsBlock(n) {
 }
 
 async function openPerson(id) {
-  modal.classList.remove("hidden"); modal.classList.remove("full");
+  pushHistoryIfOpen();  // empile la fiche/page en cours pour le bouton retour
+  modal.classList.remove("hidden"); modal.classList.add("full");
   modalContent.innerHTML = `<div class="detail-body"><p class="muted">Chargement…</p></div>`;
   try {
     const p = await api(`/api/person/${id}`);
@@ -994,6 +1021,7 @@ function renderPerson(p) {
   ].filter(Boolean).map((t) => `<span class="tag">${esc(t)}</span>`).join("");
   const bio = p.bio ? `<p class="detail-resume">${esc(p.bio.slice(0, 700))}${p.bio.length > 700 ? "…" : ""}</p>` : "";
   return `<div class="detail-hero">
+    <button class="dv-back" data-back aria-label="Retour">←</button>
     <img class="detail-poster" src="${posterSrc(p.photo)}" alt="">
     <div class="detail-info"><h2>${esc(p.nom)}</h2><div class="detail-tags">${infos}</div></div>
   </div>
@@ -1039,6 +1067,7 @@ modalContent.addEventListener("click", async (e) => {
     } catch (err) { toast(err.message); presetEl.disabled = false; presetEl.textContent = "Importer"; }
     return;
   }
+  if (e.target.closest("[data-back]")) return navBack();
   if (e.target.closest("[data-close]")) return closeModal();
   const arrowEl = e.target.closest(".row-arrow");
   if (arrowEl) {
