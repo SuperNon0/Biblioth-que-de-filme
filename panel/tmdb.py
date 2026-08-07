@@ -86,7 +86,7 @@ class TMDB:
 
     def discover(self, media="movie", page=1, sort_by="popularity.desc",
                  genre=None, year=None, country=None, vote_count_gte=None,
-                 year_gte=None, year_lte=None, provider=None):
+                 year_gte=None, year_lte=None, provider=None, note_min=None):
         """Catalogue filtrable pour l'onglet Découverte et les suggestions."""
         params = {"page": page, "sort_by": sort_by, "include_adult": "false"}
         if genre:
@@ -95,6 +95,11 @@ class TMDB:
             params["with_origin_country"] = country
         if vote_count_gte:
             params["vote_count.gte"] = vote_count_gte
+        if note_min:
+            # Note minimale, avec un seuil de votes pour éviter les titres
+            # obscurs notés 10/10 par 2 personnes.
+            params["vote_average.gte"] = note_min
+            params.setdefault("vote_count.gte", 100)
         if provider:
             # Filtre par plateforme de streaming (région requise par TMDB).
             params["with_watch_providers"] = provider

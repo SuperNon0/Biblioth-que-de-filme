@@ -205,6 +205,7 @@ def discover():
             year=request.args.get("annee") or None,
             country=request.args.get("pays") or None,
             provider=request.args.get("plateforme") or None,
+            note_min=request.args.get("note") or None,
         )
     except TMDBError as exc:
         return jsonify(error=str(exc)), 502

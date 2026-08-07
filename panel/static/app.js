@@ -430,7 +430,7 @@ async function loadDiscover() {
   const params = new URLSearchParams({
     type: dec.type, page: dec.page, tri: $("#dec-tri").value,
     genre: $("#dec-genre").value, annee: $("#dec-annee").value, pays: $("#dec-pays").value,
-    plateforme: $("#dec-plateforme").value,
+    plateforme: $("#dec-plateforme").value, note: $("#dec-note").value,
   });
   grid.innerHTML = `<p class="muted">Chargement…</p>`;
   try {
@@ -451,7 +451,7 @@ $("[data-filter='decouverte']").addEventListener("click", (e) => {
   fillProviders(mk);  // les plateformes diffèrent entre films et séries
   loadDiscover();
 });
-["dec-tri", "dec-genre", "dec-plateforme", "dec-annee", "dec-pays"].forEach((id) =>
+["dec-tri", "dec-genre", "dec-plateforme", "dec-note", "dec-annee", "dec-pays"].forEach((id) =>
   $("#" + id).addEventListener("change", () => { dec.page = 1; loadDiscover(); }));
 
 /* Remplit le filtre « Plateforme » (une fois par média). */
