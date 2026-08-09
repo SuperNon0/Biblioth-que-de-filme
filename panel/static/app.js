@@ -186,13 +186,40 @@ quickMenu.addEventListener("click", async (e) => {
     return localid ? openDetail(localid) : openPreview(tmdb, type);
   }
   // Série en cours : marque le prochain épisode vu directement (continuer).
+  // On NE recharge PAS la page : on met à jour juste la carte, et on rouvre le
+  // petit menu sur l'épisode d'après (pour enchaîner).
   if (act === "next") {
     if (!localid || !qmContext.nextS) return closeQuickMenu();
     try {
       await api(`/api/title/${localid}/episode/${qmContext.nextS}/${qmContext.nextE}/toggle`,
         { method: "POST" });
       toast(`S${qmContext.nextS}E${qmContext.nextE} marqué vu ✓`);
-      closeQuickMenu(); refreshAll();
+      // Recalcule progression + prochain épisode non vu depuis la fiche.
+      const data = await api(`/api/title/${localid}`);
+      let total = 0, vus = 0, next = null;
+      for (const s of (data.saisons || [])) {
+        for (const ep of (s.episodes || [])) {
+          total++;
+          if (ep.vu) vus++;
+          else if (!next) next = { s: ep.saison, e: ep.numero };
+        }
+      }
+      const statut = (data.titre && data.titre.statut) || "";
+      if (el) {  // maj de la carte source, sur place (pas de rechargement)
+        el.dataset.statut = statut;
+        el.dataset.vus = vus; el.dataset.total = total;
+        el.dataset.nexts = next ? next.s : ""; el.dataset.nexte = next ? next.e : "";
+        updateCardProgress(el, vus, total, next);
+        if (statut === "vu") updateCardBadge(el, "vu");
+      }
+      if (next && statut === "en_cours") {  // rouvre le menu sur l'épisode suivant
+        Object.assign(qmContext, { vus, total, statut,
+          nextS: String(next.s), nextE: String(next.e) });
+        openQuickMenu(qmContext);
+      } else {
+        closeQuickMenu();  // série terminée
+        toast("Série terminée 🎉");
+      }
     } catch (err) { toast(err.message); }
     return;
   }
@@ -234,6 +261,21 @@ function updateCardBadge(el, statut) {
   }
   badge.className = `poster-badge badge-${statut}`;
   badge.textContent = STATUTS[statut] || "";
+}
+
+/* Met à jour la barre + la ligne « ▸ S x E y / Terminée » d'une carte série,
+   sur place (sans recharger la grille). */
+function updateCardProgress(el, vus, total, next) {
+  if (!total) return;
+  const bar = el.querySelector(".poster-prog span");
+  if (bar) bar.style.width = Math.round(vus / total * 100) + "%";
+  const line = el.querySelector(".poster-progline");
+  if (line) {
+    const pos = next
+      ? `<span class="poster-pos">▸ S${next.s} E${next.e}</span>`
+      : `<span class="poster-pos done">✓ Terminée</span>`;
+    line.innerHTML = `${pos}<span class="poster-epcount">${vus}/${total}</span>`;
+  }
 }
 
 function bindGrid(container) {
