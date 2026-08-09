@@ -102,7 +102,9 @@ function posterCard(item) {
   return `<div class="poster" data-id="${item.id || ""}" data-tmdb="${item.tmdb_id || ""}"
        data-type="${item.type || ""}" data-localid="${item.local_id || ""}"
        data-statut="${item.statut || ""}" data-nbvues="${item.nb_vues || 0}"
-       data-nexts="${item.next_saison || ""}" data-nexte="${item.next_numero || ""}">
+       data-nexts="${item.next_saison || ""}" data-nexte="${item.next_numero || ""}"
+       data-vus="${item.vus_ep || 0}" data-total="${item.total_ep || 0}"
+       data-added="${item.date_ajout || ""}">
     <img class="poster-img" loading="lazy" decoding="async" src="${posterSrc(item.affiche)}" alt="">
     ${statut}${fav}
     <div class="poster-body">
@@ -123,6 +125,8 @@ function openItem(el) {
   openQuickMenu({ el, tmdb, type, localid,
     statut: el.dataset.statut || "", nbvues: Number(el.dataset.nbvues || 0),
     nextS: el.dataset.nexts || "", nextE: el.dataset.nexte || "",
+    vus: Number(el.dataset.vus || 0), total: Number(el.dataset.total || 0),
+    added: Number(el.dataset.added || 0),
     titre: titleEl ? titleEl.textContent.trim() : "", affiche: imgEl ? imgEl.src : "" });
 }
 
@@ -135,7 +139,9 @@ function openQuickMenu(ctx) {
   qmContext = ctx;
   $("#qm-poster").src = ctx.affiche || posterSrc(null);
   $("#qm-title").textContent = ctx.titre || "";
+  const inLib = !!ctx.localid || !!ctx.statut;
   const inAvoir = ctx.statut === "a_voir";
+  const enCours = ctx.statut === "en_cours";
   const seen = ctx.statut === "vu" || ctx.nbvues > 0;
   const avoirBtn = $("#quick-menu [data-qm='a_voir']");
   avoirBtn.textContent = inAvoir ? "✓ Dans « À voir »" : "＋ À voir";
@@ -143,7 +149,30 @@ function openQuickMenu(ctx) {
   const vuBtn = $("#quick-menu [data-qm='vu']");
   vuBtn.textContent = seen ? ("✓ Déjà vu" + (ctx.nbvues > 1 ? ` ×${ctx.nbvues}` : "")) : "Déjà vu";
   vuBtn.classList.toggle("current", seen);
+  // Bouton violet « Épisode suivant » : séries en cours avec un prochain épisode.
+  const nextBtn = $("#quick-menu [data-qm='next']");
+  if (enCours && ctx.type === "serie" && ctx.nextS) {
+    nextBtn.textContent = `▶ Épisode suivant · S${ctx.nextS} E${ctx.nextE}`;
+    nextBtn.classList.remove("hidden");
+  } else {
+    nextBtn.classList.add("hidden");
+  }
+  // Ligne d'infos : progression (séries en cours) et/ou date d'ajout.
+  const meta = $("#qm-meta"), parts = [];
+  if (enCours && ctx.total) parts.push(`En cours · ${ctx.vus}/${ctx.total} épisodes`);
+  if (inLib) parts.push(ctx.added ? `ajouté le ${fmtAjout(ctx.added)}` : "dans ta bibliothèque");
+  if (parts.length) { meta.textContent = "✓ " + parts.join(" · "); meta.classList.remove("hidden"); }
+  else meta.classList.add("hidden");
   quickMenu.classList.remove("hidden");
+}
+
+/* Formate un timestamp d'ajout (secondes) en « 12 mars 2025 ». */
+function fmtAjout(ts) {
+  const d = new Date(ts * 1000);
+  if (isNaN(d)) return "";
+  const MOISL = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet",
+    "août", "septembre", "octobre", "novembre", "décembre"];
+  return `${d.getDate()} ${MOISL[d.getMonth()]} ${d.getFullYear()}`;
 }
 
 quickMenu.addEventListener("click", async (e) => {
@@ -155,6 +184,17 @@ quickMenu.addEventListener("click", async (e) => {
   if (act === "infos") {
     closeQuickMenu(); pushHistoryIfOpen();  // mémorise la page en cours (retour)
     return localid ? openDetail(localid) : openPreview(tmdb, type);
+  }
+  // Série en cours : marque le prochain épisode vu directement (continuer).
+  if (act === "next") {
+    if (!localid || !qmContext.nextS) return closeQuickMenu();
+    try {
+      await api(`/api/title/${localid}/episode/${qmContext.nextS}/${qmContext.nextE}/toggle`,
+        { method: "POST" });
+      toast(`S${qmContext.nextS}E${qmContext.nextE} marqué vu ✓`);
+      closeQuickMenu(); refreshAll();
+    } catch (err) { toast(err.message); }
+    return;
   }
   try {
     let newId = localid;

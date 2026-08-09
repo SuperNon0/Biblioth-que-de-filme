@@ -37,7 +37,7 @@ def _reprendre():
     et que le menu rapide sache que la série est déjà suivie.
     """
     rows = db.q(
-        """SELECT id, tmdb_id, type, titre, affiche, annee, note_tmdb, statut
+        """SELECT id, tmdb_id, type, titre, affiche, annee, note_tmdb, statut, date_ajout
            FROM titres WHERE type='serie' AND statut='en_cours'
            ORDER BY maj DESC LIMIT 20"""
     )

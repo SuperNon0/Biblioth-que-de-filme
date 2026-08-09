@@ -94,7 +94,7 @@ def annotate_library(items):
     if not items:
         return items
     lib = {(r["tmdb_id"], r["type"]): r for r in db.q(
-        """SELECT id, tmdb_id, type, statut,
+        """SELECT id, tmdb_id, type, statut, date_ajout,
                   (SELECT COUNT(*) FROM visionnages v WHERE v.titre_id = t.id) AS nb_vues
            FROM titres t WHERE tmdb_id IS NOT NULL""")}
     for it in items:
@@ -103,6 +103,7 @@ def annotate_library(items):
             it["statut"] = row["statut"]
             it["local_id"] = row["id"]
             it["nb_vues"] = row["nb_vues"]
+            it["date_ajout"] = row["date_ajout"]
     return items
 
 
