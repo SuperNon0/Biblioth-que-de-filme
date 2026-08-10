@@ -124,6 +124,34 @@ def update():
                    message="Mise à jour lancée. Le site redémarre dans quelques secondes.")
 
 
+@bp.post("/repair")
+@auth.login_required
+def repair_data():
+    """Vérifie et répare les incohérences de la base (sans rien supprimer) :
+
+    - Film marqué « vu » mais sans aucun visionnage → ajoute un visionnage
+      (sinon il ne compte pas dans les statistiques et paraît « non sauvegardé »).
+    - Épisode marqué vu sans compteur (ou l'inverse) → remet le compteur cohérent.
+    Renvoie le détail de ce qui a été corrigé.
+    """
+    fixes = {"films_vu_sans_visionnage": 0, "episodes_incoherents": 0}
+    # 1. Films « vu » sans visionnage.
+    orphelins = db.q(
+        """SELECT id FROM titres WHERE type='film' AND statut='vu'
+           AND id NOT IN (SELECT titre_id FROM visionnages)""")
+    for f in orphelins:
+        db.run("INSERT INTO visionnages (titre_id, date, cree) VALUES (?,?,?)",
+               (f["id"], time.strftime("%Y-%m-%d"), int(time.time())))
+    fixes["films_vu_sans_visionnage"] = len(orphelins)
+    # 2. Épisodes incohérents (vu sans compteur, ou compteur sans vu).
+    n = db.q1("SELECT COUNT(*) AS n FROM episodes "
+              "WHERE (vu=0 AND nb_vues>0) OR (vu=1 AND nb_vues<1)")["n"]
+    db.run("UPDATE episodes SET vu=1 WHERE vu=0 AND nb_vues>0")
+    db.run("UPDATE episodes SET nb_vues=1 WHERE vu=1 AND nb_vues<1")
+    fixes["episodes_incoherents"] = n
+    return jsonify(ok=True, fixes=fixes)
+
+
 @bp.post("/reset")
 @auth.login_required
 def reset_data():

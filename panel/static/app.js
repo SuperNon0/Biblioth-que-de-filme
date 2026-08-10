@@ -702,6 +702,19 @@ async function loadVersion() {
       ? `${v.version}${v.message ? " — " + v.message : ""}` : "inconnue";
   } catch (_) { $("#app-version").textContent = "inconnue"; }
 }
+$("#btn-repair").addEventListener("click", async () => {
+  $("#repair-status").textContent = "Vérification…";
+  try {
+    const r = await api("/api/repair", { method: "POST" });
+    const f = r.fixes || {};
+    const total = (f.films_vu_sans_visionnage || 0) + (f.episodes_incoherents || 0);
+    $("#repair-status").textContent = total === 0
+      ? "✅ Tout est cohérent, rien à corriger."
+      : `✅ Corrigé : ${f.films_vu_sans_visionnage || 0} film(s) « vu » réintégré(s), `
+        + `${f.episodes_incoherents || 0} épisode(s) remis d'aplomb.`;
+    if (total) { toast("Base réparée"); refreshAll(); }
+  } catch (e) { $("#repair-status").textContent = "❌ " + e.message; }
+});
 $("#btn-update").addEventListener("click", async () => {
   if (!confirm("Mettre à jour le site maintenant ? Il redémarrera quelques secondes.")) return;
   $("#update-status").textContent = "Mise à jour en cours…";
@@ -1050,6 +1063,15 @@ function seasonsBlock(n) {
     const total = n.inLib ? (s.total || 0) : (s.nb_episodes || 0);
     const vus = n.inLib ? (s.vus || 0) : 0;
     const seen = n.inLib && total > 0 && vus >= total;
+    // Nombre de fois où la saison entière a été vue = min des revisionnages.
+    const svu = seen && s.episodes && s.episodes.length
+      ? Math.min(...s.episodes.map((e) => e.nb_vues || 0)) : 0;
+    // Vue : « ↻ Revue ×N » (ajoute) + croix (retire). Non vue : « Déjà vu ».
+    const controls = seen
+      ? `<button class="ep-del" data-markseason="${s.numero}" data-act="remove"
+            title="Retirer un visionnage de la saison" aria-label="Retirer un visionnage">✕</button>
+         <button class="ep-btn season-vu vu" data-markseason="${s.numero}" data-act="revu">↻ Revue${svu > 1 ? " ×" + svu : ""}</button>`
+      : `<button class="ep-btn season-vu" data-markseason="${s.numero}" data-act="seen">Déjà vu</button>`;
     const body = n.inLib
       ? (s.episodes || []).map((e) => episodeRow(e)).join("")
       : `<p class="muted ep-loading">Chargement des épisodes…</p>`;
@@ -1058,8 +1080,7 @@ function seasonsBlock(n) {
         <span class="season-toggle"><span class="chevron">▸</span>
           <span class="season-title">Saison ${s.numero}</span>
           <span class="season-prog">${vus}/${total}</span></span>
-        <button class="ep-btn season-vu ${seen ? "vu" : ""}"
-          data-markseason="${s.numero}" data-seen="${seen ? 1 : 0}">${seen ? "✓ Vue" : "Déjà vu"}</button>
+        <span class="season-actions">${controls}</span>
       </div>
       <div class="season-body">${body}</div>
     </div>`;
@@ -1079,9 +1100,11 @@ function seasonsBlock(n) {
     ${seasons || `<p class="muted">${n.syncPending
         ? "Chargement des épisodes…" : "Épisodes indisponibles."}</p>`}
     ${n.syncPending && sais.length ? `<p class="muted">Chargement des autres saisons…</p>` : ""}
-    ${sais.length ? `<button class="btn full dv-serievue ${allSeen ? "" : "primary"}"
-       data-markseries>
-       ${allSeen ? "↻ J'ai revu toute la série" : "✓ J'ai vu toute la série"}</button>` : ""}
+    ${sais.length ? (allSeen
+       ? `<button class="btn full dv-serievue" data-markseries data-act="revu">↻ J'ai revu toute la série${n.temps && n.temps.fois > 1 ? " · ×" + n.temps.fois : ""}</button>
+          <button class="btn full small dv-serieremove" data-markseries data-act="remove">− Retirer un visionnage de la série</button>`
+       : `<button class="btn full primary dv-serievue" data-markseries data-act="seen">✓ J'ai vu toute la série</button>`)
+     : ""}
   </div>`;
 }
 
@@ -1204,19 +1227,21 @@ modalContent.addEventListener("click", async (e) => {
       wasIn ? refreshSeasons(id) : openDetail(id, { seasons: true }); refreshAll();
     } else if (e.target.closest("[data-markseason]")) {
       const b = e.target.closest("[data-markseason]"), ctx = seasonCtx(b), wasIn = !!ctx.localid;
-      const vu = b.dataset.seen !== "1";
+      const action = b.dataset.act || "seen";
       const id = await ensureInLib(ctx);
       await api(`/api/title/${id}/season/${b.dataset.markseason}/mark`,
-        { method: "POST", body: { vu } });
+        { method: "POST", body: { action } });
       wasIn ? refreshSeasons(id) : openDetail(id, { seasons: true }); refreshAll();
-      toast(vu ? "Saison marquée vue ✓" : "Saison décochée");
+      toast({ seen: "Saison marquée vue ✓", revu: "Revisionnage de la saison ✓",
+              remove: "Visionnage retiré" }[action] || "");
     } else if (e.target.closest("[data-markseries]")) {
       const b = e.target.closest("[data-markseries]"), ctx = seasonCtx(b), wasIn = !!ctx.localid;
-      const revu = b.classList.contains("dv-serievue") && !b.classList.contains("primary");
+      const action = b.dataset.act || "seen";
       const id = await ensureInLib(ctx);
-      await api(`/api/title/${id}/mark`, { method: "POST", body: { vu: true } });
+      await api(`/api/title/${id}/mark`, { method: "POST", body: { action } });
       wasIn ? refreshSeasons(id) : openDetail(id, { seasons: true }); refreshAll();
-      toast(revu ? "Revisionnage de la série enregistré ✓" : "Toute la série marquée vue ✓");
+      toast({ seen: "Toute la série marquée vue ✓", revu: "Revisionnage de la série ✓",
+              remove: "Un visionnage retiré de la série" }[action] || "");
     } else {
       const head = e.target.closest(".season-head");
       if (head) {

@@ -211,8 +211,10 @@ def _set_episode(ep_id, vu):
 
 def _apply_ep(ep, action):
     """Applique une action à un épisode :
+    - ``seen`` : le marque vu (×1) SANS incrémenter s'il l'était déjà ;
     - ``revu`` : le marque vu (×1), ou ajoute un visionnage s'il l'était déjà (×N+1) ;
     - ``remove`` : retire un visionnage (×N-1) ; à 0 l'épisode redevient non vu."""
+    today = date.today().isoformat()
     if action == "remove":
         nb = (ep["nb_vues"] or 0) - 1
         if nb <= 0:
@@ -220,10 +222,16 @@ def _apply_ep(ep, action):
                    "WHERE id = ?", (ep["id"],))
         else:
             db.run("UPDATE episodes SET nb_vues = ? WHERE id = ?", (nb, ep["id"]))
+    elif action == "seen":
+        # Marquage simple : garantit ×1, sans gonfler le compteur si déjà vu.
+        if not ep["vu"]:
+            db.run("UPDATE episodes SET vu = 1, "
+                   "nb_vues = CASE WHEN nb_vues < 1 THEN 1 ELSE nb_vues END, "
+                   "derniere_vue = ? WHERE id = ?", (today, ep["id"]))
     else:  # revu (marque ou +1)
         nb = (ep["nb_vues"] or 0) + 1 if ep["vu"] else 1
         db.run("UPDATE episodes SET vu = 1, nb_vues = ?, derniere_vue = ? WHERE id = ?",
-               (nb, date.today().isoformat(), ep["id"]))
+               (nb, today, ep["id"]))
 
 
 @bp.post("/episode/<int:ep_id>/toggle")
@@ -256,14 +264,32 @@ def toggle_episode_num(titre_id, saison, numero):
     return jsonify(ok=True)
 
 
+def _mark_action(body):
+    """Détermine l'action de marquage groupé (saison/série) à partir du corps.
+    Rétrocompatible : ``vu:true`` → « seen » (marque sans gonfler), ``vu:false``
+    → « unmark »."""
+    body = body or {}
+    if "action" in body:
+        return body["action"]
+    return "seen" if body.get("vu", True) else "unmark"
+
+
+def _mark_episodes(episodes, action):
+    for e in episodes:
+        if action == "unmark":
+            _set_episode(e["id"], False)
+        else:
+            _apply_ep(e, action)  # seen | revu | remove
+
+
 @bp.post("/title/<int:titre_id>/season/<int:saison>/mark")
 @auth.login_required
 def mark_season(titre_id, saison):
-    """Marque toute une saison vue (ou non vue selon ``vu``)."""
-    vu = (request.get_json(silent=True) or {}).get("vu", True)
-    for e in db.q("SELECT id FROM episodes WHERE titre_id = ? AND saison = ?",
-                  (titre_id, saison)):
-        _set_episode(e["id"], vu)
+    """Marque une saison entière : seen (×1), revu (+1), remove (-1) ou unmark."""
+    action = _mark_action(request.get_json(silent=True))
+    eps = db.q("SELECT id, vu, nb_vues FROM episodes WHERE titre_id = ? AND saison = ?",
+               (titre_id, saison))
+    _mark_episodes(eps, action)
     _refresh_serie_statut(titre_id)
     return jsonify(ok=True)
 
@@ -271,10 +297,10 @@ def mark_season(titre_id, saison):
 @bp.post("/title/<int:titre_id>/mark")
 @auth.login_required
 def mark_series(titre_id):
-    """Marque toute la série vue (ou non vue)."""
-    vu = (request.get_json(silent=True) or {}).get("vu", True)
-    for e in db.q("SELECT id FROM episodes WHERE titre_id = ?", (titre_id,)):
-        _set_episode(e["id"], vu)
+    """Marque la série entière : seen (×1), revu (+1), remove (-1) ou unmark."""
+    action = _mark_action(request.get_json(silent=True))
+    eps = db.q("SELECT id, vu, nb_vues FROM episodes WHERE titre_id = ?", (titre_id,))
+    _mark_episodes(eps, action)
     _refresh_serie_statut(titre_id)
     return jsonify(ok=True)
 

@@ -316,7 +316,10 @@ main { padding: 20px; max-width: 1400px; margin: 0 auto; }
 .season-title { font-family: var(--font-serif); font-size: 0.98rem; }
 .season-prog { font-size: 0.72rem; color: var(--muted); }
 .season-vu.vu { background: rgba(79,195,161,0.14); }
+.season-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .dv-serievue { margin-top: 6px; }
+.dv-serieremove { margin-top: 6px; color: var(--muted); font-size: 0.75rem; }
+.dv-serieremove:hover { color: var(--red); border-color: var(--red); }
 .season-body { display: none; padding: 6px; }
 .season.open .season-body { display: block; }
 .season.open .chevron { transform: rotate(90deg); }
