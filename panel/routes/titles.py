@@ -209,13 +209,32 @@ def _set_episode(ep_id, vu):
                "WHERE id = ?", (ep_id,))
 
 
+def _apply_ep(ep, action):
+    """Applique une action à un épisode :
+    - ``revu`` : le marque vu (×1), ou ajoute un visionnage s'il l'était déjà (×N+1) ;
+    - ``remove`` : retire un visionnage (×N-1) ; à 0 l'épisode redevient non vu."""
+    if action == "remove":
+        nb = (ep["nb_vues"] or 0) - 1
+        if nb <= 0:
+            db.run("UPDATE episodes SET vu = 0, nb_vues = 0, derniere_vue = NULL "
+                   "WHERE id = ?", (ep["id"],))
+        else:
+            db.run("UPDATE episodes SET nb_vues = ? WHERE id = ?", (nb, ep["id"]))
+    else:  # revu (marque ou +1)
+        nb = (ep["nb_vues"] or 0) + 1 if ep["vu"] else 1
+        db.run("UPDATE episodes SET vu = 1, nb_vues = ?, derniere_vue = ? WHERE id = ?",
+               (nb, date.today().isoformat(), ep["id"]))
+
+
 @bp.post("/episode/<int:ep_id>/toggle")
 @auth.login_required
 def toggle_episode(ep_id):
-    ep = db.q1("SELECT id, titre_id, vu FROM episodes WHERE id = ?", (ep_id,))
+    """Action sur un épisode : ``revu`` (marque / +1) ou ``remove`` (-1)."""
+    ep = db.q1("SELECT id, titre_id, vu, nb_vues FROM episodes WHERE id = ?", (ep_id,))
     if not ep:
         return jsonify(error="Épisode introuvable."), 404
-    _set_episode(ep_id, not ep["vu"])
+    action = (request.get_json(silent=True) or {}).get("action", "revu")
+    _apply_ep(ep, action)
     _refresh_serie_statut(ep["titre_id"])
     return jsonify(ok=True)
 
@@ -223,15 +242,16 @@ def toggle_episode(ep_id):
 @bp.post("/title/<int:titre_id>/episode/<int:saison>/<int:numero>/toggle")
 @auth.login_required
 def toggle_episode_num(titre_id, saison, numero):
-    """Bascule un épisode repéré par (saison, numéro) — utile après un ajout
+    """Comme ci-dessus mais repéré par (saison, numéro) — utile après un ajout
     depuis l'aperçu, où le front ne connaît pas encore l'id local de l'épisode."""
     ep = db.q1(
-        "SELECT id, vu FROM episodes WHERE titre_id = ? AND saison = ? AND numero = ?",
+        "SELECT id, vu, nb_vues FROM episodes WHERE titre_id = ? AND saison = ? AND numero = ?",
         (titre_id, saison, numero),
     )
     if not ep:
         return jsonify(error="Épisode introuvable."), 404
-    _set_episode(ep["id"], not ep["vu"])
+    action = (request.get_json(silent=True) or {}).get("action", "revu")
+    _apply_ep(ep, action)
     _refresh_serie_statut(titre_id)
     return jsonify(ok=True)
 

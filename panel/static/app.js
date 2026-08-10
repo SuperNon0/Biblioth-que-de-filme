@@ -1114,12 +1114,18 @@ function renderPerson(p) {
 }
 
 function episodeRow(e) {
-  // En biblio : bouton lié à l'id local (bascule). En aperçu : pas encore
-  // d'id local → on repère l'épisode par (saison, numéro) et l'action ajoute
-  // d'abord la série à la bibliothèque.
-  const btn = e.id
-    ? `<button class="ep-btn ${e.vu ? "vu" : ""}" data-ep="${e.id}">${e.vu ? "✓ Revu" : "Vu"}</button>`
-    : `<button class="ep-btn" data-epnum="${e.numero}" data-season="${e.saison}">Vu</button>`;
+  // En biblio : boutons liés à l'id local. En aperçu (pas encore d'id local) :
+  // on repère l'épisode par (saison, numéro) et l'action ajoute d'abord la série.
+  // ref = attributs communs pour cibler l'épisode ; act = attribut d'action.
+  const ref = e.id ? `data-ep="${e.id}"`
+                   : `data-epnum="${e.numero}" data-season="${e.saison}"`;
+  // Vu : bouton « ↻ Revu » (ajoute un visionnage) + petite croix pour en retirer.
+  // Non vu : simple bouton « Vu ».
+  const controls = e.vu
+    ? `<button class="ep-del" data-ep-act="remove" ${ref}
+         aria-label="Retirer un visionnage" title="Retirer un visionnage">✕</button>
+       <button class="ep-btn vu" data-ep-act="revu" ${ref}>↻ Revu${e.nb_vues > 1 ? " ×" + e.nb_vues : ""}</button>`
+    : `<button class="ep-btn" data-ep-act="revu" ${ref}>Vu</button>`;
   return `<div class="episode">
     <img loading="lazy" src="${posterSrc(e.image)}" alt="">
     <div class="ep-info">
@@ -1128,7 +1134,7 @@ function episodeRow(e) {
         ${e.nb_vues > 1 ? " · vu ×" + e.nb_vues : ""}</div>
       <div class="ep-resume">${esc(e.resume)}</div>
     </div>
-    <div class="ep-check">${btn}</div></div>`;
+    <div class="ep-check">${controls}</div></div>`;
 }
 
 /* Actions dans la fiche (délégation d'événements sur la modale). */
@@ -1184,17 +1190,17 @@ modalContent.addEventListener("click", async (e) => {
       await api(`/api/watch/${w.dataset.delwatch}`, { method: "DELETE" });
       if (id) openDetail(id, { keepScroll: true }); refreshAll();
     } else if (e.target.closest("[data-ep]")) {
-      // Épisode déjà en biblio : bascule + refresh du bloc Saisons sur place.
-      const id = idFrom();
-      await api(`/api/episode/${e.target.closest("[data-ep]").dataset.ep}/toggle`,
-        { method: "POST" });
+      // Épisode déjà en biblio : « ↻ Revu » (+1) ou « ✕ » (-1), sur place.
+      const b = e.target.closest("[data-ep]"), id = idFrom();
+      await api(`/api/episode/${b.dataset.ep}/toggle`,
+        { method: "POST", body: { action: b.dataset.epAct || "revu" } });
       if (id) refreshSeasons(id); refreshAll();
     } else if (e.target.closest("[data-epnum]")) {
       // Épisode d'un aperçu : on ajoute d'abord la série, puis on marque.
       const b = e.target.closest("[data-epnum]"), ctx = seasonCtx(b), wasIn = !!ctx.localid;
       const id = await ensureInLib(ctx);
       await api(`/api/title/${id}/episode/${b.dataset.season}/${b.dataset.epnum}/toggle`,
-        { method: "POST" });
+        { method: "POST", body: { action: b.dataset.epAct || "revu" } });
       wasIn ? refreshSeasons(id) : openDetail(id, { seasons: true }); refreshAll();
     } else if (e.target.closest("[data-markseason]")) {
       const b = e.target.closest("[data-markseason]"), ctx = seasonCtx(b), wasIn = !!ctx.localid;
