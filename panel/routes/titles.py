@@ -179,6 +179,7 @@ def add_watch(titre_id):
     db.run("INSERT INTO visionnages (titre_id, date, cree) VALUES (?,?,?)",
            (titre_id, jour, int(time.time())))
     db.run("UPDATE titres SET statut = 'vu' WHERE id = ?", (titre_id,))
+    db.log_event(titre_id, "film")
     return jsonify(ok=True)
 
 
@@ -238,12 +239,15 @@ def _apply_ep(ep, action):
 @auth.login_required
 def toggle_episode(ep_id):
     """Action sur un épisode : ``revu`` (marque / +1) ou ``remove`` (-1)."""
-    ep = db.q1("SELECT id, titre_id, vu, nb_vues FROM episodes WHERE id = ?", (ep_id,))
+    ep = db.q1("SELECT id, titre_id, vu, nb_vues, nom, saison, numero "
+               "FROM episodes WHERE id = ?", (ep_id,))
     if not ep:
         return jsonify(error="Épisode introuvable."), 404
     action = (request.get_json(silent=True) or {}).get("action", "revu")
     _apply_ep(ep, action)
     _refresh_serie_statut(ep["titre_id"])
+    if action in ("seen", "revu"):
+        db.log_event(ep["titre_id"], "episode", _ep_label(ep))
     return jsonify(ok=True)
 
 
@@ -253,7 +257,8 @@ def toggle_episode_num(titre_id, saison, numero):
     """Comme ci-dessus mais repéré par (saison, numéro) — utile après un ajout
     depuis l'aperçu, où le front ne connaît pas encore l'id local de l'épisode."""
     ep = db.q1(
-        "SELECT id, vu, nb_vues FROM episodes WHERE titre_id = ? AND saison = ? AND numero = ?",
+        "SELECT id, vu, nb_vues, nom, saison, numero FROM episodes "
+        "WHERE titre_id = ? AND saison = ? AND numero = ?",
         (titre_id, saison, numero),
     )
     if not ep:
@@ -261,7 +266,15 @@ def toggle_episode_num(titre_id, saison, numero):
     action = (request.get_json(silent=True) or {}).get("action", "revu")
     _apply_ep(ep, action)
     _refresh_serie_statut(titre_id)
+    if action in ("seen", "revu"):
+        db.log_event(titre_id, "episode", _ep_label(ep))
     return jsonify(ok=True)
+
+
+def _ep_label(ep):
+    """Libellé d'un épisode pour le journal : « S02E05 — Le sentier »."""
+    code = f"S{ep['saison']:02d}E{ep['numero']:02d}"
+    return code + (f" — {ep['nom']}" if ep.get("nom") else "")
 
 
 def _mark_action(body):
@@ -291,6 +304,8 @@ def mark_season(titre_id, saison):
                (titre_id, saison))
     _mark_episodes(eps, action)
     _refresh_serie_statut(titre_id)
+    if action in ("seen", "revu"):
+        db.log_event(titre_id, "saison", f"Saison {saison}")
     return jsonify(ok=True)
 
 
@@ -302,6 +317,8 @@ def mark_series(titre_id):
     eps = db.q("SELECT id, vu, nb_vues FROM episodes WHERE titre_id = ?", (titre_id,))
     _mark_episodes(eps, action)
     _refresh_serie_statut(titre_id)
+    if action in ("seen", "revu"):
+        db.log_event(titre_id, "serie", "Série entière")
     return jsonify(ok=True)
 
 

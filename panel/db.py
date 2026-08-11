@@ -95,10 +95,19 @@ CREATE TABLE IF NOT EXISTS alertes (
     UNIQUE(titre_id, canal)
 );
 
+CREATE TABLE IF NOT EXISTS journal (
+    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    titre_id INTEGER NOT NULL REFERENCES titres(id) ON DELETE CASCADE,
+    type     TEXT,                               -- 'film'|'serie'|'saison'|'episode'
+    label    TEXT,                               -- nom d'épisode / « Saison 2 » / …
+    cree     INTEGER                             -- horodatage (date + heure)
+);
+
 CREATE INDEX IF NOT EXISTS idx_titres_statut  ON titres(statut);
 CREATE INDEX IF NOT EXISTS idx_titres_type    ON titres(type);
 CREATE INDEX IF NOT EXISTS idx_episodes_titre ON episodes(titre_id);
 CREATE INDEX IF NOT EXISTS idx_vision_titre   ON visionnages(titre_id);
+CREATE INDEX IF NOT EXISTS idx_journal_cree   ON journal(cree);
 """
 
 _local = threading.local()
@@ -158,6 +167,13 @@ def _migrate(conn):
             PRAGMA foreign_keys=ON;
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_vision_titre ON visionnages(titre_id)")
+    # Amorce le journal des films depuis les visionnages existants (une fois),
+    # pour que l'historique ne parte pas vide. Les épisodes/séries se logueront
+    # à partir de maintenant (on n'avait pas leur horodatage précis avant).
+    if not conn.execute("SELECT 1 FROM journal LIMIT 1").fetchone():
+        conn.execute(
+            "INSERT INTO journal (titre_id, type, label, cree) "
+            "SELECT titre_id, 'film', '', cree FROM visionnages WHERE cree IS NOT NULL")
     conn.commit()
 
 
@@ -192,6 +208,12 @@ def run(sql, params=()):
     cur = conn.execute(sql, params)
     conn.commit()
     return cur.lastrowid
+
+
+def log_event(titre_id, type_, label=""):
+    """Ajoute une entrée au journal de visionnage (date + heure = maintenant)."""
+    run("INSERT INTO journal (titre_id, type, label, cree) VALUES (?,?,?,?)",
+        (titre_id, type_, label, int(time.time())))
 
 
 def jload(value, default):

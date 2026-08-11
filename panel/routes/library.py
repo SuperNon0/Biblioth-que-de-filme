@@ -45,6 +45,7 @@ def _mark_seen(titre_id, typ):
         if not db.q1("SELECT 1 FROM visionnages WHERE titre_id = ? LIMIT 1", (titre_id,)):
             db.run("INSERT OR IGNORE INTO visionnages (titre_id, date, cree) VALUES (?,?,?)",
                    (titre_id, time.strftime("%Y-%m-%d"), int(time.time())))
+            db.log_event(titre_id, "film")
     else:
         db.run("""UPDATE episodes SET vu = 1,
                   nb_vues = CASE WHEN nb_vues < 1 THEN 1 ELSE nb_vues END

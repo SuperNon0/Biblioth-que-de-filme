@@ -312,7 +312,7 @@ function showTab(name) {
     LOADERS[name]();
   }
 }
-const RELOAD_ALWAYS = new Set(["bibliotheque", "listes", "profil"]);
+const RELOAD_ALWAYS = new Set(["bibliotheque", "listes", "profil", "historique"]);
 const _tabLoaded = new Set();
 
 document.addEventListener("click", (e) => {
@@ -678,6 +678,52 @@ async function loadStats() {
           <span class="bar-num">${g.n}</span></div>`).join("")}` : ""}`;
   } catch (e) { wrap.innerHTML = `<p class="muted">${esc(e.message)}</p>`; }
 }
+
+/* ============================ HISTORIQUE ============================= */
+const MOIS_LONG = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet",
+  "août", "septembre", "octobre", "novembre", "décembre"];
+function fmtDateHeure(ts) {
+  const d = new Date(ts * 1000);
+  if (isNaN(d)) return "";
+  const h = String(d.getHours()).padStart(2, "0");
+  const m = String(d.getMinutes()).padStart(2, "0");
+  return `${d.getDate()} ${MOIS_LONG[d.getMonth()]} ${d.getFullYear()} à ${h} h ${m}`;
+}
+const JRNL_SUB = { film: "Film vu", serie: "Série entière", saison: "", episode: "" };
+async function loadJournal() {
+  const wrap = $("#journal-list");
+  wrap.innerHTML = `<p class="muted">Chargement…</p>`;
+  try {
+    const { events } = await api("/api/journal");
+    wrap.innerHTML = events.length ? events.map(journalRow).join("")
+      : `<p class="muted">Rien pour l'instant. Marque un film, un épisode ou une
+         série comme vu et ça apparaîtra ici, avec la date et l'heure.</p>`;
+  } catch (e) { wrap.innerHTML = `<p class="muted">${esc(e.message)}</p>`; }
+}
+function journalRow(ev) {
+  const sub = ev.label || JRNL_SUB[ev.type] || "";
+  return `<div class="jrnl-item" data-open="${ev.titre_id}" data-type="${ev.media}">
+    <img class="jrnl-poster" loading="lazy" src="${posterSrc(ev.affiche)}" alt="">
+    <div class="jrnl-info">
+      <div class="jrnl-title">${esc(ev.titre)}</div>
+      ${sub ? `<div class="jrnl-sub">${esc(sub)}</div>` : ""}
+      <div class="jrnl-date">${fmtDateHeure(ev.cree)}</div>
+    </div>
+    <button class="jrnl-del" data-jrnl-del="${ev.id}" aria-label="Retirer de l'historique"
+      title="Retirer de l'historique">✕</button>
+  </div>`;
+}
+$("#journal-list").addEventListener("click", async (e) => {
+  const del = e.target.closest("[data-jrnl-del]");
+  if (del) {
+    e.stopPropagation();
+    try { await api(`/api/journal/${del.dataset.jrnlDel}`, { method: "DELETE" });
+      del.closest(".jrnl-item").remove(); } catch (err) { toast(err.message); }
+    return;
+  }
+  const item = e.target.closest("[data-open]");
+  if (item && item.dataset.open) openDetail(Number(item.dataset.open));
+});
 
 /* ============================ PARAMÈTRES ============================= */
 async function loadSettings() {
@@ -1394,6 +1440,7 @@ const LOADERS = {
   futur: loadFutur,
   listes: loadListes,
   profil: loadStats,
+  historique: loadJournal,
   parametres: loadSettings,
 };
 
