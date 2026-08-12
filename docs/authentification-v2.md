@@ -185,21 +185,71 @@ CREATE TABLE IF NOT EXISTS comptes (
 );
 ```
 
-### Impact majeur : cloisonner les données par utilisateur
+### Cloisonnement des données par utilisateur — ❓ QUESTION À TRANCHER
 
-> **C'est LE point d'architecture à trancher (voir §11).** Si chaque personne a
-> « sa partie à elle » de la bibliothèque, alors **toutes** les tables de
-> contenu doivent porter un propriétaire :
-> `titres`, `visionnages`, `episodes`, `journal`, `listes`, `alertes`…
+> **⚠️ Décision à prendre AVANT de coder quoi que ce soit.** Elle conditionne
+> tout le reste : changer d'avis ensuite oblige à quasiment tout refaire.
+> **Poser explicitement la question au propriétaire du projet :**
 >
-> Il faut ajouter `compte_id INTEGER REFERENCES comptes(id)` à ces tables et
-> **filtrer chaque requête** par l'utilisateur effectif. C'est un chantier
-> nettement plus lourd que la page de login elle-même.
+> > **« Veux-tu une bibliothèque PARTAGÉE ou CLOISONNÉE ? »**
 >
-> **Alternative légère :** bibliothèque **partagée** par tous les comptes
-> actifs (tout le monde voit/édite la même collection), les comptes ne servant
-> qu'au contrôle d'accès. Beaucoup moins de travail. À décider **avant** de
-> commencer.
+> | | **Option A — Partagée** | **Option B — Cloisonnée** |
+> |---|---|---|
+> | Ce que voit chaque personne | La **même** bibliothèque pour tous | **Sa propre** bibliothèque, invisible des autres |
+> | Un « déjà vu » marqué par l'un… | …est visible par **tous** | …n'est visible que **par lui** |
+> | Rôle des comptes | Contrôle d'accès **uniquement** | Contrôle d'accès **+ cloisonnement des données** |
+> | Charge de travail | **Légère** (on garde le code actuel, on ajoute le login) | **Lourde** (voir ci-dessous) — c'est le plus gros lot du projet |
+> | Lot 6 (§11) | **Non nécessaire** | **Obligatoire** |
+>
+> Cocher un seul choix : ☐ Partagée   ☐ Cloisonnée
+>
+> Le reste de cette section décrit **comment faire l'option B (cloisonnée)**,
+> car c'est la seule qui demande du travail. Pour l'option A, ignorer cette
+> section : aucune modification des tables de contenu n'est requise.
+
+---
+
+#### Si « Cloisonnée » (option B) — comment faire
+
+**Bonne nouvelle sur le schéma actuel :** presque toutes les tables de contenu
+référencent `titre_id` (`visionnages`, `episodes`, `alertes`, `journal`,
+`liste_items`). Il **suffit donc de rendre `titres` propre à chaque compte** —
+tout le reste hérite du propriétaire *via* `titre_id`, sans colonne
+supplémentaire.
+
+Concrètement, **seules deux tables** reçoivent un `compte_id` :
+
+```sql
+-- 1) titres : chaque compte a ses propres lignes
+ALTER TABLE titres ADD COLUMN compte_id INTEGER REFERENCES comptes(id);
+-- l'unicité devient PAR compte (deux personnes peuvent avoir le même film) :
+--   avant : UNIQUE(tmdb_id, type)
+--   après : UNIQUE(compte_id, tmdb_id, type)   ← à recréer via migration table
+
+-- 2) listes : ne référence pas titre_id, donc à cloisonner explicitement
+ALTER TABLE listes ADD COLUMN compte_id INTEGER REFERENCES comptes(id);
+--   avant : UNIQUE(systeme)
+--   après : UNIQUE(compte_id, systeme)   ← chaque compte a ses listes système
+```
+
+Tables **inchangées** (elles héritent du compte par `titre_id`, en cascade) :
+`visionnages`, `episodes`, `alertes`, `journal`, `liste_items`.
+
+**Ce qui reste à faire (le vrai travail) :** ajouter `WHERE compte_id = ?`
+(le compte *effectif*, cf. impersonation §6) à **chaque** requête qui lit ou
+écrit `titres` ou `listes` — c'est-à-dire l'essentiel des routes `library`,
+`titles`, `discover` (« reprendre »), `lists`, `stats`, `services/sync`,
+`services/statistics`. Mécanique mais nombreux points de passage : à faire
+proprement, une fonction utilitaire `compte_courant()` centralise l'accès.
+
+> **Duplication assumée :** si deux comptes ajoutent le même film, il y aura
+> deux lignes `titres` (métadonnées + affiche en cache dupliquées). Pour un
+> usage à quelques comptes, c'est négligeable et bien plus simple qu'un
+> catalogue partagé avec état par utilisateur. *(Alternative « propre » si le
+> nombre d'utilisateurs explose un jour : garder `titres` comme catalogue
+> commun et sortir `statut`/`favori`/`date_ajout` dans une table
+> `bibliotheque(compte_id, titre_id, …)` — refactor nettement plus lourd, non
+> retenu ici.)*
 
 ---
 
