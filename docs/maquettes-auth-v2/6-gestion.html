@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Comptes — cinéthèque</title>
+  <link rel="stylesheet" href="../../panel/static/fonts.css">
+  <link rel="stylesheet" href="../../panel/static/style.css">
+  <link rel="stylesheet" href="maquette.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img class="logo-mark" src="../../panel/static/logo.svg" alt="" width="30" height="30">
+      <span class="logo"><span class="g">ciné</span><span class="i">thèque</span></span>
+    </div>
+    <span class="badge">paramètres · comptes</span>
+  </header>
+
+  <div class="acct-wrap">
+    <!-- ---------------------------------------------- demandes en attente -->
+    <section class="acct-section">
+      <h3>Demandes en attente <span class="acct-count">· 2</span></h3>
+      <div class="acct-list">
+
+        <div class="acct-row">
+          <div class="acct-av">E</div>
+          <div class="acct-main">
+            <span class="acct-mail">emma.dupont@gmail.com</span>
+            <span class="acct-sub">demandé le 12 août 2026 à 14 h 30</span>
+          </div>
+          <div class="acct-actions">
+            <button class="btn primary small icon-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l5 5L20 6"/></svg>
+              Accepter
+            </button>
+            <button class="btn danger small icon-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+              Refuser
+            </button>
+          </div>
+        </div>
+
+        <div class="acct-row">
+          <div class="acct-av">L</div>
+          <div class="acct-main">
+            <span class="acct-mail">lucas.martin@gmail.com</span>
+            <span class="acct-sub">demandé le 11 août 2026 à 21 h 07</span>
+          </div>
+          <div class="acct-actions">
+            <button class="btn primary small icon-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l5 5L20 6"/></svg>
+              Accepter
+            </button>
+            <button class="btn danger small icon-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+              Refuser
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------- membres -->
+    <section class="acct-section">
+      <h3>Membres <span class="acct-count">· 3</span></h3>
+      <div class="acct-list">
+
+        <div class="acct-row">
+          <div class="acct-av">N</div>
+          <div class="acct-main">
+            <span class="acct-mail">noe.fougeray30@gmail.com</span>
+            <span class="acct-sub">toi · connecté en local · créé le 4 août 2026</span>
+          </div>
+          <div class="acct-actions">
+            <span class="role-badge role-super">super-admin</span>
+          </div>
+        </div>
+
+        <div class="acct-row">
+          <div class="acct-av">E</div>
+          <div class="acct-main">
+            <span class="acct-mail">emma.dupont@gmail.com</span>
+            <span class="acct-sub">dernière connexion : hier à 20 h 12</span>
+          </div>
+          <div class="acct-actions">
+            <span class="role-badge role-membre">membre</span>
+            <button class="btn ghost small icon-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+              Voir en tant que
+            </button>
+            <button class="btn ghost small icon-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>
+              Bloquer
+            </button>
+            <button class="btn danger small icon-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="acct-row">
+          <div class="acct-av">L</div>
+          <div class="acct-main">
+            <span class="acct-mail">leo.bernard@gmail.com</span>
+            <span class="acct-sub">bloqué le 9 août 2026</span>
+          </div>
+          <div class="acct-actions">
+            <span class="role-badge role-bloque">bloqué</span>
+            <button class="btn ghost small">Débloquer</button>
+            <button class="btn danger small icon-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/></svg>
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </section>
+  </div>
+</body>
+</html>

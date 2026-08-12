@@ -7,6 +7,10 @@
 >
 > Le multi-utilisateurs était **hors périmètre v1** (voir `CLAUDE.md`). Cette
 > spec le réintègre volontairement en v2.
+>
+> 🎨 **Contrat visuel** : les écrans à reproduire **à la lettre** sont dans
+> [`maquettes-auth-v2/`](maquettes-auth-v2/) (pages HTML au vrai thème +
+> captures). Voir le [README des maquettes](maquettes-auth-v2/README.md).
 
 ---
 
