@@ -1233,8 +1233,12 @@ modalContent.addEventListener("click", async (e) => {
       sc.scrollBy({ left: arrowEl.classList.contains("left") ? -dx : dx, behavior: "smooth" }); }
     return;
   }
+  // Les boutons Vu / À voir / Liste / Revu portent data-act seul → action titre.
+  // Les boutons de saison/série portent AUSSI data-markseason/markseries : on ne
+  // les détourne pas ici, ils sont traités par leurs branches dédiées plus bas.
   const actEl = e.target.closest("[data-act]");
-  if (actEl) return handleTitleAct(actEl);
+  if (actEl && !actEl.matches("[data-markseason], [data-markseries]"))
+    return handleTitleAct(actEl);
   const posterEl = e.target.closest(".poster");
   if (posterEl) return openItem(posterEl);
 
