@@ -57,6 +57,7 @@ Tout le code applicatif est dans **`panel/`** :
 - Endpoints dynamiques : JSON sous `/api/*`, en `Cache-Control: no-store`.
 - Secrets (`config.json`, `users.json`, `settings.json`, base) **jamais** commités.
 - PWA : `static/sw.js` — penser à **incrémenter la version du cache** (`cinetheque-vNN`) à chaque changement de front.
+- Version affichée : fichier **`VERSION`** à la racine (ex. `26.1`), montré dans Paramètres → « Version installée ». Le **monter** à chaque changement notable ; repli automatique sur le commit git si le fichier manque.
 
 **Vérifications avant chaque commit**
 

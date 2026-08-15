@@ -93,13 +93,25 @@ def _git(src, *args):
 @bp.get("/version")
 @auth.login_required
 def version():
-    """Version déployée : commit court + message du dernier commit du dépôt source."""
+    """Version déployée.
+
+    Priorité au fichier ``VERSION`` à la racine du dépôt (numéro lisible, ex.
+    « 26.1 »). Repli sur le commit court si le fichier est absent. Le message du
+    dernier commit est joint quand il est disponible (contexte utile).
+    """
     src = cfg().get("source_dir", "/opt/cinetheque-src")
+    numero = None
     try:
-        return jsonify(version=_git(src, "rev-parse", "--short", "HEAD"),
-                       message=_git(src, "log", "-1", "--pretty=%s"))
+        with open(os.path.join(src, "VERSION"), encoding="utf-8") as handle:
+            numero = handle.read().strip() or None
+    except OSError:
+        pass
+    try:
+        message = _git(src, "log", "-1", "--pretty=%s")
+        return jsonify(version=numero or _git(src, "rev-parse", "--short", "HEAD"),
+                       message=message)
     except (subprocess.SubprocessError, OSError):
-        return jsonify(version=None, message=None)
+        return jsonify(version=numero, message=None)
 
 
 @bp.post("/update")
