@@ -1224,8 +1224,10 @@ modalContent.addEventListener("click", async (e) => {
     } catch (err) { toast(err.message); presetEl.disabled = false; presetEl.textContent = "Importer"; }
     return;
   }
-  if (e.target.closest("[data-back]")) return navBack();
-  if (e.target.closest("[data-close]")) return closeModal();
+  // NB : retour « ← » (data-back) et fermeture (data-close) sont gérés par le
+  // handler sur #modal (plus haut). Ne PAS les traiter ici aussi : #modal-content
+  // étant imbriqué dans #modal, l'événement remonte et déclencherait navBack()
+  // deux fois → on sauterait une page. On les laisse donc remonter.
   const arrowEl = e.target.closest(".row-arrow");
   if (arrowEl) {
     const sc = arrowEl.parentElement.querySelector(".row-scroll");
