@@ -1,6 +1,5 @@
 {
   "secret_key": "…généré aléatoirement à l'installation…",
-  "panel_password_hash": "scrypt:32768:8:1$…généré à l'installation…",
   "bind": "0.0.0.0",
   "panel_port": 8080,
   "data_dir": "/opt/cinetheque/data",
@@ -12,5 +11,15 @@
   "tmdb_api_key": "",
   "tmdb_language": "fr-FR",
   "tmdb_region": "FR",
-  "cf_access_email": ""
+
+  "superadmin_email": "toi@gmail.com",
+  "cf_team_domain": "",
+  "cf_aud": "",
+  "cf_verify_jwt": true,
+  "allow_local_login": true,
+
+  "cap_account_management": "off",
+  "cap_profiles": "super_admin",
+  "cap_admin_password": "super_admin",
+  "cap_site_update": "super_admin"
 }
