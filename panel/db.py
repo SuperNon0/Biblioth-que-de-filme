@@ -17,8 +17,36 @@ SCHEMA_VERSION = 1
 
 # --- schéma ---------------------------------------------------------------
 SCHEMA = """
+-- Fondation multi-comptes (socle « site-base », auth v2 §7) ------------------
+CREATE TABLE IF NOT EXISTS comptes (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    email         TEXT UNIQUE,                   -- e-mail Google (NULL: super-admin local seul)
+    role          TEXT NOT NULL DEFAULT 'membre',-- super_admin | membre
+    etat          TEXT NOT NULL DEFAULT 'pending',-- pending | actif | refused | bloque
+    mdp_hash      TEXT,                          -- uniquement pour le login local
+    cree          INTEGER,
+    valide        INTEGER,
+    bloque        INTEGER,
+    derniere_cnx  INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS audit (
+    id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts      INTEGER NOT NULL,
+    acteur  TEXT,                                -- e-mail / id de celui qui agit
+    action  TEXT NOT NULL,
+    cible   TEXT,                                -- e-mail / id concerné
+    detail  TEXT
+);
+
+CREATE TABLE IF NOT EXISTS app_settings (
+    cle     TEXT PRIMARY KEY,
+    valeur  TEXT
+);
+
 CREATE TABLE IF NOT EXISTS titres (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    compte_id     INTEGER REFERENCES comptes(id) ON DELETE CASCADE,  -- propriétaire (cloisonnement)
     tmdb_id       INTEGER,                       -- NULL si ajout manuel
     type          TEXT NOT NULL,                 -- 'film' | 'serie'
     titre         TEXT NOT NULL,
@@ -43,7 +71,7 @@ CREATE TABLE IF NOT EXISTS titres (
     ajout_manuel  INTEGER DEFAULT 0,
     date_ajout    INTEGER,
     maj           INTEGER,
-    UNIQUE(tmdb_id, type)
+    UNIQUE(compte_id, tmdb_id, type)
 );
 
 CREATE TABLE IF NOT EXISTS visionnages (
@@ -71,11 +99,12 @@ CREATE TABLE IF NOT EXISTS episodes (
 );
 
 CREATE TABLE IF NOT EXISTS listes (
-    id       INTEGER PRIMARY KEY AUTOINCREMENT,
-    nom      TEXT NOT NULL,
-    systeme  TEXT,                               -- 'a_voir'|'favoris' si liste système
-    cree     INTEGER,
-    UNIQUE(systeme)
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    compte_id INTEGER REFERENCES comptes(id) ON DELETE CASCADE,  -- propriétaire (cloisonnement)
+    nom       TEXT NOT NULL,
+    systeme   TEXT,                              -- 'a_voir'|'favoris' si liste système
+    cree      INTEGER,
+    UNIQUE(compte_id, systeme)
 );
 
 CREATE TABLE IF NOT EXISTS liste_items (
@@ -122,15 +151,140 @@ def init(db_path):
     conn = connect()
     conn.executescript(SCHEMA)
     _migrate(conn)
-    # Listes système présentes par défaut : « À voir » et « Favoris ».
-    now = int(time.time())
-    for systeme, nom in (("a_voir", "À voir"), ("favoris", "Favoris")):
-        conn.execute(
-            "INSERT OR IGNORE INTO listes (nom, systeme, cree) VALUES (?, ?, ?)",
-            (nom, systeme, now),
-        )
+    # Les listes système (« À voir »/« Favoris ») sont désormais créées PAR
+    # compte (cloisonnement) via ensure_system_lists(), plus de seeding global.
     conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     conn.commit()
+
+
+SYSTEM_LISTS = (("a_voir", "À voir"), ("favoris", "Favoris"))
+
+
+def ensure_system_lists(compte_id):
+    """Crée les listes système (« À voir », « Favoris ») d'un compte si absentes."""
+    conn = connect()
+    now = int(time.time())
+    for systeme, nom in SYSTEM_LISTS:
+        conn.execute(
+            "INSERT OR IGNORE INTO listes (compte_id, nom, systeme, cree) "
+            "VALUES (?, ?, ?, ?)", (compte_id, nom, systeme, now))
+    conn.commit()
+
+
+def audit(action, acteur=None, cible=None, detail=None):
+    """Journalise une action sensible (validation, blocage, impersonation…)."""
+    run("INSERT INTO audit (ts, acteur, action, cible, detail) VALUES (?,?,?,?,?)",
+        (int(time.time()), acteur, action, cible, detail))
+
+
+def _backup_once(suffix="avant-comptes"):
+    """Copie la base une seule fois avant la migration cloisonnement (sécurité)."""
+    if _DB_PATH is None:
+        return
+    bak = _DB_PATH.with_name(_DB_PATH.name + f".bak-{suffix}")
+    if _DB_PATH.exists() and not bak.exists():
+        import shutil
+        shutil.copy2(_DB_PATH, bak)
+
+
+def bootstrap_accounts(superadmin_email="", superadmin_hash=None):
+    """Amorce le super-admin et cloisonne le contenu existant (idempotent).
+
+    - crée le super-admin de base (login local via ``superadmin_hash`` + e-mail) ;
+    - ajoute ``compte_id`` sur ``titres``/``listes`` si absent ;
+    - remplace l'ancienne unicité globale par une unicité PAR compte ;
+    - rattache TOUT le contenu orphelin (compte_id NULL) au super-admin de base.
+    Aucune donnée n'est supprimée. Une sauvegarde ``.bak-avant-comptes`` est
+    posée avant la première migration.
+    """
+    conn = connect()
+    email = (superadmin_email or "").strip().lower() or None
+
+    # Super-admin de base : s'il n'existe aucun super-admin, on l'amorce.
+    row = conn.execute(
+        "SELECT id, email FROM comptes WHERE role='super_admin' ORDER BY id LIMIT 1"
+    ).fetchone()
+    if row is None:
+        now = int(time.time())
+        cur = conn.execute(
+            "INSERT INTO comptes (email, role, etat, mdp_hash, cree, valide) "
+            "VALUES (?, 'super_admin', 'actif', ?, ?, ?)",
+            (email, superadmin_hash, now, now))
+        conn.commit()
+        base_id = cur.lastrowid
+    else:
+        base_id = row["id"]
+        # Rattache l'e-mail au super-admin de base s'il n'en a pas encore.
+        if email and not row["email"] and not conn.execute(
+                "SELECT 1 FROM comptes WHERE email=?", (email,)).fetchone():
+            conn.execute("UPDATE comptes SET email=? WHERE id=?", (email, row["id"]))
+            conn.commit()
+
+    _cloisonner_existant(conn, base_id)
+    # Recrée les éventuels index perdus lors d'une reconstruction de table.
+    conn.executescript(SCHEMA)
+    conn.commit()
+    ensure_system_lists(base_id)
+
+
+def _cloisonner_existant(conn, base_id):
+    """Ajoute compte_id (si absent) et rattache le contenu orphelin au base_id."""
+    tcols = {r[1] for r in conn.execute("PRAGMA table_info(titres)")}
+    lcols = {r[1] for r in conn.execute("PRAGMA table_info(listes)")}
+    if "compte_id" in tcols and "compte_id" in lcols:
+        # Colonnes déjà là : il reste juste à rattacher d'éventuels orphelins.
+        conn.execute("UPDATE titres SET compte_id=? WHERE compte_id IS NULL", (base_id,))
+        conn.execute("UPDATE listes SET compte_id=? WHERE compte_id IS NULL", (base_id,))
+        conn.commit()
+        return
+
+    _backup_once()  # sauvegarde de la base avant de toucher au schéma existant
+    conn.executescript("PRAGMA foreign_keys=OFF;")
+    if "compte_id" not in tcols:
+        conn.execute("ALTER TABLE titres ADD COLUMN compte_id INTEGER REFERENCES comptes(id)")
+    if "compte_id" not in lcols:
+        conn.execute("ALTER TABLE listes ADD COLUMN compte_id INTEGER REFERENCES comptes(id)")
+    conn.execute("UPDATE titres SET compte_id=? WHERE compte_id IS NULL", (base_id,))
+    conn.execute("UPDATE listes SET compte_id=? WHERE compte_id IS NULL", (base_id,))
+    # Remplace l'ancienne unicité globale par une unicité par compte.
+    _rebuild_unique(conn, "titres", "UNIQUE(compte_id, tmdb_id, type)")
+    _rebuild_unique(conn, "listes", "UNIQUE(compte_id, systeme)")
+    conn.executescript("PRAGMA foreign_keys=ON;")
+    conn.commit()
+
+
+def _rebuild_unique(conn, table, new_unique):
+    """Recrée `table` en remplaçant sa contrainte UNIQUE, ids et données préservés.
+
+    Ne recrée QUE si l'unicité voulue n'est pas déjà en place (idempotent).
+    """
+    sql = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name=?", (table,)
+    ).fetchone()
+    if not sql or new_unique in (sql[0] or ""):
+        return
+    cols = [r[1] for r in conn.execute(f"PRAGMA table_info({table})")]
+    collist = ", ".join(cols)
+    # Reconstruit la définition en repartant du CREATE existant (colonnes déjà
+    # présentes, y compris compte_id ajouté juste avant), en réécrivant l'UNIQUE.
+    body = _replace_unique_clause(sql[0], new_unique)
+    tmp = f"{table}__new"
+    body = body.replace(f"TABLE IF NOT EXISTS {table}", f"TABLE {tmp}") \
+               .replace(f"TABLE {table}", f"TABLE {tmp}", 1)
+    conn.executescript(body)
+    conn.execute(f"INSERT INTO {tmp} ({collist}) SELECT {collist} FROM {table}")
+    conn.execute(f"DROP TABLE {table}")
+    conn.execute(f"ALTER TABLE {tmp} RENAME TO {table}")
+
+
+def _replace_unique_clause(create_sql, new_unique):
+    """Remplace toute clause UNIQUE(...) d'un CREATE TABLE par `new_unique`."""
+    import re
+    if re.search(r"UNIQUE\s*\([^)]*\)", create_sql or ""):
+        return re.sub(r"UNIQUE\s*\([^)]*\)", new_unique, create_sql, count=1)
+    # Aucune UNIQUE existante : on l'insère avant la parenthèse finale.
+    idx = create_sql.rstrip().rfind(")")
+    return create_sql[:idx] + ",\n    " + new_unique + "\n" + create_sql[idx:]
 
 
 def _migrate(conn):
