@@ -115,9 +115,19 @@ def search():
     if not query:
         return jsonify(results=[])
     try:
-        return jsonify(results=annotate_library(get_tmdb().search(query)))
+        items = annotate_library(get_tmdb().search(query))
     except TMDBError as exc:
         return jsonify(error=str(exc)), 502
+    # Progression des séries déjà en biblio → menu rapide « épisode suivant »
+    # et affichage correct au reclic depuis la recherche. annotate_series_progress
+    # attend la clé « id » : on aliase temporairement local_id.
+    in_lib = [it for it in items if it.get("local_id")]
+    for it in in_lib:
+        it["id"] = it["local_id"]
+    annotate_series_progress(in_lib)
+    for it in in_lib:
+        it.pop("id", None)
+    return jsonify(results=items)
 
 
 @bp.get("/library")

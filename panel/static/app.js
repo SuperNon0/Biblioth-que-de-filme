@@ -358,12 +358,18 @@ async function runSearch(q) {
       searchBox.innerHTML = `<div class="sr-item muted">Aucun résultat.</div>`;
     } else {
       searchBox.innerHTML = results.map((r) => `
-        <div class="sr-item" data-tmdb="${r.tmdb_id}" data-type="${r.type}">
+        <div class="sr-item" data-tmdb="${r.tmdb_id}" data-type="${r.type}"
+             data-id="${r.local_id || ""}" data-statut="${r.statut || ""}"
+             data-nbvues="${r.nb_vues || 0}" data-added="${r.date_ajout || 0}"
+             data-nexts="${r.next_saison || ""}" data-nexte="${r.next_numero || ""}"
+             data-vus="${r.vus_ep || 0}" data-total="${r.total_ep || 0}">
           <img loading="lazy" src="${posterSrc(r.affiche)}" alt="">
           <div class="sr-info">
             <div class="sr-title">${esc(r.titre)}</div>
             <div class="sr-meta">${r.type === "serie" ? "Série" : "Film"} · ${r.annee || "—"}
-              ${r.note_tmdb ? "· ★ " + r.note_tmdb : ""}</div>
+              ${r.note_tmdb ? "· ★ " + r.note_tmdb : ""}${r.statut
+                ? ` · <span class="badge-${r.statut}">${STATUTS[r.statut] || ""}${
+                    r.nb_vues > 1 ? " ×" + r.nb_vues : ""}</span>` : ""}</div>
           </div>
         </div>`).join("");
     }
