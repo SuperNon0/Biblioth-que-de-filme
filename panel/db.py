@@ -370,6 +370,18 @@ def log_event(titre_id, type_, label=""):
         (titre_id, type_, label, int(time.time())))
 
 
+def get_setting(cle, default=None):
+    """Réglage éditable stocké en base (app_settings), sinon `default`."""
+    row = q1("SELECT valeur FROM app_settings WHERE cle = ?", (cle,))
+    return row["valeur"] if row else default
+
+
+def set_setting(cle, valeur):
+    """Écrit/écrase un réglage en base (app_settings)."""
+    run("INSERT INTO app_settings (cle, valeur) VALUES (?, ?) "
+        "ON CONFLICT(cle) DO UPDATE SET valeur = excluded.valeur", (cle, valeur))
+
+
 def jload(value, default):
     """Décode un champ JSON stocké en texte, avec valeur de repli."""
     if not value:
