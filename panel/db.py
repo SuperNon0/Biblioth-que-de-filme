@@ -200,11 +200,14 @@ def bootstrap_accounts(superadmin_email="", superadmin_hash=None):
     conn = connect()
     email = (superadmin_email or "").strip().lower() or None
 
-    # Super-admin de base : s'il n'existe aucun super-admin, on l'amorce.
+    # Super-admin de base : s'il n'existe aucun super-admin, on l'amorce —
+    # mais uniquement si on a de quoi le connecter (mot de passe et/ou e-mail).
     row = conn.execute(
         "SELECT id, email FROM comptes WHERE role='super_admin' ORDER BY id LIMIT 1"
     ).fetchone()
     if row is None:
+        if not superadmin_hash and not email:
+            return  # rien pour se connecter : on n'amorce pas de super-admin fantôme
         now = int(time.time())
         cur = conn.execute(
             "INSERT INTO comptes (email, role, etat, mdp_hash, cree, valide) "
