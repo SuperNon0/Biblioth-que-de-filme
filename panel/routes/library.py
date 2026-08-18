@@ -97,7 +97,8 @@ def annotate_library(items):
     lib = {(r["tmdb_id"], r["type"]): r for r in db.q(
         """SELECT id, tmdb_id, type, statut, date_ajout,
                   (SELECT COUNT(*) FROM visionnages v WHERE v.titre_id = t.id) AS nb_vues
-           FROM titres t WHERE tmdb_id IS NOT NULL""")}
+           FROM titres t WHERE tmdb_id IS NOT NULL AND compte_id = ?""",
+        (auth.compte_courant_id(),))}
     for it in items:
         row = lib.get((it.get("tmdb_id"), it.get("type")))
         if row:
@@ -134,7 +135,7 @@ def search():
 @auth.login_required
 def library():
     """Liste la bibliothèque avec filtres (statut, type, genre) et tri."""
-    where, params = ["1=1"], []
+    where, params = ["compte_id = ?"], [auth.compte_courant_id()]
     statut = request.args.get("statut")
     if statut in STATUTS:
         where.append("statut = ?")
@@ -191,7 +192,7 @@ def add():
         detail = tmdb.movie(tmdb_id) if typ == "film" else tmdb.tv(tmdb_id)
     except TMDBError as exc:
         return jsonify(error=str(exc)), 502
-    titre_id = sync.upsert_titre(detail, statut)
+    titre_id = sync.upsert_titre(detail, statut, auth.compte_courant_id())
     # Applique le statut choisi même si le titre existait déjà (upsert ne le
     # change pas à la mise à jour) — utile depuis le menu rapide.
     db.run("UPDATE titres SET statut = ? WHERE id = ?", (statut, titre_id))
@@ -245,10 +246,10 @@ def add_manual():
         return jsonify(error="Titre et type requis."), 400
     now = int(time.time())
     titre_id = db.run(
-        """INSERT INTO titres (type, titre, annee, resume, duree, statut,
+        """INSERT INTO titres (compte_id, type, titre, annee, resume, duree, statut,
                                ajout_manuel, date_ajout, maj)
-           VALUES (?,?,?,?,?,?,1,?,?)""",
-        (typ, titre, data.get("annee"), data.get("resume"),
+           VALUES (?,?,?,?,?,?,?,1,?,?)""",
+        (auth.compte_courant_id(), typ, titre, data.get("annee"), data.get("resume"),
          data.get("duree"), data.get("statut", "a_voir"), now, now),
     )
     return jsonify(ok=True, id=titre_id)
@@ -259,24 +260,26 @@ def add_manual():
 def update(titre_id):
     """Change le statut ou le favori d'un titre."""
     data = request.get_json(silent=True) or {}
-    row = db.q1("SELECT id, type FROM titres WHERE id = ?", (titre_id,))
+    cid = auth.compte_courant_id()
+    row = db.q1("SELECT id, type FROM titres WHERE id = ? AND compte_id = ?", (titre_id, cid))
     if not row:
         return jsonify(error="Titre introuvable."), 404
     if "statut" in data and data["statut"] in STATUTS:
-        db.run("UPDATE titres SET statut = ? WHERE id = ?",
-               (data["statut"], titre_id))
+        db.run("UPDATE titres SET statut = ? WHERE id = ? AND compte_id = ?",
+               (data["statut"], titre_id, cid))
         if data["statut"] == "vu":
             _mark_seen(titre_id, row["type"])
     if "favori" in data:
-        db.run("UPDATE titres SET favori = ? WHERE id = ?",
-               (1 if data["favori"] else 0, titre_id))
+        db.run("UPDATE titres SET favori = ? WHERE id = ? AND compte_id = ?",
+               (1 if data["favori"] else 0, titre_id, cid))
     return jsonify(ok=True)
 
 
 @bp.delete("/library/<int:titre_id>")
 @auth.login_required
 def delete(titre_id):
-    db.run("DELETE FROM titres WHERE id = ?", (titre_id,))
+    db.run("DELETE FROM titres WHERE id = ? AND compte_id = ?",
+           (titre_id, auth.compte_courant_id()))
     return jsonify(ok=True)
 
 
@@ -292,7 +295,8 @@ def to_add():
     except TMDBError as exc:
         return jsonify(error=str(exc)), 502
     connus = {r["tmdb_id"] for r in
-              db.q("SELECT tmdb_id FROM titres WHERE tmdb_id IS NOT NULL")}
+              db.q("SELECT tmdb_id FROM titres WHERE tmdb_id IS NOT NULL AND compte_id = ?",
+                   (auth.compte_courant_id(),))}
     seen, out = set(), []
     for r in pool:
         if r["tmdb_id"] in connus or r["tmdb_id"] in seen:

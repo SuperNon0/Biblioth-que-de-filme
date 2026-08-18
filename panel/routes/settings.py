@@ -32,7 +32,7 @@ def get_settings():
 
 
 @bp.post("/settings")
-@auth.login_required
+@auth.super_admin_required
 def set_settings():
     data = request.get_json(silent=True) or {}
     values = {}
@@ -74,8 +74,11 @@ def test_tmdb():
 
 
 @bp.post("/settings/password")
-@auth.login_required
+@require_capability("admin_password")
 def change_password():
+    from flask import session
+    if session.get("impersonator_id"):
+        return jsonify(error="Impossible pendant une impersonation."), 400
     password = str((request.get_json(silent=True) or {}).get("password", ""))
     try:
         auth.set_password(password)
@@ -147,20 +150,23 @@ def repair_data():
     - Épisode marqué vu sans compteur (ou l'inverse) → remet le compteur cohérent.
     Renvoie le détail de ce qui a été corrigé.
     """
+    cid = auth.compte_courant_id()
     fixes = {"films_vu_sans_visionnage": 0, "episodes_incoherents": 0}
-    # 1. Films « vu » sans visionnage.
+    # 1. Films « vu » sans visionnage (de ce compte uniquement).
     orphelins = db.q(
-        """SELECT id FROM titres WHERE type='film' AND statut='vu'
-           AND id NOT IN (SELECT titre_id FROM visionnages)""")
+        """SELECT id FROM titres WHERE type='film' AND statut='vu' AND compte_id = ?
+           AND id NOT IN (SELECT titre_id FROM visionnages)""", (cid,))
     for f in orphelins:
         db.run("INSERT INTO visionnages (titre_id, date, cree) VALUES (?,?,?)",
                (f["id"], time.strftime("%Y-%m-%d"), int(time.time())))
     fixes["films_vu_sans_visionnage"] = len(orphelins)
-    # 2. Épisodes incohérents (vu sans compteur, ou compteur sans vu).
-    n = db.q1("SELECT COUNT(*) AS n FROM episodes "
-              "WHERE (vu=0 AND nb_vues>0) OR (vu=1 AND nb_vues<1)")["n"]
-    db.run("UPDATE episodes SET vu=1 WHERE vu=0 AND nb_vues>0")
-    db.run("UPDATE episodes SET nb_vues=1 WHERE vu=1 AND nb_vues<1")
+    # 2. Épisodes incohérents (vu sans compteur, ou compteur sans vu), de ce compte.
+    scope = ("titre_id IN (SELECT id FROM titres WHERE compte_id = ?)")
+    n = db.q1(f"SELECT COUNT(*) AS n FROM episodes "
+              f"WHERE ((vu=0 AND nb_vues>0) OR (vu=1 AND nb_vues<1)) AND {scope}",
+              (cid,))["n"]
+    db.run(f"UPDATE episodes SET vu=1 WHERE vu=0 AND nb_vues>0 AND {scope}", (cid,))
+    db.run(f"UPDATE episodes SET nb_vues=1 WHERE vu=1 AND nb_vues<1 AND {scope}", (cid,))
     fixes["episodes_incoherents"] = n
     return jsonify(ok=True, fixes=fixes)
 
@@ -168,15 +174,15 @@ def repair_data():
 @bp.post("/reset")
 @auth.login_required
 def reset_data():
-    """Réinitialise toute la bibliothèque (titres, visionnages, épisodes, listes
-    perso, alertes). Conserve les listes système « À voir » et « Favoris »."""
+    """Réinitialise la bibliothèque DE CE COMPTE (titres → cascade visionnages,
+    épisodes, alertes, liste_items ; + listes perso). Conserve les listes
+    système « À voir » et « Favoris »."""
+    cid = auth.compte_courant_id()
     conn = db.connect()
     try:
-        conn.execute("PRAGMA foreign_keys = OFF")
-        for table in ("liste_items", "alertes", "visionnages", "episodes", "titres"):
-            conn.execute(f"DELETE FROM {table}")
-        conn.execute("DELETE FROM listes WHERE systeme IS NULL")
-        conn.execute("PRAGMA foreign_keys = ON")
+        # Supprimer les titres du compte suffit : les enfants sont en CASCADE.
+        conn.execute("DELETE FROM titres WHERE compte_id = ?", (cid,))
+        conn.execute("DELETE FROM listes WHERE compte_id = ? AND systeme IS NULL", (cid,))
         conn.commit()
     except Exception as exc:  # noqa: BLE001
         conn.rollback()
@@ -185,7 +191,7 @@ def reset_data():
 
 
 @bp.get("/export")
-@auth.login_required
+@auth.super_admin_required
 def export_data():
     """Exporte toute la base au format JSON (fichier de secours/migration)."""
     dump = {"version": 1, "exporte_le": int(time.time())}
@@ -200,7 +206,7 @@ def export_data():
 
 
 @bp.post("/import")
-@auth.login_required
+@auth.super_admin_required
 def import_data():
     """Réimporte un export : remplace intégralement le contenu de la base."""
     dump = request.get_json(silent=True) or {}

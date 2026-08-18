@@ -30,8 +30,9 @@ def create():
                       else get_tmdb().tv(data["tmdb_id"]))
         except TMDBError as exc:
             return jsonify(error=str(exc)), 502
-        titre_id = sync.upsert_titre(detail, "a_voir")
-    if not db.q1("SELECT id FROM titres WHERE id = ?", (titre_id,)):
+        titre_id = sync.upsert_titre(detail, "a_voir", auth.compte_courant_id())
+    if not db.q1("SELECT id FROM titres WHERE id = ? AND compte_id = ?",
+                 (titre_id, auth.compte_courant_id())):
         return jsonify(error="Titre introuvable."), 404
     import time
     db.run("INSERT OR REPLACE INTO alertes (titre_id, canal, cree) VALUES (?,?,?)",
@@ -42,5 +43,7 @@ def create():
 @bp.delete("/alerts/<int:titre_id>")
 @auth.login_required
 def delete(titre_id):
-    db.run("DELETE FROM alertes WHERE titre_id = ?", (titre_id,))
+    db.run("DELETE FROM alertes WHERE titre_id = ? AND titre_id IN "
+           "(SELECT id FROM titres WHERE compte_id = ?)",
+           (titre_id, auth.compte_courant_id()))
     return jsonify(ok=True)

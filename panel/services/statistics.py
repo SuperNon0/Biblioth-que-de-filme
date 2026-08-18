@@ -15,18 +15,20 @@ DUREE_EPISODE_DEFAUT = 42
 DUREE_FILM_DEFAUT = 100
 
 
-def _minutes_films():
+def _minutes_films(compte_id):
     rows = db.q(
         """SELECT t.duree, COUNT(v.id) AS vues
            FROM titres t JOIN visionnages v ON v.titre_id = t.id
-           WHERE t.type = 'film' GROUP BY t.id"""
+           WHERE t.type = 'film' AND t.compte_id = ? GROUP BY t.id""",
+        (compte_id,)
     )
     return sum((r["duree"] or DUREE_FILM_DEFAUT) * max(r["vues"], 1) for r in rows)
 
 
-def _minutes_episodes():
+def _minutes_episodes(compte_id):
     rows = db.q(
-        "SELECT duree, nb_vues FROM episodes WHERE vu = 1"
+        """SELECT e.duree, e.nb_vues FROM episodes e JOIN titres t ON t.id = e.titre_id
+           WHERE e.vu = 1 AND t.compte_id = ?""", (compte_id,)
     )
     return sum((r["duree"] or DUREE_EPISODE_DEFAUT) * max(r["nb_vues"], 1)
                for r in rows)
@@ -76,38 +78,44 @@ def temps_serie(titre_id):
     return info
 
 
-def _compte_genres():
+def _compte_genres(compte_id):
     counter = collections.Counter()
-    for r in db.q("SELECT genres FROM titres WHERE statut = 'vu' OR id IN "
-                  "(SELECT DISTINCT titre_id FROM visionnages)"):
+    for r in db.q("SELECT genres FROM titres WHERE compte_id = ? AND (statut = 'vu' "
+                  "OR id IN (SELECT DISTINCT titre_id FROM visionnages))", (compte_id,)):
         for g in db.jload(r["genres"], []):
             counter[g] += 1
     return counter.most_common(10)
 
 
-def resume():
-    minutes = _minutes_films() + _minutes_episodes()
+def resume(compte_id):
+    minutes = _minutes_films(compte_id) + _minutes_episodes(compte_id)
     nb_films = db.q1(
         "SELECT COUNT(DISTINCT titre_id) AS n FROM visionnages v "
-        "JOIN titres t ON t.id = v.titre_id WHERE t.type = 'film'"
+        "JOIN titres t ON t.id = v.titre_id WHERE t.type = 'film' AND t.compte_id = ?",
+        (compte_id,)
     )["n"]
     nb_series = db.q1(
-        "SELECT COUNT(DISTINCT titre_id) AS n FROM episodes WHERE vu = 1"
+        "SELECT COUNT(DISTINCT e.titre_id) AS n FROM episodes e "
+        "JOIN titres t ON t.id = e.titre_id WHERE e.vu = 1 AND t.compte_id = ?",
+        (compte_id,)
     )["n"]
     nb_episodes = db.q1(
-        "SELECT COALESCE(SUM(MAX(nb_vues,1)),0) AS n FROM episodes WHERE vu = 1"
+        "SELECT COALESCE(SUM(MAX(e.nb_vues,1)),0) AS n FROM episodes e "
+        "JOIN titres t ON t.id = e.titre_id WHERE e.vu = 1 AND t.compte_id = ?",
+        (compte_id,)
     )["n"]
     par_annee = db.q(
         """SELECT annee, COUNT(*) AS n FROM titres
-           WHERE annee IS NOT NULL AND (statut='vu' OR id IN
+           WHERE compte_id = ? AND annee IS NOT NULL AND (statut='vu' OR id IN
                  (SELECT titre_id FROM visionnages))
-           GROUP BY annee ORDER BY annee"""
+           GROUP BY annee ORDER BY annee""",
+        (compte_id,)
     )
     return {
         "temps_total": duree_lisible(minutes),
         "nb_films": nb_films,
         "nb_series": nb_series,
         "nb_episodes": nb_episodes,
-        "genres": [{"nom": g, "n": n} for g, n in _compte_genres()],
+        "genres": [{"nom": g, "n": n} for g, n in _compte_genres(compte_id)],
         "par_annee": par_annee,
     }

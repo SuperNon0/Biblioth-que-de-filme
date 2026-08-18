@@ -19,8 +19,15 @@ from tmdb import TMDBError
 bp = Blueprint("titles", __name__, url_prefix="/api")
 
 
+def _owns(titre_id):
+    """Le titre appartient-il au compte effectif ? (cloisonnement des écritures)"""
+    return bool(db.q1("SELECT 1 FROM titres WHERE id = ? AND compte_id = ?",
+                      (titre_id, auth.compte_courant_id())))
+
+
 def _titre(titre_id):
-    t = db.q1("SELECT * FROM titres WHERE id = ?", (titre_id,))
+    t = db.q1("SELECT * FROM titres WHERE id = ? AND compte_id = ?",
+              (titre_id, auth.compte_courant_id()))
     if t:
         t["genres"] = db.jload(t.get("genres"), [])
         t["plateformes"] = db.jload(t.get("plateformes"), [])
@@ -173,6 +180,8 @@ def _prochain_episode(titre_id):
 @auth.login_required
 def add_watch(titre_id):
     """Enregistre un visionnage (« vu » / « revu ») à la date du jour par défaut."""
+    if not _owns(titre_id):
+        return jsonify(error="Titre introuvable."), 404
     data = request.get_json(silent=True) or {}
     raw = (data.get("date") or "").strip()
     jour = raw[:10] if raw else date.today().isoformat()
@@ -187,6 +196,8 @@ def add_watch(titre_id):
 @auth.login_required
 def del_watch(watch_id):
     row = db.q1("SELECT titre_id FROM visionnages WHERE id = ?", (watch_id,))
+    if not row or not _owns(row["titre_id"]):
+        return jsonify(error="Visionnage introuvable."), 404
     db.run("DELETE FROM visionnages WHERE id = ?", (watch_id,))
     # S'il n'y a plus aucun visionnage, le film n'est plus « vu » (correction
     # d'un marquage par erreur) : on repasse le statut à « à voir ».
@@ -241,7 +252,7 @@ def toggle_episode(ep_id):
     """Action sur un épisode : ``revu`` (marque / +1) ou ``remove`` (-1)."""
     ep = db.q1("SELECT id, titre_id, vu, nb_vues, nom, saison, numero "
                "FROM episodes WHERE id = ?", (ep_id,))
-    if not ep:
+    if not ep or not _owns(ep["titre_id"]):
         return jsonify(error="Épisode introuvable."), 404
     action = (request.get_json(silent=True) or {}).get("action", "revu")
     _apply_ep(ep, action)
@@ -256,6 +267,8 @@ def toggle_episode(ep_id):
 def toggle_episode_num(titre_id, saison, numero):
     """Comme ci-dessus mais repéré par (saison, numéro) — utile après un ajout
     depuis l'aperçu, où le front ne connaît pas encore l'id local de l'épisode."""
+    if not _owns(titre_id):
+        return jsonify(error="Épisode introuvable."), 404
     ep = db.q1(
         "SELECT id, vu, nb_vues, nom, saison, numero FROM episodes "
         "WHERE titre_id = ? AND saison = ? AND numero = ?",
@@ -299,6 +312,8 @@ def _mark_episodes(episodes, action):
 @auth.login_required
 def mark_season(titre_id, saison):
     """Marque une saison entière : seen (×1), revu (+1), remove (-1) ou unmark."""
+    if not _owns(titre_id):
+        return jsonify(error="Titre introuvable."), 404
     action = _mark_action(request.get_json(silent=True))
     eps = db.q("SELECT id, vu, nb_vues FROM episodes WHERE titre_id = ? AND saison = ?",
                (titre_id, saison))
@@ -313,6 +328,8 @@ def mark_season(titre_id, saison):
 @auth.login_required
 def mark_series(titre_id):
     """Marque la série entière : seen (×1), revu (+1), remove (-1) ou unmark."""
+    if not _owns(titre_id):
+        return jsonify(error="Titre introuvable."), 404
     action = _mark_action(request.get_json(silent=True))
     eps = db.q("SELECT id, vu, nb_vues FROM episodes WHERE titre_id = ?", (titre_id,))
     _mark_episodes(eps, action)

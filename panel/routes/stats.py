@@ -10,7 +10,7 @@ bp = Blueprint("stats", __name__, url_prefix="/api")
 @bp.get("/stats")
 @auth.login_required
 def stats():
-    return jsonify(statistics.resume())
+    return jsonify(statistics.resume(auth.compte_courant_id()))
 
 
 @bp.get("/journal")
@@ -23,7 +23,9 @@ def journal():
         """SELECT j.id, j.type, j.label, j.cree,
                   t.id AS titre_id, t.titre, t.affiche, t.type AS media
            FROM journal j JOIN titres t ON t.id = j.titre_id
-           ORDER BY j.cree DESC, j.id DESC LIMIT 300"""
+           WHERE t.compte_id = ?
+           ORDER BY j.cree DESC, j.id DESC LIMIT 300""",
+        (auth.compte_courant_id(),)
     )
     return jsonify(events=events)
 
@@ -33,5 +35,7 @@ def journal():
 def del_journal(event_id):
     """Supprime une entrée du journal (correction), sans toucher aux compteurs."""
     import db
-    db.run("DELETE FROM journal WHERE id = ?", (event_id,))
+    db.run("DELETE FROM journal WHERE id = ? AND titre_id IN "
+           "(SELECT id FROM titres WHERE compte_id = ?)",
+           (event_id, auth.compte_courant_id()))
     return jsonify(ok=True)

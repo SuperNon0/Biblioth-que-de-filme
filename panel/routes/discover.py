@@ -38,8 +38,9 @@ def _reprendre():
     """
     rows = db.q(
         """SELECT id, tmdb_id, type, titre, affiche, annee, note_tmdb, statut, date_ajout
-           FROM titres WHERE type='serie' AND statut='en_cours'
-           ORDER BY maj DESC LIMIT 20"""
+           FROM titres WHERE type='serie' AND statut='en_cours' AND compte_id = ?
+           ORDER BY maj DESC LIMIT 20""",
+        (auth.compte_courant_id(),)
     )
     return annotate_series_progress(rows)
 
@@ -142,7 +143,7 @@ def _bases_perso(media="all", limit=4):
     n'importe quels titres de la bibliothèque. L'ordre aléatoire fait varier
     les rangées « Parce que tu as aimé … » d'un rafraîchissement à l'autre.
     """
-    cond, params = ["tmdb_id IS NOT NULL"], []
+    cond, params = ["tmdb_id IS NOT NULL", "compte_id = ?"], [auth.compte_courant_id()]
     if media in ("movie", "tv"):
         cond.append("type = ?")
         params.append("film" if media == "movie" else "serie")
@@ -167,7 +168,8 @@ def _top_genres(tmdb, media="movie", limit=3):
     """Genres les plus présents dans la bibliothèque (sinon des défauts)."""
     import collections
     counter = collections.Counter()
-    for r in db.q("SELECT genres FROM titres"):
+    for r in db.q("SELECT genres FROM titres WHERE compte_id = ?",
+                  (auth.compte_courant_id(),)):
         for g in db.jload(r["genres"], []):
             counter[g] += 1
     try:
@@ -240,7 +242,8 @@ def roulette():
     if source == "library":
         rows = db.q(
             """SELECT id, tmdb_id, type, titre, affiche, annee, note_tmdb, statut
-               FROM titres WHERE statut = 'a_voir'"""
+               FROM titres WHERE statut = 'a_voir' AND compte_id = ?""",
+            (auth.compte_courant_id(),)
         )
         random.shuffle(rows)
         return jsonify(results=rows[:count])

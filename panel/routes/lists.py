@@ -23,8 +23,9 @@ def _import_items(nom, entrees):
     Chaque titre est récupéré depuis TMDB (validé) puis ajouté à la biblio en
     « à voir ». Renvoie (liste_id, nombre ajouté).
     """
-    liste_id = db.run("INSERT INTO listes (nom, cree) VALUES (?, ?)",
-                      (nom, int(time.time())))
+    cid = auth.compte_courant_id()
+    liste_id = db.run("INSERT INTO listes (compte_id, nom, cree) VALUES (?, ?, ?)",
+                      (cid, nom, int(time.time())))
     tmdb = get_tmdb()
     ajoutes = 0
     for rang, e in enumerate(entrees):
@@ -34,7 +35,7 @@ def _import_items(nom, entrees):
                       else tmdb.tv(e["tmdb_id"]))
         except (TMDBError, KeyError):
             continue
-        titre_id = sync.upsert_titre(detail, "a_voir")
+        titre_id = sync.upsert_titre(detail, "a_voir", cid)
         db.run("INSERT OR IGNORE INTO liste_items (liste_id, titre_id, rang, ajoute) "
                "VALUES (?,?,?,?)", (liste_id, titre_id, rang, int(time.time())))
         ajoutes += 1
@@ -51,7 +52,10 @@ def _liste(row):
 @bp.get("/lists")
 @auth.login_required
 def lists():
-    rows = db.q("SELECT * FROM listes ORDER BY systeme IS NULL, nom COLLATE NOCASE")
+    db.ensure_system_lists(auth.compte_courant_id())  # « À voir »/« Favoris » du compte
+    rows = db.q("SELECT * FROM listes WHERE compte_id = ? "
+                "ORDER BY systeme IS NULL, nom COLLATE NOCASE",
+                (auth.compte_courant_id(),))
     return jsonify(listes=[_liste(r) for r in rows])
 
 
@@ -61,25 +65,30 @@ def create():
     nom = (request.get_json(silent=True) or {}).get("nom", "").strip()
     if not nom:
         return jsonify(error="Nom de liste requis."), 400
-    liste_id = db.run("INSERT INTO listes (nom, cree) VALUES (?, ?)",
-                      (nom, int(time.time())))
+    liste_id = db.run("INSERT INTO listes (compte_id, nom, cree) VALUES (?, ?, ?)",
+                      (auth.compte_courant_id(), nom, int(time.time())))
     return jsonify(ok=True, id=liste_id)
 
 
 @bp.delete("/lists/<int:liste_id>")
 @auth.login_required
 def delete(liste_id):
-    row = db.q1("SELECT systeme FROM listes WHERE id = ?", (liste_id,))
-    if row and row["systeme"]:
+    row = db.q1("SELECT systeme FROM listes WHERE id = ? AND compte_id = ?",
+                (liste_id, auth.compte_courant_id()))
+    if not row:
+        return jsonify(error="Liste introuvable."), 404
+    if row["systeme"]:
         return jsonify(error="Les listes système ne peuvent pas être supprimées."), 400
-    db.run("DELETE FROM listes WHERE id = ?", (liste_id,))
+    db.run("DELETE FROM listes WHERE id = ? AND compte_id = ?",
+           (liste_id, auth.compte_courant_id()))
     return jsonify(ok=True)
 
 
 @bp.get("/lists/<int:liste_id>")
 @auth.login_required
 def items(liste_id):
-    liste = db.q1("SELECT * FROM listes WHERE id = ?", (liste_id,))
+    liste = db.q1("SELECT * FROM listes WHERE id = ? AND compte_id = ?",
+                  (liste_id, auth.compte_courant_id()))
     if not liste:
         return jsonify(error="Liste introuvable."), 404
     rows = db.q(
@@ -96,8 +105,11 @@ def items(liste_id):
 @bp.post("/lists/<int:liste_id>/items")
 @auth.login_required
 def add_item(liste_id):
+    cid = auth.compte_courant_id()
     titre_id = (request.get_json(silent=True) or {}).get("titre_id")
-    if not db.q1("SELECT id FROM titres WHERE id = ?", (titre_id,)):
+    if not db.q1("SELECT id FROM listes WHERE id = ? AND compte_id = ?", (liste_id, cid)):
+        return jsonify(error="Liste introuvable."), 404
+    if not db.q1("SELECT id FROM titres WHERE id = ? AND compte_id = ?", (titre_id, cid)):
         return jsonify(error="Titre introuvable."), 404
     rang = db.q1("SELECT COALESCE(MAX(rang),0)+1 AS r FROM liste_items "
                  "WHERE liste_id = ?", (liste_id,))["r"]
@@ -109,6 +121,9 @@ def add_item(liste_id):
 @bp.delete("/lists/<int:liste_id>/items/<int:titre_id>")
 @auth.login_required
 def remove_item(liste_id, titre_id):
+    if not db.q1("SELECT id FROM listes WHERE id = ? AND compte_id = ?",
+                 (liste_id, auth.compte_courant_id())):
+        return jsonify(error="Liste introuvable."), 404
     db.run("DELETE FROM liste_items WHERE liste_id = ? AND titre_id = ?",
            (liste_id, titre_id))
     return jsonify(ok=True)

@@ -42,14 +42,15 @@ def _cache_affiche(url):
     return posters.local_url(name) or url
 
 
-def upsert_titre(detail, statut="a_voir"):
+def upsert_titre(detail, statut="a_voir", compte_id=None):
     """Insère (ou récupère) un titre depuis une fiche TMDB détaillée.
 
-    Renvoie l'identifiant local du titre.
+    Le titre appartient à ``compte_id`` (cloisonnement) : l'unicité et la
+    recherche d'existant sont faites PAR compte. Renvoie l'identifiant local.
     """
     existing = db.q1(
-        "SELECT id FROM titres WHERE tmdb_id = ? AND type = ?",
-        (detail.get("tmdb_id"), detail["type"]),
+        "SELECT id FROM titres WHERE tmdb_id = ? AND type = ? AND compte_id IS ?",
+        (detail.get("tmdb_id"), detail["type"], compte_id),
     )
     now = int(time.time())
     # affiche = chemin local mis en cache (pour l'app) ; affiche_url = l'URL TMDB
@@ -82,9 +83,9 @@ def upsert_titre(detail, statut="a_voir"):
         """INSERT INTO titres
            (tmdb_id, type, titre, annee, date_sortie, resume, genres, duree,
             affiche, fond, bande_annonce, note_tmdb, pays, plateformes, casting,
-            equipe, nb_saisons, affiche_url, statut, date_ajout, maj)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-        fields + (statut, now, now),
+            equipe, nb_saisons, affiche_url, compte_id, statut, date_ajout, maj)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        fields + (compte_id, statut, now, now),
     )
 
 
