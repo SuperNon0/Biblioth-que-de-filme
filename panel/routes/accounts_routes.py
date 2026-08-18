@@ -187,6 +187,35 @@ def changer_mdp():
     return jsonify(ok=True)
 
 
+# ── Cloudflare : configuration éditable + diagnostic ─────────────────────────
+@bp.get("/api/cloudflare")
+@auth.super_admin_required
+def cf_get():
+    return jsonify(auth.cf_config())
+
+
+@bp.post("/api/cloudflare")
+@auth.super_admin_required
+def cf_set():
+    data = request.get_json(silent=True) or {}
+    if "team" in data:
+        db.set_setting("cf_team", auth.normalize_team(data.get("team")))
+    if "aud" in data:
+        db.set_setting("cf_aud", (data.get("aud") or "").strip())
+    if "verify" in data:
+        db.set_setting("cf_verify", "1" if data.get("verify") else "0")
+    auth._jwk_clients.clear()  # la config a changé : on vide le cache JWK
+    db.audit("cf_config", acteur=_acteur())
+    return jsonify(ok=True, **auth.cf_config())
+
+
+@bp.get("/api/diagnostic")
+@auth.super_admin_required
+def diagnostic():
+    """Diagnostic Cloudflare pour Paramètres → Diagnostic (OK ✓ / échec ✗)."""
+    return jsonify(auth.cf_diagnostic())
+
+
 # ── helpers ──────────────────────────────────────────────────────────────────
 def _acteur():
     real = auth.get_compte(session.get("impersonator_id") or session.get("compte_id"))

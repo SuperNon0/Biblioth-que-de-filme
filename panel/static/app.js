@@ -1473,3 +1473,46 @@ if ("serviceWorker" in navigator) {
 /* Au démarrage : onglet Suggestions (marqué chargé pour éviter un rechargement). */
 _tabLoaded.add("suggestions");
 loadSuggestions();
+
+/* ============ Auth v2 : impersonation, Cloudflare, diagnostic ============ */
+// Revenir à son compte depuis le bandeau « voir en tant que ».
+document.getElementById("imp-stop")?.addEventListener("click", async () => {
+  try { await api("/api/impersonate/stop", { method: "POST" }); location.reload(); }
+  catch (e) { toast(e.message); }
+});
+
+// Charge la config Cloudflare dans le formulaire (à l'ouverture des Paramètres).
+async function loadCloudflare() {
+  const team = document.getElementById("cf-team");
+  if (!team) return;  // pas super-admin
+  try {
+    const c = await api("/api/cloudflare");
+    team.value = c.team || "";
+    document.getElementById("cf-aud").value = c.aud || "";
+    document.getElementById("cf-verify").checked = !!c.verify;
+  } catch (_) {}
+}
+document.getElementById("btn-cf-save")?.addEventListener("click", async () => {
+  try {
+    await api("/api/cloudflare", { method: "POST", body: {
+      team: document.getElementById("cf-team").value,
+      aud: document.getElementById("cf-aud").value,
+      verify: document.getElementById("cf-verify").checked } });
+    toast("Cloudflare enregistré ✓");
+  } catch (e) { toast(e.message); }
+});
+document.getElementById("btn-diag")?.addEventListener("click", async () => {
+  const out = document.getElementById("diag-out");
+  out.style.display = "block"; out.textContent = "Diagnostic…";
+  try {
+    const d = await api("/api/diagnostic");
+    out.textContent =
+      `Équipe : ${d.team || "—"}\nAUD : ${d.aud || "—"}\n` +
+      `Vérif JWT : ${d.verify ? "activée" : "désactivée"}\n` +
+      `E-mail en-tête : ${d.header_email || "—"}\n` +
+      `Jeton reçu : ${d.has_token ? "oui" : "non"}\n` +
+      `JWT : ${d.jwt_status}` + (d.jwt_email ? ` (${d.jwt_email})` : "") +
+      (d.jwt_error ? `\nDétail : ${d.jwt_error}` : "");
+  } catch (e) { out.textContent = e.message; }
+});
+loadCloudflare();  // remplit le formulaire Cloudflare si super-admin

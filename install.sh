@@ -45,11 +45,13 @@ done
 
 [[ $EUID -eq 0 ]] || fail "Lance ce script en root (sudo)."
 
-# --- 1. dépendances (apt : Python 3 + Flask) --------------------------------
-log "Installation des dépendances (python3, flask)…"
+# --- 1. dépendances (apt : Python 3 + Flask + PyJWT/crypto) ------------------
+# python3-jwt (PyJWT) + python3-cryptography : vérification du JWT Cloudflare
+# Access (RS256). Installés via apt pour rester sans pip, conformément au socle.
+log "Installation des dépendances (python3, flask, pyjwt, cryptography)…"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-apt-get install -y -qq python3 python3-flask git >/dev/null
+apt-get install -y -qq python3 python3-flask python3-jwt python3-cryptography git >/dev/null
 
 # --- 2. utilisateur dédié non-root ------------------------------------------
 if ! id "$APP" &>/dev/null; then

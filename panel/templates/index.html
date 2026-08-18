@@ -20,6 +20,13 @@
   <link rel="stylesheet" href="{{ asset('style.css') }}">
 </head>
 <body>
+  {% if impersonation %}
+  <div class="imp-banner">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+    <span>Tu consultes le compte de <b>{{ impersonation.email }}</b></span>
+    <button class="btn small" id="imp-stop">Revenir à mon compte</button>
+  </div>
+  {% endif %}
   <header class="topbar">
     <div class="brand">
       <img class="logo-mark" src="{{ asset('logo.svg') }}" alt="" width="34" height="34">
@@ -288,6 +295,28 @@
           <button id="btn-reset" class="btn danger small"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 4h4a1 1 0 0 1 1 1v2H9V5a1 1 0 0 1 1-1z"/><path d="M6 7l1 13h10l1-13"/><path d="M10 11v6M14 11v6"/></svg>Tout réinitialiser</button>
           <span id="reset-status" class="muted"></span>
         </div>
+
+        {% if is_super_admin %}
+        <div class="card">
+          <h3 class="sub-title">Comptes &amp; profils</h3>
+          <p class="muted">Gère les accès, et « mets-toi à la place » d'un membre
+            pour voir/éditer sa bibliothèque.</p>
+          <a class="btn small" href="{{ url_for('accounts.comptes_page') }}">Gérer les comptes</a>
+        </div>
+
+        <div class="card">
+          <h3 class="sub-title">Cloudflare / Accès</h3>
+          <p class="muted">Équipe et AUD de ton application Cloudflare Access
+            (vérification du JWT). Modifiable sans toucher au serveur.</p>
+          <input class="input" id="cf-team" placeholder="équipe (ex. super-nono)">
+          <input class="input" id="cf-aud" placeholder="AUD tag de l'application Access">
+          <label class="switch-row"><input type="checkbox" id="cf-verify">
+            Vérifier le JWT (recommandé en production)</label>
+          <button id="btn-cf-save" class="btn primary small">Enregistrer</button>
+          <button id="btn-diag" class="btn ghost small">Diagnostic</button>
+          <pre id="diag-out" class="aide-cmd" style="display:none;white-space:pre-wrap"></pre>
+        </div>
+        {% endif %}
       </div>
     </section>
     <!-- Aide / Support -->
