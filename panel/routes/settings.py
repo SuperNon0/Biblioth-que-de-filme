@@ -13,6 +13,7 @@ from flask import Blueprint, jsonify, request
 import auth
 import db
 import settings_store
+from permissions import require_capability
 from context import cfg, get_tmdb
 from tmdb import TMDBError
 
@@ -115,7 +116,7 @@ def version():
 
 
 @bp.post("/update")
-@auth.login_required
+@require_capability("site_update")
 def update():
     """Lance la mise à jour depuis GitHub (script auto-remplaçant + redémarrage).
 

@@ -37,12 +37,13 @@ def bienvenue():
 
 @bp.route("/login", methods=["GET", "POST"])
 def login():
-    error = None
-    if request.method == "POST":
-        if auth.do_login(request.form.get("password", "")):
-            return redirect(url_for("pages.index"))
-        error = "Mot de passe incorrect."
-    return render_template("login.html", error=error)
+    # GET /login redirige vers le parcours de connexion (gateway) : c'est lui qui
+    # décide quel écran montrer (login local, demande, attente, refus, bloqué).
+    if request.method == "GET":
+        return redirect(url_for("auth.gateway"))
+    if auth.do_login(request.form.get("password", "")):
+        return redirect(url_for("pages.index"))
+    return render_template("login.html", error="Mot de passe incorrect.")
 
 
 @bp.get("/mot-de-passe-oublie")
@@ -53,7 +54,7 @@ def forgot_password():
 @bp.post("/logout")
 def logout():
     session.clear()
-    return redirect(url_for("pages.login"))
+    return redirect(url_for("auth.gateway"))
 
 
 @bp.get("/sw.js")

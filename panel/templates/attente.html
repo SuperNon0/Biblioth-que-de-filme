@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>Demande en attente — cinéthèque</title>
+  <meta name="theme-color" content="#0e0f11">
+  <link rel="icon" href="{{ asset('favicon.svg') }}" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ asset('fonts.css') }}">
+  <link rel="stylesheet" href="{{ asset('style.css') }}">
+</head>
+<body class="login-page">
+  <div class="login-card">
+    <div class="login-logo">
+      <img class="logo-mark" src="{{ asset('logo.svg') }}" alt="" width="44" height="44">
+      <span class="logo"><span class="g">ciné</span><span class="i">thèque</span></span>
+    </div>
+    <div class="access-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="var(--pending)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/>
+      </svg>
+    </div>
+    <h2>Demande en attente</h2>
+    <span class="mail-chip">{{ email }}</span>
+    <p class="access-text">Ta demande a bien été envoyée. Un administrateur
+      doit la valider — tu auras accès dès qu'elle est approuvée.</p>
+    <a class="btn ghost full" href="{{ url_for('auth.gateway') }}">Rafraîchir</a>
+  </div>
+</body>
+</html>

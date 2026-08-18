@@ -21,10 +21,13 @@ from werkzeug.security import check_password_hash, generate_password_hash
 import db
 
 # PyJWT est optionnel à l'import : requis seulement si la vérif JWT est active.
+# On rattrape BaseException : une lib `cryptography` cassée lève un
+# pyo3 PanicException (BaseException, pas Exception). Repli sûr : jwt=None →
+# cf_access_email() renvoie None quand la vérif est active (aucun contournement).
 try:
     import jwt
     from jwt import PyJWKClient
-except Exception:  # pragma: no cover
+except BaseException:  # pragma: no cover
     jwt = None
     PyJWKClient = None
 
@@ -194,6 +197,12 @@ def do_login(password):
         return True
     time.sleep(1)
     return False
+
+
+def do_login_check(password):
+    """Vérifie le mot de passe du super-admin de base sans ouvrir de session."""
+    row = base_admin_row()
+    return bool(row and row["mdp_hash"] and check_password_hash(row["mdp_hash"], password))
 
 
 def set_password(password):

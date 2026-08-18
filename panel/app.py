@@ -10,6 +10,7 @@ Lancement :
 En développement, sans config déployée, l'app tourne avec des valeurs par
 défaut et une base locale dans ./.data/.
 """
+import json
 import os
 
 from flask import Flask, session, url_for
@@ -17,7 +18,24 @@ from flask import Flask, session, url_for
 import auth
 import config as config_module
 import db
+import permissions
 import settings_store
+
+
+def _legacy_admin_hash(cfg):
+    """Récupère le hash du mot de passe admin existant (users.json puis config).
+
+    Permet d'amorcer le super-admin de base avec le mot de passe DÉJÀ en place,
+    pour que la connexion locale continue de fonctionner après la migration.
+    """
+    try:
+        with open(cfg.get("users_file", ""), encoding="utf-8") as handle:
+            users = json.load(handle)
+        if isinstance(users, dict) and users.get("admin"):
+            return users["admin"]
+    except (OSError, ValueError):
+        pass
+    return cfg.get("panel_password_hash") or None
 
 
 def create_app():
@@ -32,6 +50,13 @@ def create_app():
     )
 
     db.init(cfg["db_file"])
+    # Amorce le super-admin de base + cloisonne le contenu existant (idempotent,
+    # sauvegarde .bak posée au 1er passage). Le hash reprend le mot de passe
+    # admin déjà en place pour ne pas casser la connexion locale.
+    with app.app_context():
+        db.bootstrap_accounts(
+            superadmin_email=cfg.get("superadmin_email") or cfg.get("cf_access_email") or "",
+            superadmin_hash=_legacy_admin_hash(cfg))
 
     # Cache-busting : suffixe de version basé sur la date de modif du fichier.
     @app.template_global()
@@ -48,10 +73,18 @@ def create_app():
     def _sso():
         auth.cloudflare_sso()
 
-    # Réglages exposés aux templates (état de configuration TMDB).
+    # Contexte partagé des templates : état TMDB, bandeau d'impersonation,
+    # helper de permissions `can(...)`, rôle courant.
     @app.context_processor
     def _inject():
-        return {"tmdb_ok": bool(settings_store.get("tmdb_api_key"))}
+        imp = None
+        if session.get("impersonator_id"):
+            c = auth.current_compte()
+            imp = {"email": (c["email"] if c and c["email"] else "ce membre")}
+        return {"tmdb_ok": bool(settings_store.get("tmdb_api_key")),
+                "impersonation": imp,
+                "can": permissions.has_capability,
+                "is_super_admin": auth.is_super_admin()}
 
     _register_blueprints(app)
     # Pas de cache sur les réponses d'API (états temps réel).
@@ -69,10 +102,10 @@ def create_app():
 
 
 def _register_blueprints(app):
-    from routes import (alerts, discover, library, lists, pages, people,
-                        settings, stats, titles)
-    for module in (pages, library, titles, discover, lists, alerts, people,
-                   stats, settings):
+    from routes import (accounts_routes, alerts, auth_routes, discover, library,
+                        lists, pages, people, settings, stats, titles)
+    for module in (pages, auth_routes, accounts_routes, library, titles,
+                   discover, lists, alerts, people, stats, settings):
         app.register_blueprint(module.bp)
 
 

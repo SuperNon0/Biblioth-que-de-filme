@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>{{ 'Comptes' if gere else 'Profils' }} — cinéthèque</title>
+  <meta name="theme-color" content="#0e0f11">
+  <link rel="icon" href="{{ asset('favicon.svg') }}" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ asset('fonts.css') }}">
+  <link rel="stylesheet" href="{{ asset('style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img class="logo-mark" src="{{ asset('logo.svg') }}" alt="" width="30" height="30">
+      <span class="logo"><span class="g">ciné</span><span class="i">thèque</span></span>
+    </div>
+    <span class="badge">paramètres · {{ 'comptes' if gere else 'profils' }}</span>
+    <a class="btn ghost small" href="{{ url_for('pages.index') }}" style="margin-left:auto">← Retour</a>
+  </header>
+
+  <div class="acct-wrap" style="max-width:720px;margin:0 auto;padding:24px 20px 60px">
+    {% if gere and pending %}
+    <section class="acct-section">
+      <h3>Demandes en attente <span class="acct-count">· {{ pending|length }}</span></h3>
+      <div class="acct-list">
+        {% for c in pending %}
+        <div class="acct-row" data-id="{{ c.id }}">
+          <div class="acct-av">{{ (c.email or '?')[0]|upper }}</div>
+          <div class="acct-main">
+            <span class="acct-mail">{{ c.email }}</span>
+            <span class="acct-sub">demandé le {{ c.cree }}</span>
+          </div>
+          <div class="acct-actions">
+            <button class="btn primary small" data-act="valider">✓ Accepter</button>
+            <button class="btn danger small" data-act="refuser">✕ Refuser</button>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    <section class="acct-section">
+      <h3>Membres <span class="acct-count">· {{ membres|length }}</span></h3>
+      <div class="acct-list">
+        {% for c in membres %}
+        <div class="acct-row" data-id="{{ c.id }}">
+          <div class="acct-av">{{ (c.email or 'A')[0]|upper }}</div>
+          <div class="acct-main">
+            <span class="acct-mail">{{ c.email or 'administrateur (local)' }}</span>
+            <span class="acct-sub">
+              {%- if c.local %}connecté en local · {% endif -%}
+              {%- if c.derniere_cnx %}dernière connexion {{ c.derniere_cnx }}{% else %}créé le {{ c.cree }}{% endif -%}
+            </span>
+          </div>
+          <div class="acct-actions">
+            {% if c.role == 'super_admin' %}<span class="role-badge role-super">super-admin</span>
+            {% elif c.etat == 'bloque' %}<span class="role-badge role-bloque">bloqué</span>
+            {% else %}<span class="role-badge role-membre">membre</span>{% endif %}
+
+            {% if c.role != 'super_admin' and c.etat == 'actif' %}
+              {% if peut_profils %}<button class="btn ghost small" data-act="impersonate">👁 Voir en tant que</button>{% endif %}
+              {% if gere %}<button class="btn ghost small" data-act="bloquer">Bloquer</button>{% endif %}
+            {% elif c.etat == 'bloque' and gere %}
+              <button class="btn ghost small" data-act="debloquer">Débloquer</button>
+            {% endif %}
+            {% if base_admin and c.role != 'super_admin' and c.etat == 'actif' %}
+              <button class="btn ghost small" data-act="promouvoir">↑ Super-admin</button>
+            {% endif %}
+            {% if gere and c.role != 'super_admin' %}
+              <button class="btn danger small" data-act="supprimer" title="Supprimer">🗑</button>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const ROUTES = {
+      valider:  (id) => ["POST", `/api/comptes/${id}/valider`],
+      refuser:  (id) => ["POST", `/api/comptes/${id}/refuser`],
+      bloquer:  (id) => ["POST", `/api/comptes/${id}/bloquer`],
+      debloquer:(id) => ["POST", `/api/comptes/${id}/debloquer`],
+      supprimer:(id) => ["DELETE", `/api/comptes/${id}`],
+      impersonate:(id) => ["POST", `/api/comptes/${id}/impersonate`],
+      promouvoir:(id) => ["POST", `/api/comptes/${id}/role`, {role: "super_admin"}],
+    };
+    document.body.addEventListener("click", async (e) => {
+      const btn = e.target.closest("[data-act]");
+      if (!btn) return;
+      const row = btn.closest(".acct-row");
+      const [method, url, body] = ROUTES[btn.dataset.act](row.dataset.id);
+      if (btn.dataset.act === "supprimer" &&
+          !confirm("Supprimer ce compte et TOUTES ses données ? Action irréversible.")) return;
+      btn.disabled = true;
+      try {
+        const r = await fetch(url, {method,
+          headers: body ? {"Content-Type": "application/json"} : {},
+          body: body ? JSON.stringify(body) : undefined});
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) { alert(d.error || "Échec"); btn.disabled = false; return; }
+        if (btn.dataset.act === "impersonate") { location.href = "{{ url_for('pages.index') }}"; return; }
+        location.reload();
+      } catch (err) { alert(err.message); btn.disabled = false; }
+    });
+  </script>
+</body>
+</html>

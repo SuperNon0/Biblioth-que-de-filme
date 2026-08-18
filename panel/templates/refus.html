@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>Demande refusée — cinéthèque</title>
+  <meta name="theme-color" content="#0e0f11">
+  <link rel="icon" href="{{ asset('favicon.svg') }}" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ asset('fonts.css') }}">
+  <link rel="stylesheet" href="{{ asset('style.css') }}">
+</head>
+<body class="login-page">
+  <div class="login-card">
+    <div class="login-logo">
+      <img class="logo-mark" src="{{ asset('logo.svg') }}" alt="" width="44" height="44">
+      <span class="logo"><span class="g">ciné</span><span class="i">thèque</span></span>
+    </div>
+    <div class="access-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/>
+      </svg>
+    </div>
+    <h2>Demande refusée</h2>
+    <span class="mail-chip">{{ email }}</span>
+    <p class="access-text">Un administrateur a refusé ta demande d'accès
+      à cinéthèque.</p>
+    <form method="post" action="{{ url_for('auth.request_access') }}" style="width:100%">
+      <button type="submit" class="btn ghost full">Redemander un accès</button>
+    </form>
+  </div>
+</body>
+</html>

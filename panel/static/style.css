@@ -728,3 +728,53 @@ h2 svg.ic, h3 svg.ic { width: 18px; height: 18px; vertical-align: -3px; margin-r
   .toolbar.open .chips { justify-content: center; }
   .filter-done { display: block; }
 }
+
+/* =========================================================================
+   Auth v2 — écrans d'accès, gestion des comptes, bandeau « voir en tant que ».
+   Basé sur les variables :root existantes (thème identique aux maquettes).
+   ========================================================================= */
+.access-icon { width: 60px; height: 60px; display: flex; align-items: center;
+  justify-content: center; border-radius: 50%; border: 1px solid var(--border);
+  background: var(--bg-card); }
+.access-icon svg { width: 28px; height: 28px; }
+.mail-chip { font-family: var(--font); font-size: 0.76rem; color: var(--text);
+  background: var(--bg-input); border: 1px solid var(--border);
+  border-radius: 999px; padding: 6px 14px; word-break: break-all; text-align: center; }
+.access-text { color: var(--muted); font-size: 0.8rem; text-align: center; line-height: 1.65; }
+.access-note { color: var(--muted); font-size: 0.72rem; text-align: center; }
+.login-card h2 { text-align: center; }
+
+/* --- gestion des comptes / profils (Paramètres) ------------------------- */
+.acct-section { margin-bottom: 22px; }
+.acct-section > h3 { margin-bottom: 12px; color: var(--accent);
+  font-family: var(--font-serif); font-weight: 400; }
+.acct-count { color: var(--muted); font-size: 0.72rem; }
+.acct-list { display: flex; flex-direction: column; gap: 10px; }
+.acct-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); flex-wrap: wrap; }
+.acct-av { width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg-input); border: 1px solid var(--border);
+  color: var(--accent); font-family: var(--font-serif); font-size: 1rem; }
+.acct-main { flex: 1; min-width: 150px; display: flex; flex-direction: column; gap: 2px; }
+.acct-mail { color: var(--text); font-size: 0.8rem; word-break: break-all; }
+.acct-sub { color: var(--muted); font-size: 0.7rem; }
+.acct-actions { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; }
+.role-badge { font-size: 0.6rem; text-transform: uppercase; letter-spacing: .05em;
+  padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border);
+  background: rgba(255,255,255,0.03); white-space: nowrap; }
+.role-super  { color: var(--accent);  border-color: var(--accent); }
+.role-membre { color: var(--muted); }
+.role-bloque { color: var(--orange);  border-color: var(--orange); }
+.icon-btn { display: inline-flex; align-items: center; gap: 6px; }
+.icon-btn svg { width: 14px; height: 14px; }
+
+/* --- bandeau « voir en tant que » (impersonation) ----------------------- */
+.imp-banner { display: flex; align-items: center; gap: 12px; justify-content: center;
+  background: rgba(167,139,250,0.15); border-bottom: 1px solid var(--pending);
+  color: var(--text); font-size: 0.76rem; padding: 10px 16px; flex-wrap: wrap;
+  position: sticky; top: 0; z-index: 60; }
+.imp-banner svg { width: 16px; height: 16px; color: var(--pending); flex-shrink: 0; }
+.imp-banner b { color: var(--pending); font-weight: 500; }
+.imp-banner .btn { padding: 5px 12px; }

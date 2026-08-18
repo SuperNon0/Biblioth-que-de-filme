@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>Demander un accès — cinéthèque</title>
+  <meta name="theme-color" content="#0e0f11">
+  <link rel="icon" href="{{ asset('favicon.svg') }}" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ asset('fonts.css') }}">
+  <link rel="stylesheet" href="{{ asset('style.css') }}">
+</head>
+<body class="login-page">
+  <div class="login-card">
+    <div class="login-logo">
+      <img class="logo-mark" src="{{ asset('logo.svg') }}" alt="" width="44" height="44">
+      <span class="logo"><span class="g">ciné</span><span class="i">thèque</span></span>
+    </div>
+    <div class="access-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="9" cy="8" r="3.5"/><path d="M2.5 19v-1a4 4 0 0 1 4-4h5a4 4 0 0 1 4 4v1"/><path d="M19 8v6M22 11h-6"/>
+      </svg>
+    </div>
+    <h2>Bienvenue</h2>
+    <span class="mail-chip">{{ email }}</span>
+    <p class="access-text">Ton adresse est reconnue, mais tu n'as pas encore
+      de profil sur cinéthèque.</p>
+    <form method="post" action="{{ url_for('auth.request_access') }}" style="width:100%">
+      <button type="submit" class="btn primary full">Demander un accès</button>
+    </form>
+    <p class="access-note">Un administrateur devra valider ta demande.</p>
+  </div>
+</body>
+</html>
