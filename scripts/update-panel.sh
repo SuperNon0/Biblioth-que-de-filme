@@ -24,6 +24,15 @@ main() {
     git config --global --add safe.directory "$SOURCE_DIR" 2>/dev/null || true
     git -C "$SOURCE_DIR" pull --ff-only
 
+    # Dépendances (apt) : PyJWT + cryptography pour la vérif JWT Cloudflare.
+    # Best-effort et idempotent : on ne bloque pas la mise à jour si apt échoue.
+    if ! python3 -c "import jwt" 2>/dev/null; then
+        echo "[update] Installation des dépendances manquantes (python3-jwt, cryptography)…"
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+            python3-jwt python3-cryptography >/dev/null 2>&1 || \
+            echo "[update] ⚠ Installation apt impossible — installe python3-jwt manuellement." >&2
+    fi
+
     echo "[update] Copie des fichiers…"
     cp -a "$SOURCE_DIR/panel/."   "$PANEL_DIR/"
     cp -a "$SOURCE_DIR/scripts/." "$SCRIPTS_DIR/"

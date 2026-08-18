@@ -217,17 +217,37 @@ def bootstrap_accounts(superadmin_email="", superadmin_hash=None):
         base_id = cur.lastrowid
     else:
         base_id = row["id"]
-        # Rattache l'e-mail au super-admin de base s'il n'en a pas encore.
-        if email and not row["email"] and not conn.execute(
-                "SELECT 1 FROM comptes WHERE email=?", (email,)).fetchone():
-            conn.execute("UPDATE comptes SET email=? WHERE id=?", (email, row["id"]))
-            conn.commit()
 
+    _reconcile_superadmin_email(conn, base_id, email)
     _cloisonner_existant(conn, base_id)
     # Recrée les éventuels index perdus lors d'une reconstruction de table.
     conn.executescript(SCHEMA)
     conn.commit()
     ensure_system_lists(base_id)
+
+
+def _reconcile_superadmin_email(conn, base_id, email):
+    """Garantit que l'e-mail du super-admin renseigné est bien SUR le compte de
+    base — pour que Cloudflare te reconnaisse comme super-admin.
+
+    Si cet e-mail est déjà porté par un AUTRE compte (ex. membre auto-créé avant
+    que l'e-mail soit configuré), on fusionne son contenu dans le super-admin de
+    base puis on supprime le doublon. Aucune donnée n'est perdue.
+    """
+    if not email:
+        return
+    other = conn.execute(
+        "SELECT id FROM comptes WHERE email = ? AND id <> ?", (email, base_id)
+    ).fetchone()
+    if other is not None:
+        oid = other["id"]
+        # Récupère le contenu du compte parasite (OR IGNORE = on saute les
+        # éventuels doublons, effacés ensuite par la cascade de suppression).
+        conn.execute("UPDATE OR IGNORE titres SET compte_id = ? WHERE compte_id = ?", (base_id, oid))
+        conn.execute("UPDATE OR IGNORE listes SET compte_id = ? WHERE compte_id = ?", (base_id, oid))
+        conn.execute("DELETE FROM comptes WHERE id = ?", (oid,))
+    conn.execute("UPDATE comptes SET email = ?, etat = 'actif' WHERE id = ?", (email, base_id))
+    conn.commit()
 
 
 def _cloisonner_existant(conn, base_id):
