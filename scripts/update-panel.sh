@@ -6,10 +6,19 @@
 # Lancé en root par le site (bouton « Mettre à jour ») via sudo, ou à la main :
 #   sudo /opt/cinetheque/scripts/update-panel.sh
 #
-# Le corps est encapsulé dans main() : bash parse toute la fonction en mémoire
-# avant exécution, ce qui permet au script de se remplacer lui-même sans
-# corruption pendant la copie.
+# Le corps est encapsulé dans main(). Comme la copie des fichiers plus bas
+# réécrit CE script pendant qu'il tourne (mise à jour de lui-même), on se
+# ré-exécute d'abord depuis une COPIE TEMPORAIRE stable : bash lit alors le
+# script depuis /tmp (jamais modifié), ce qui évite l'erreur « unbound variable »
+# lorsque le fichier d'origine change de taille en cours d'exécution.
 set -euo pipefail
+
+if [[ "${_CINE_REEXEC:-}" != "1" ]]; then
+    _self="$(mktemp /tmp/cine-update.XXXXXX.sh)"
+    cp "$0" "$_self"; chmod +x "$_self"
+    _CINE_REEXEC=1 exec "$_self" "$@"
+fi
+trap 'rm -f "$0"' EXIT   # supprime la copie temporaire à la sortie
 
 main() {
     local SOURCE_DIR="${SOURCE_DIR:-/opt/cinetheque-src}"
