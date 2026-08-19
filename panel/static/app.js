@@ -737,8 +737,6 @@ async function loadSettings() {
     const s = await api("/api/settings");
     $("#set-region").value = s.tmdb_region || "FR";
     $("#tmdb-status").textContent = s.tmdb_configuree ? "✅ Clé configurée" : "⚠️ Non configurée";
-    $("#set-cf-enabled").checked = !!s.cf_sso_enabled;
-    $("#set-cf-email").value = s.cf_access_email || "";
     $("#set-discord-enabled").checked = !!s.notif_discord_enabled;
     $("#set-botpanel-url").value = s.botpanel_url || "";
     $("#set-slug-episode").value = s.botpanel_slug_episode || "";
@@ -798,16 +796,6 @@ $("#btn-test-notif").addEventListener("click", async () => {
     const r = await api("/api/settings/notif-test", { method: "POST" });
     $("#notif-status").textContent = "✅ Test envoyé sur : " + r.canaux.join(", ");
   } catch (e) { $("#notif-status").textContent = "❌ " + e.message; }
-});
-$("#btn-save-cf").addEventListener("click", async () => {
-  try {
-    await api("/api/settings", { method: "POST", body: {
-      cf_sso_enabled: $("#set-cf-enabled").checked,
-      cf_access_email: $("#set-cf-email").value.trim(),
-    } });
-    $("#cf-status").textContent = "✅ Enregistré.";
-    toast("Réglage de connexion enregistré");
-  } catch (e) { $("#cf-status").textContent = "❌ " + e.message; }
 });
 $("#btn-save-tmdb").addEventListener("click", async () => {
   const body = { tmdb_region: $("#set-region").value };
