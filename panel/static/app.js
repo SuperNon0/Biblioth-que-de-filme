@@ -325,7 +325,7 @@ function showTab(name) {
     LOADERS[name]();
   }
 }
-const RELOAD_ALWAYS = new Set(["bibliotheque", "listes", "profil", "historique"]);
+const RELOAD_ALWAYS = new Set(["bibliotheque", "listes", "profil"]);
 const _tabLoaded = new Set();
 
 document.addEventListener("click", (e) => {
@@ -1452,8 +1452,7 @@ const LOADERS = {
   decouverte: () => { fillGenres("dec-genre"); fillProviders("movie"); loadDiscover(); },
   futur: loadFutur,
   listes: loadListes,
-  profil: loadStats,
-  historique: loadJournal,
+  profil: () => { loadStats(); loadJournal(); },  // stats + historique intégré
   parametres: loadSettings,
 };
 
