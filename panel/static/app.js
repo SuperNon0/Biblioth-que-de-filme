@@ -146,20 +146,28 @@ function openQuickMenu(ctx) {
   const avoirBtn = $("#quick-menu [data-qm='a_voir']");
   avoirBtn.textContent = inAvoir ? "✓ Dans « À voir »" : "＋ À voir";
   avoirBtn.classList.toggle("current", inAvoir);
+  // « Déjà vu » seulement pour un titre PAS encore dans la bibliothèque (on
+  // note quelque chose vu dans le passé). S'il est déjà dans ta biblio, c'est
+  // « Vu » (tu le marques vu maintenant), avec « ✓ Vu ×N » s'il est déjà vu.
   const vuBtn = $("#quick-menu [data-qm='vu']");
-  vuBtn.textContent = seen ? ("✓ Déjà vu" + (ctx.nbvues > 1 ? ` ×${ctx.nbvues}` : "")) : "Déjà vu";
+  if (!inLib) vuBtn.textContent = "Déjà vu";
+  else vuBtn.textContent = seen ? ("✓ Vu" + (ctx.nbvues > 1 ? ` ×${ctx.nbvues}` : "")) : "Vu";
   vuBtn.classList.toggle("current", seen);
-  // Bouton violet « Épisode suivant » : séries en cours avec un prochain épisode.
+  // Bouton violet « Épisode suivant » (ou « Revoir » pour une série déjà vue
+  // qu'on re-visionne). Visible pour toute série en biblio ayant un prochain
+  // épisode — 1er visionnage OU re-visionnage.
   const nextBtn = $("#quick-menu [data-qm='next']");
-  if (enCours && ctx.type === "serie" && ctx.nextS) {
-    nextBtn.textContent = `▶ Épisode suivant · S${ctx.nextS} E${ctx.nextE}`;
+  if (ctx.localid && ctx.type === "serie" && ctx.nextS) {
+    const revoit = seen;  // série déjà vue entièrement → re-visionnage en cours
+    nextBtn.textContent = `▶ ${revoit ? "Revoir" : "Épisode suivant"} · S${ctx.nextS} E${ctx.nextE}`;
     nextBtn.classList.remove("hidden");
   } else {
     nextBtn.classList.add("hidden");
   }
-  // Ligne d'infos : progression (séries en cours) et/ou date d'ajout.
+  // Ligne d'infos : progression (séries en cours), re-visionnage, date d'ajout.
   const meta = $("#qm-meta"), parts = [];
   if (enCours && ctx.total) parts.push(`En cours · ${ctx.vus}/${ctx.total} épisodes`);
+  else if (seen && ctx.type === "serie" && ctx.nextS) parts.push("Re-visionnage en cours");
   if (inLib) parts.push(ctx.added ? `ajouté le ${fmtAjout(ctx.added)}` : "dans ta bibliothèque");
   if (parts.length) { meta.textContent = "✓ " + parts.join(" · "); meta.classList.remove("hidden"); }
   else meta.classList.add("hidden");
@@ -173,6 +181,18 @@ function fmtAjout(ts) {
   const MOISL = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet",
     "août", "septembre", "octobre", "novembre", "décembre"];
   return `${d.getDate()} ${MOISL[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+/* Progression d'une série + prochain épisode (1er non-vu, sinon 1er moins revu
+   que le max = re-visionnage en cours). Même logique que le back-end. */
+function seriesProgress(saisons) {
+  let total = 0, vus = 0, maxnb = 0; const eps = [];
+  for (const s of (saisons || [])) for (const ep of (s.episodes || [])) {
+    total++; if (ep.vu) vus++; maxnb = Math.max(maxnb, ep.nb_vues || 0); eps.push(ep);
+  }
+  let nx = eps.find((e) => !e.vu) || null, revoit = false;
+  if (!nx && maxnb > 0) { nx = eps.find((e) => (e.nb_vues || 0) < maxnb) || null; revoit = !!nx; }
+  return { total, vus, revoit, next: nx ? { s: nx.saison, e: nx.numero } : null };
 }
 
 quickMenu.addEventListener("click", async (e) => {
@@ -194,31 +214,24 @@ quickMenu.addEventListener("click", async (e) => {
       await api(`/api/title/${localid}/episode/${qmContext.nextS}/${qmContext.nextE}/toggle`,
         { method: "POST" });
       toast(`S${qmContext.nextS}E${qmContext.nextE} marqué vu ✓`);
-      // Recalcule progression + prochain épisode non vu depuis la fiche.
+      // Recalcule progression + prochain épisode (re-visionnage inclus).
       const data = await api(`/api/title/${localid}`);
-      let total = 0, vus = 0, next = null;
-      for (const s of (data.saisons || [])) {
-        for (const ep of (s.episodes || [])) {
-          total++;
-          if (ep.vu) vus++;
-          else if (!next) next = { s: ep.saison, e: ep.numero };
-        }
-      }
+      const prog = seriesProgress(data.saisons);
       const statut = (data.titre && data.titre.statut) || "";
       if (el) {  // maj de la carte source, sur place (pas de rechargement)
         el.dataset.statut = statut;
-        el.dataset.vus = vus; el.dataset.total = total;
-        el.dataset.nexts = next ? next.s : ""; el.dataset.nexte = next ? next.e : "";
-        updateCardProgress(el, vus, total, next);
+        el.dataset.vus = prog.vus; el.dataset.total = prog.total;
+        el.dataset.nexts = prog.next ? prog.next.s : ""; el.dataset.nexte = prog.next ? prog.next.e : "";
+        updateCardProgress(el, prog.vus, prog.total, prog.next);
         if (statut === "vu") updateCardBadge(el, "vu");
       }
-      if (next && statut === "en_cours") {  // rouvre le menu sur l'épisode suivant
-        Object.assign(qmContext, { vus, total, statut,
-          nextS: String(next.s), nextE: String(next.e) });
+      if (prog.next) {  // reste un épisode (1er visionnage OU re-visionnage) → on enchaîne
+        Object.assign(qmContext, { vus: prog.vus, total: prog.total, statut,
+          nextS: String(prog.next.s), nextE: String(prog.next.e) });
         openQuickMenu(qmContext);
       } else {
-        closeQuickMenu();  // série terminée
-        toast("Série terminée 🎉");
+        closeQuickMenu();
+        toast("Tout est vu 🎉");
       }
     } catch (err) { toast(err.message); }
     return;

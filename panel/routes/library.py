@@ -54,35 +54,45 @@ def _mark_seen(titre_id, typ):
 
 def annotate_series_progress(rows):
     """Ajoute à des lignes de séries : progression (``total_ep``/``vus_ep``) et
-    prochain épisode non vu (``next_saison``/``next_numero``) — pour afficher
-    « où j'en suis » sur les cartes (bibliothèque et « Reprendre »)."""
+    prochain épisode (``next_saison``/``next_numero``) — pour « où j'en suis ».
+
+    Le « prochain épisode » gère aussi le **re-visionnage** : s'il ne reste aucun
+    épisode non vu, on propose le premier épisode **moins revu que le maximum**
+    (``revoit=True``), pour pouvoir enchaîner une série déjà vue."""
     ids = [r["id"] for r in rows if r.get("type") == "serie"]
     if not ids:
         return rows
     marks = ",".join("?" * len(ids))
-    prog = {p["titre_id"]: p for p in db.q(
-        f"""SELECT titre_id, COUNT(*) AS total, SUM(vu) AS vus, MIN(nb_vues) AS mini
-            FROM episodes WHERE titre_id IN ({marks}) GROUP BY titre_id""", ids)}
-    nextep = {}
-    for e in db.q(f"""SELECT titre_id, saison, numero FROM episodes
-                      WHERE titre_id IN ({marks}) AND vu = 0
+    eps_by = {}
+    for e in db.q(f"""SELECT titre_id, saison, numero, vu, nb_vues FROM episodes
+                      WHERE titre_id IN ({marks})
                       ORDER BY titre_id, saison, numero""", ids):
-        nextep.setdefault(e["titre_id"], e)
+        eps_by.setdefault(e["titre_id"], []).append(e)
     for r in rows:
         if r.get("type") != "serie":
             continue
-        p = prog.get(r["id"])
-        if p:
-            r["total_ep"] = p["total"]
-            r["vus_ep"] = p["vus"] or 0
-            # Série entièrement vue N fois (min des revisionnages) → « ↻ ×N »
-            # sur la carte, comme les films.
-            if p["total"] and (p["vus"] or 0) >= p["total"]:
-                r["nb_vues"] = p["mini"] or 0
-        nx = nextep.get(r["id"])
-        if nx:
-            r["next_saison"] = nx["saison"]
-            r["next_numero"] = nx["numero"]
+        eps = eps_by.get(r["id"])
+        if not eps:
+            continue
+        total = len(eps)
+        vus = sum(1 for e in eps if e["vu"])
+        maxi = max((e["nb_vues"] or 0) for e in eps)
+        mini = min((e["nb_vues"] or 0) for e in eps)
+        r["total_ep"] = total
+        r["vus_ep"] = vus
+        # Prochain épisode : d'abord un non-vu (1er visionnage) ; sinon, le
+        # premier moins revu que le max (re-visionnage en cours).
+        nxt = next((e for e in eps if not e["vu"]), None)
+        if nxt is None and maxi > 0:
+            nxt = next((e for e in eps if (e["nb_vues"] or 0) < maxi), None)
+            if nxt is not None:
+                r["revoit"] = True
+        if nxt is not None:
+            r["next_saison"] = nxt["saison"]
+            r["next_numero"] = nxt["numero"]
+        # Série entièrement vue N fois (min des revisionnages) → « ↻ ×N ».
+        if total and vus >= total:
+            r["nb_vues"] = mini
     return rows
 
 
