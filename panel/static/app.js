@@ -45,7 +45,7 @@ function toast(msg) {
   toastTimer = setTimeout(() => el.classList.add("hidden"), 2800);
 }
 
-const STATUTS = { vu: "Vu", a_voir: "À voir", en_cours: "En cours" };
+const STATUTS = { vu: "Vu", a_voir: "À voir plus tard", en_cours: "En cours" };
 const posterSrc = (u) => u || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E";
 
 /* Couleur par genre — un peu de vie dans les fiches et les cartes. */
@@ -115,7 +115,7 @@ function posterCard(item) {
   </div>`;
 }
 
-/* Clic sur un titre → petit menu 3 options (À voir / Déjà vu / Plus d'infos). */
+/* Clic sur un titre → petit menu 3 options (À voir plus tard / Déjà vu / Plus d'infos). */
 function openItem(el) {
   const tmdb = Number(el.dataset.tmdb) || null, type = el.dataset.type || null;
   const localid = Number(el.dataset.id || el.dataset.localid) || null;
@@ -144,7 +144,7 @@ function openQuickMenu(ctx) {
   const enCours = ctx.statut === "en_cours";
   const seen = ctx.statut === "vu" || ctx.nbvues > 0;
   const avoirBtn = $("#quick-menu [data-qm='a_voir']");
-  avoirBtn.textContent = inAvoir ? "✓ Dans « À voir »" : "＋ À voir";
+  avoirBtn.textContent = inAvoir ? "✓ Dans « À voir plus tard »" : "＋ À voir plus tard";
   avoirBtn.classList.toggle("current", inAvoir);
   // « Déjà vu » seulement pour un titre PAS encore dans la bibliothèque (on
   // note quelque chose vu dans le passé). S'il est déjà dans ta biblio, c'est
@@ -259,7 +259,7 @@ quickMenu.addEventListener("click", async (e) => {
       el.classList.add("poster-added");
       updateCardBadge(el, st);  // badge visible à jour immédiatement (pas de reshuffle)
     }
-    toast(act === "vu" ? "Marqué comme vu ✓" : "Ajouté à « À voir »");
+    toast(act === "vu" ? "Marqué comme vu ✓" : "Ajouté à « À voir plus tard »");
     closeQuickMenu();
     refreshAll();  // biblio uniquement, en silence (défilement conservé)
   } catch (err) { toast(err.message); }
@@ -495,10 +495,10 @@ async function rollRoulette(source) {
   try {
     const { results } = await api(`/api/roulette?${params}`);
     const vide = source === "library"
-      ? "Ta liste « À voir » est vide — ajoute des titres d'abord."
+      ? "Ta liste « À voir plus tard » est vide — ajoute des titres d'abord."
       : "Aucun résultat.";
     const intro = source === "library"
-      ? "Piochés dans ta liste « À voir » :" : "Piochés au hasard dans le catalogue :";
+      ? "Piochés dans ta liste « À voir plus tard » :" : "Piochés au hasard dans le catalogue :";
     modalContent.innerHTML = `<div class="detail-body"><h2>${ICONS.dice}Que regarder ?</h2>
       ${(!results || !results.length) ? `<p class="muted">${vide}</p>`
         : `<p class="muted">${intro}</p><div class="grid">${results.map(posterCard).join("")}</div>
@@ -657,7 +657,7 @@ async function openPresetsModal() {
   modal.classList.remove("hidden"); modal.classList.remove("full");
   modalContent.innerHTML = `<div class="detail-body"><h2>${ICONS.film}Listes prêtes</h2>
     <p class="muted">Choisis une saga : ses titres sont ajoutés à ta bibliothèque
-      (« À voir ») et rangés dans une nouvelle liste, dans l'ordre.</p>
+      (« À voir plus tard ») et rangés dans une nouvelle liste, dans l'ordre.</p>
     <div id="presets-list" class="muted">Chargement…</div></div>`;
   try {
     const { presets } = await api("/api/lists/presets");
@@ -1049,7 +1049,7 @@ function renderTitlePage(n) {
     <button class="dv-act ${seen ? "done" : ""}" data-act="vu">
       <span class="dv-ic">${seen ? "✓" : "○"}</span><span>${seen ? "Vu" : "Marquer comme vu"}</span></button>
     <button class="dv-act ${n.statut === "a_voir" ? "done" : ""}" data-act="avoir">
-      <span class="dv-ic">＋</span><span>Liste de suivi</span></button>
+      <span class="dv-ic">＋</span><span>À voir plus tard</span></button>
     <button class="dv-act" data-act="liste">
       <span class="dv-ic">≣</span><span>Ajouter à la liste…</span></button>
   </div>`;
@@ -1242,7 +1242,7 @@ modalContent.addEventListener("click", async (e) => {
       sc.scrollBy({ left: arrowEl.classList.contains("left") ? -dx : dx, behavior: "smooth" }); }
     return;
   }
-  // Les boutons Vu / À voir / Liste / Revu portent data-act seul → action titre.
+  // Les boutons Vu / À voir plus tard / Liste / Revu portent data-act seul → action titre.
   // Les boutons de saison/série portent AUSSI data-markseason/markseries : on ne
   // les détourne pas ici, ils sont traités par leurs branches dédiées plus bas.
   const actEl = e.target.closest("[data-act]");
@@ -1370,12 +1370,12 @@ async function handleTitleAct(actEl) {
     // conservée, la pastille/état du bouton se met à jour tout de suite).
     if (localid) {
       await api(`/api/library/${localid}`, { method: "PATCH", body: { statut } });
-      toast(statut === "vu" ? "Marqué comme vu ✓" : "Ajouté à « À voir »");
+      toast(statut === "vu" ? "Marqué comme vu ✓" : "Ajouté à « À voir plus tard »");
       openDetail(localid, { keepScroll: true });
     } else {
       const r = await api("/api/library", { method: "POST",
         body: { tmdb_id: tmdb, type, statut } });
-      toast(statut === "vu" ? "Marqué comme vu ✓" : "Ajouté à « À voir »");
+      toast(statut === "vu" ? "Marqué comme vu ✓" : "Ajouté à « À voir plus tard »");
       openDetail(r.id, { keepScroll: true });
     }
     refreshAll();

@@ -151,13 +151,16 @@ def init(db_path):
     conn = connect()
     conn.executescript(SCHEMA)
     _migrate(conn)
-    # Les listes système (« À voir »/« Favoris ») sont désormais créées PAR
+    # Les listes système (« À voir plus tard »/« Favoris ») sont créées PAR
     # compte (cloisonnement) via ensure_system_lists(), plus de seeding global.
+    # Renommage une fois de l'ancien libellé « À voir » → « À voir plus tard ».
+    conn.execute("UPDATE listes SET nom='À voir plus tard' "
+                 "WHERE systeme='a_voir' AND nom='À voir'")
     conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     conn.commit()
 
 
-SYSTEM_LISTS = (("a_voir", "À voir"), ("favoris", "Favoris"))
+SYSTEM_LISTS = (("a_voir", "À voir plus tard"), ("favoris", "Favoris"))
 
 
 def ensure_system_lists(compte_id):
