@@ -375,6 +375,7 @@ main { padding: 20px; max-width: 1400px; margin: 0 auto; }
    et la barre paraît vide. */
 .bar-fill { display: block; height: 100%; border-radius: 999px; min-width: 8px;
             background: linear-gradient(90deg, var(--accent), var(--accent-hover)); }
+.bar-fill.alt { background: linear-gradient(90deg, var(--pending), #c4b5fd); }
 .bar-num { min-width: 58px; font-size: 0.74rem; color: var(--text); font-weight: 500;
            white-space: nowrap; text-align: right; }
 
@@ -386,22 +387,37 @@ main { padding: 20px; max-width: 1400px; margin: 0 auto; }
 .dv-time-ic { font-size: 1.2rem; }
 .dv-timespent b { color: var(--green); }
 
-/* ------------------------------------------------------------- historique */
-.jrnl-item { display: flex; align-items: center; gap: 12px; padding: 8px;
-             border-bottom: 1px solid var(--border); cursor: pointer; }
-.jrnl-item:hover { background: var(--bg-card); }
-.jrnl-poster { width: 42px; height: 63px; object-fit: cover; border-radius: 6px;
-               background: var(--bg-panel); flex-shrink: 0;
-               border: 1px solid var(--border); }
-.jrnl-info { flex: 1; min-width: 0; }
-.jrnl-title { font-weight: 500; font-size: 0.86rem; }
-.jrnl-sub { font-size: 0.76rem; color: var(--accent); margin-top: 1px; }
-.jrnl-date { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
-.jrnl-del { flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%;
-            border: 1px solid var(--border); background: var(--bg-card);
-            color: var(--muted); cursor: pointer; font-size: 0.72rem; }
-.jrnl-del:hover { color: var(--red); border-color: var(--red);
-                  background: rgba(224, 90, 90, 0.14); }
+/* --- cartes « records » / top séries (stats du profil) ------------------ */
+.rec-cards { display: grid; gap: 12px; margin-bottom: 22px;
+             grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.rec-card { display: flex; gap: 10px; align-items: center; padding: 10px;
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: var(--radius); }
+.rec-poster { width: 46px; height: 69px; object-fit: cover; border-radius: 6px;
+              flex-shrink: 0; border: 1px solid var(--border); background: var(--bg-panel); }
+.rec-info { min-width: 0; }
+.rec-titre { font-weight: 500; font-size: 0.84rem; line-height: 1.2; overflow: hidden;
+             display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+
+/* --------------------------------------- historique (grille d'affiches) */
+.jrnl-grid { display: grid; gap: 14px;
+             grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); }
+.jrnl-card { cursor: pointer; }
+.jrnl-thumb { position: relative; aspect-ratio: 2 / 3; border-radius: var(--radius);
+              overflow: hidden; border: 1px solid var(--border); background: var(--bg-panel); }
+.jrnl-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.jrnl-card:hover .jrnl-thumb { border-color: var(--accent); }
+.jrnl-del { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px;
+            border-radius: 50%; border: 1px solid var(--border);
+            background: rgba(14, 15, 17, 0.8); color: var(--text); cursor: pointer;
+            font-size: 0.72rem; line-height: 1; }
+.jrnl-del:hover { color: #fff; border-color: var(--red); background: var(--red); }
+.jrnl-cap { padding: 6px 2px 0; }
+.jrnl-title { font-weight: 500; font-size: 0.8rem; line-height: 1.25; overflow: hidden;
+              display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.jrnl-sub { font-size: 0.72rem; color: var(--accent); margin-top: 2px;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jrnl-date { font-size: 0.68rem; color: var(--muted); margin-top: 2px; }
 
 /* ------------------------------------------------------------- paramètres */
 .settings-grid { display: grid; gap: 16px;

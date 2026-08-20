@@ -676,6 +676,12 @@ async function loadStats() {
   try {
     const s = await api("/api/stats");
     const maxG = Math.max(1, ...s.genres.map((g) => g.n));
+    const rep = s.repartition || {}, rev = s.revisionnages || {}, rec = s.records || {};
+    const totMin = (rep.films_min || 0) + (rep.series_min || 0) || 1;
+    const recCard = (r, sous) => r ? `<div class="rec-card">
+        <img class="rec-poster" loading="lazy" src="${posterSrc(r.affiche)}" alt="">
+        <div class="rec-info"><div class="rec-titre">${esc(r.titre)}</div>
+          <div class="muted">${sous}</div></div></div>` : "";
     wrap.innerHTML = `
       <div class="stat-cards">
         <div class="stat-card">
@@ -690,6 +696,36 @@ async function loadStats() {
         <div class="stat-card"><div class="stat-value">${s.nb_episodes}</div>
           <div class="stat-label">Épisodes vus</div></div>
       </div>
+
+      <h3 class="sub-title">Répartition films / séries</h3>
+      <div class="bar-row"><span class="bar-label">Films</span>
+        <span class="bar-track"><span class="bar-fill" style="width:${(rep.films_min || 0) / totMin * 100}%"></span></span>
+        <span class="bar-num">${rep.films_n || 0} · ${rep.films_texte || "0 min"}</span></div>
+      <div class="bar-row"><span class="bar-label">Séries</span>
+        <span class="bar-track"><span class="bar-fill alt" style="width:${(rep.series_min || 0) / totMin * 100}%"></span></span>
+        <span class="bar-num">${rep.series_n || 0} · ${rep.series_texte || "0 min"}</span></div>
+
+      <div class="stat-cards" style="margin-top:16px">
+        <div class="stat-card"><div class="stat-value">${rev.films || 0}</div>
+          <div class="stat-label">Films revus</div></div>
+        <div class="stat-card"><div class="stat-value">${rev.series || 0}</div>
+          <div class="stat-label">Séries revues</div></div>
+      </div>
+
+      ${(rec.film_plus_revu || rec.serie_plus_revue) ? `<h3 class="sub-title">Records</h3>
+        <div class="rec-cards">
+          ${recCard(rec.film_plus_revu, `Film le plus revu · vu ×${(rec.film_plus_revu || {}).n}`)}
+          ${recCard(rec.serie_plus_revue, `Série la plus revue · vue ×${(rec.serie_plus_revue || {}).n}`)}
+        </div>` : ""}
+
+      ${(s.top_series_temps || []).length ? `<h3 class="sub-title">Séries les plus chronophages</h3>
+        <div class="rec-cards">
+          ${s.top_series_temps.map((t) => `<div class="rec-card">
+            <img class="rec-poster" loading="lazy" src="${posterSrc(t.affiche)}" alt="">
+            <div class="rec-info"><div class="rec-titre">${esc(t.titre)}</div>
+              <div class="muted">${t.texte} · ≈ ${t.converti}</div></div></div>`).join("")}
+        </div>` : ""}
+
       ${s.genres.length ? `<h3 class="sub-title">Genres les plus vus</h3>
         ${s.genres.map((g) => `<div class="bar-row">
           <span class="bar-label">${esc(g.nom)}</span>
@@ -714,22 +750,25 @@ async function loadJournal() {
   wrap.innerHTML = `<p class="muted">Chargement…</p>`;
   try {
     const { events } = await api("/api/journal");
-    wrap.innerHTML = events.length ? events.map(journalRow).join("")
+    wrap.innerHTML = events.length
+      ? `<div class="jrnl-grid">${events.map(journalRow).join("")}</div>`
       : `<p class="muted">Rien pour l'instant. Marque un film, un épisode ou une
          série comme vu et ça apparaîtra ici, avec la date et l'heure.</p>`;
   } catch (e) { wrap.innerHTML = `<p class="muted">${esc(e.message)}</p>`; }
 }
 function journalRow(ev) {
   const sub = ev.label || JRNL_SUB[ev.type] || "";
-  return `<div class="jrnl-item" data-open="${ev.titre_id}" data-type="${ev.media}">
-    <img class="jrnl-poster" loading="lazy" src="${posterSrc(ev.affiche)}" alt="">
-    <div class="jrnl-info">
+  return `<div class="jrnl-card" data-open="${ev.titre_id}" data-type="${ev.media}">
+    <div class="jrnl-thumb">
+      <img loading="lazy" src="${posterSrc(ev.affiche)}" alt="">
+      <button class="jrnl-del" data-jrnl-del="${ev.id}" aria-label="Retirer de l'historique"
+        title="Retirer de l'historique">✕</button>
+    </div>
+    <div class="jrnl-cap">
       <div class="jrnl-title">${esc(ev.titre)}</div>
       ${sub ? `<div class="jrnl-sub">${esc(sub)}</div>` : ""}
       <div class="jrnl-date">${fmtDateHeure(ev.cree)}</div>
     </div>
-    <button class="jrnl-del" data-jrnl-del="${ev.id}" aria-label="Retirer de l'historique"
-      title="Retirer de l'historique">✕</button>
   </div>`;
 }
 $("#journal-list").addEventListener("click", async (e) => {
@@ -737,7 +776,7 @@ $("#journal-list").addEventListener("click", async (e) => {
   if (del) {
     e.stopPropagation();
     try { await api(`/api/journal/${del.dataset.jrnlDel}`, { method: "DELETE" });
-      del.closest(".jrnl-item").remove(); } catch (err) { toast(err.message); }
+      del.closest(".jrnl-card").remove(); } catch (err) { toast(err.message); }
     return;
   }
   const item = e.target.closest("[data-open]");

@@ -87,8 +87,63 @@ def _compte_genres(compte_id):
     return counter.most_common(10)
 
 
+def _top_series_temps(compte_id, limit=3):
+    """Séries les plus chronophages (temps vu, revisionnages inclus)."""
+    rows = db.q(
+        f"""SELECT t.id, t.titre, t.affiche,
+                   SUM(COALESCE(e.duree, {DUREE_EPISODE_DEFAUT}) * MAX(e.nb_vues, 1)) AS minutes
+            FROM episodes e JOIN titres t ON t.id = e.titre_id
+            WHERE e.vu = 1 AND t.compte_id = ?
+            GROUP BY t.id ORDER BY minutes DESC LIMIT ?""",
+        (compte_id, limit))
+    out = []
+    for r in rows:
+        d = duree_lisible(r["minutes"] or 0)
+        out.append({"titre": r["titre"], "affiche": r["affiche"], "texte": d["texte"],
+                    "converti": d["converti"]})
+    return out
+
+
+def _revisionnages(compte_id):
+    """Compteurs de re-visionnages : films revus ≥2 fois, séries revues ≥2 fois."""
+    films = db.q1(
+        """SELECT COUNT(*) AS n FROM (
+             SELECT v.titre_id FROM visionnages v JOIN titres t ON t.id = v.titre_id
+             WHERE t.compte_id = ? GROUP BY v.titre_id HAVING COUNT(*) >= 2)""",
+        (compte_id,))["n"]
+    # Série revue = tous les épisodes vus au moins 2 fois (min des nb_vues ≥ 2).
+    series = db.q1(
+        """SELECT COUNT(*) AS n FROM (
+             SELECT e.titre_id FROM episodes e JOIN titres t ON t.id = e.titre_id
+             WHERE t.compte_id = ? GROUP BY e.titre_id
+             HAVING MIN(e.nb_vues) >= 2 AND SUM(CASE WHEN e.vu=0 THEN 1 ELSE 0 END) = 0)""",
+        (compte_id,))["n"]
+    return {"films": films, "series": series}
+
+
+def _records(compte_id):
+    """Film le plus revu et série la plus revue (pour la section « records »)."""
+    film = db.q1(
+        """SELECT t.titre, t.affiche, COUNT(v.id) AS n
+           FROM visionnages v JOIN titres t ON t.id = v.titre_id
+           WHERE t.compte_id = ? GROUP BY t.id ORDER BY n DESC LIMIT 1""",
+        (compte_id,))
+    serie = db.q1(
+        """SELECT t.titre, t.affiche, MIN(e.nb_vues) AS n
+           FROM episodes e JOIN titres t ON t.id = e.titre_id
+           WHERE t.compte_id = ? AND e.vu = 1
+           GROUP BY t.id HAVING SUM(CASE WHEN e.vu=0 THEN 1 ELSE 0 END) = 0
+           ORDER BY n DESC LIMIT 1""",
+        (compte_id,))
+    def fmt(r):
+        return {"titre": r["titre"], "affiche": r["affiche"], "n": r["n"]} if r and r["n"] else None
+    return {"film_plus_revu": fmt(film), "serie_plus_revue": fmt(serie)}
+
+
 def resume(compte_id):
-    minutes = _minutes_films(compte_id) + _minutes_episodes(compte_id)
+    min_films = _minutes_films(compte_id)
+    min_series = _minutes_episodes(compte_id)
+    minutes = min_films + min_series
     nb_films = db.q1(
         "SELECT COUNT(DISTINCT titre_id) AS n FROM visionnages v "
         "JOIN titres t ON t.id = v.titre_id WHERE t.type = 'film' AND t.compte_id = ?",
@@ -118,4 +173,15 @@ def resume(compte_id):
         "nb_episodes": nb_episodes,
         "genres": [{"nom": g, "n": n} for g, n in _compte_genres(compte_id)],
         "par_annee": par_annee,
+        # Stat 1 — répartition films / séries (nombre + temps).
+        "repartition": {"films_n": nb_films, "series_n": nb_series,
+                        "films_min": min_films, "series_min": min_series,
+                        "films_texte": duree_lisible(min_films)["texte"],
+                        "series_texte": duree_lisible(min_series)["texte"]},
+        # Stat 4 — top séries chronophages.
+        "top_series_temps": _top_series_temps(compte_id),
+        # Stat 5 — total de re-visionnages.
+        "revisionnages": _revisionnages(compte_id),
+        # Stat 16 — records (film le plus revu, série la plus revue).
+        "records": _records(compte_id),
     }
