@@ -55,10 +55,13 @@ def run_checks():
 
 def _check_episodes():
     today = date.today().isoformat()
+    # Notifications réservées aux comptes super-admin : les séries des membres
+    # ne déclenchent PAS de notification (voir aussi _check_alertes).
     series = db.q(
         """SELECT id, tmdb_id, titre, affiche_url FROM titres
            WHERE type='serie' AND statut IN ('en_cours','a_voir')
-           AND tmdb_id IS NOT NULL"""
+           AND tmdb_id IS NOT NULL
+           AND compte_id IN (SELECT id FROM comptes WHERE role='super_admin')"""
     )
     tmdb = get_tmdb()
     for s in series:
@@ -96,11 +99,13 @@ def _check_episodes():
 def _check_alertes():
     today = date.today().isoformat()
     tmdb = get_tmdb()
+    # Idem : seules les alertes des comptes super-admin sont notifiées.
     alertes = db.q(
         """SELECT a.id, a.canal, t.titre, t.tmdb_id, t.type, t.date_sortie,
                   t.affiche_url
            FROM alertes a JOIN titres t ON t.id = a.titre_id
-           WHERE a.vue = 0"""
+           WHERE a.vue = 0
+           AND t.compte_id IN (SELECT id FROM comptes WHERE role='super_admin')"""
     )
     for a in alertes:
         affiche = a["affiche_url"] or ""
