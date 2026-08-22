@@ -734,6 +734,9 @@ h2 svg.ic, h3 svg.ic { width: 18px; height: 18px; vertical-align: -3px; margin-r
   /* filtres : cachés en ligne, ouverts en feuille du bas via « Filtres » */
   .filter-btn { display: inline-flex; }
   .toolbar { display: none; }
+  /* Barres d'ACTIONS (ex. page Listes) : toujours visibles sur mobile — ce ne
+     sont pas des filtres, il n'y a pas de bouton pour les déplier. */
+  .toolbar.always { display: flex; }
   .toolbar.open { display: flex; flex-direction: column; align-items: stretch;
                   gap: 12px; position: fixed; left: 0; right: 0; bottom: 0; z-index: 70;
                   background: var(--bg-panel); border-top: 1px solid var(--border);
