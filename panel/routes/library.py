@@ -116,6 +116,16 @@ def annotate_library(items):
             it["local_id"] = row["id"]
             it["nb_vues"] = row["nb_vues"]
             it["date_ajout"] = row["date_ajout"]
+    # Progression des séries (X/Y, prochain épisode, re-visionnage) sur TOUS les
+    # écrans qui affichent des résultats TMDB (suggestions, découverte, similaires,
+    # sagas, page acteur…), pour que le menu rapide montre « En cours » et
+    # « Épisode suivant » partout. annotate_series_progress attend la clé « id ».
+    in_lib = [it for it in items if it.get("local_id")]
+    for it in in_lib:
+        it["id"] = it["local_id"]
+    annotate_series_progress(in_lib)
+    for it in in_lib:
+        it.pop("id", None)
     return items
 
 
@@ -126,18 +136,11 @@ def search():
     if not query:
         return jsonify(results=[])
     try:
+        # annotate_library annote aussi la progression des séries (X/Y, prochain
+        # épisode) → le menu rapide « épisode suivant » marche depuis la recherche.
         items = annotate_library(get_tmdb().search(query))
     except TMDBError as exc:
         return jsonify(error=str(exc)), 502
-    # Progression des séries déjà en biblio → menu rapide « épisode suivant »
-    # et affichage correct au reclic depuis la recherche. annotate_series_progress
-    # attend la clé « id » : on aliase temporairement local_id.
-    in_lib = [it for it in items if it.get("local_id")]
-    for it in in_lib:
-        it["id"] = it["local_id"]
-    annotate_series_progress(in_lib)
-    for it in in_lib:
-        it.pop("id", None)
     return jsonify(results=items)
 
 
