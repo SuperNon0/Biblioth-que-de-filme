@@ -1079,10 +1079,17 @@ function renderTitlePage(n) {
   const watchChips = n.watches.length ? `<div class="dv-watches">${n.watches.map((w) =>
       `<span class="watch-chip">${w.date ? fmtDate(w.date) : "déjà vu"}<button
          class="watch-del" data-delwatch="${w.id}" aria-label="Supprimer ce visionnage">✕</button></span>`).join("")}</div>` : "";
-  const vuBlock = seen ? `<div class="dv-seen">
-      <span class="dv-seen-count">Vu ${n.watches.length || 1} fois</span>
-      ${watchChips}
-      <button class="btn small" data-act="revu">↻ J'ai revu</button></div>` : "";
+  // Nombre de fois vu : pour un FILM = nombre de visionnages ; pour une SÉRIE =
+  // nombre de re-visionnages complets (min des nb_vues, via temps.fois). Les
+  // séries n'utilisent pas les « visionnages » et gèrent le revu dans « Saisons »
+  // (donc pas de chips de dates ni de bouton « J'ai revu » film ici).
+  const foisSerie = (n.temps && n.temps.fois) || 1;
+  const vuBlock = seen ? (n.type === "serie"
+    ? `<div class="dv-seen"><span class="dv-seen-count">Série vue ${foisSerie} fois</span></div>`
+    : `<div class="dv-seen">
+        <span class="dv-seen-count">Vu ${n.watches.length || 1} fois</span>
+        ${watchChips}
+        <button class="btn small" data-act="revu">↻ J'ai revu</button></div>`) : "";
   const actions = `<div class="dv-actions" data-localid="${n.localId || ""}"
        data-tmdb="${n.tmdb || ""}" data-type="${n.type}">
     <button class="dv-act ${seen ? "done" : ""}" data-act="vu">
