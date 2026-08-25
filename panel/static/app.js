@@ -45,6 +45,29 @@ function toast(msg) {
   toastTimer = setTimeout(() => el.classList.add("hidden"), 2800);
 }
 
+/* Confirmation intégrée (au thème) — remplace window.confirm(), peu fiable en
+   PWA installée (iOS) où il peut griser/figer l'écran au lieu de s'afficher.
+   Renvoie une promesse résolue à true/false. */
+function confirmDialog(message, okLabel = "Confirmer") {
+  return new Promise((resolve) => {
+    const ov = document.createElement("div");
+    ov.className = "confirm-overlay";
+    ov.innerHTML = `<div class="confirm-box"><p class="confirm-msg"></p>
+      <div class="confirm-actions">
+        <button class="btn small" data-c="0">Annuler</button>
+        <button class="btn small danger" data-c="1"></button></div></div>`;
+    ov.querySelector(".confirm-msg").textContent = message;
+    ov.querySelector("[data-c='1']").textContent = okLabel;
+    const done = (v) => { ov.remove(); resolve(v); };
+    ov.addEventListener("click", (e) => {
+      if (e.target === ov) return done(false);
+      const b = e.target.closest("[data-c]");
+      if (b) done(b.dataset.c === "1");
+    });
+    document.body.appendChild(ov);
+  });
+}
+
 const STATUTS = { vu: "Vu", a_voir: "À voir plus tard", en_cours: "En cours" };
 const posterSrc = (u) => u || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E";
 
@@ -818,7 +841,7 @@ $("#btn-repair").addEventListener("click", async () => {
   } catch (e) { $("#repair-status").textContent = "❌ " + e.message; }
 });
 $("#btn-update").addEventListener("click", async () => {
-  if (!confirm("Mettre à jour le site maintenant ? Il redémarrera quelques secondes.")) return;
+  if (!(await confirmDialog("Mettre à jour le site maintenant ? Il redémarrera quelques secondes.", "Mettre à jour"))) return;
   $("#update-status").textContent = "Mise à jour en cours…";
   $("#btn-update").disabled = true;
   try {
@@ -873,8 +896,8 @@ $("#btn-save-password").addEventListener("click", async () => {
   } catch (e) { $("#password-status").textContent = "❌ " + e.message; }
 });
 $("#btn-reset").addEventListener("click", async () => {
-  if (!confirm("Effacer TOUTE ta bibliothèque ? Cette action est irréversible.")) return;
-  if (!confirm("Confirmer une dernière fois : tout supprimer ?")) return;
+  if (!(await confirmDialog("Effacer TOUTE ta bibliothèque ? Cette action est irréversible.", "Tout effacer"))) return;
+  if (!(await confirmDialog("Confirmer une dernière fois : tout supprimer ?", "Oui, supprimer"))) return;
   $("#reset-status").textContent = "Réinitialisation…";
   try {
     await api("/api/reset", { method: "POST" });
@@ -1309,7 +1332,7 @@ modalContent.addEventListener("click", async (e) => {
       await api(`/api/library/${id}`, { method: "PATCH", body: { favori: on } });
       favEl.classList.toggle("on", on);
     } else if (delEl) {
-      if (confirm("Retirer ce titre de ta bibliothèque ?")) {
+      if (await confirmDialog("Retirer ce titre de ta bibliothèque ?", "Retirer")) {
         await api(`/api/library/${delEl.dataset.localid}`, { method: "DELETE" });
         closeModal(); refreshAll(); toast("Titre retiré");
       }

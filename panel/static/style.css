@@ -797,3 +797,14 @@ h2 svg.ic, h3 svg.ic { width: 18px; height: 18px; vertical-align: -3px; margin-r
 .imp-banner svg { width: 16px; height: 16px; color: var(--pending); flex-shrink: 0; }
 .imp-banner b { color: var(--pending); font-weight: 500; }
 .imp-banner .btn { padding: 5px 12px; }
+
+/* Confirmation intégrée (remplace window.confirm, fiable en PWA installée). */
+.confirm-overlay { position: fixed; inset: 0; z-index: 200; display: flex;
+  align-items: center; justify-content: center; padding: 24px;
+  background: rgba(0, 0, 0, 0.6); }
+.confirm-box { background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 22px; width: 100%; max-width: 360px;
+  box-shadow: var(--shadow); }
+.confirm-msg { color: var(--text); font-size: 0.9rem; line-height: 1.5;
+  margin-bottom: 18px; }
+.confirm-actions { display: flex; gap: 10px; justify-content: flex-end; }
