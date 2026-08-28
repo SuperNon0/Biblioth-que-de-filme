@@ -35,11 +35,22 @@ def _reprendre():
     On renvoie le statut et la progression (épisodes vus/total + prochain
     épisode) pour que la carte affiche le badge « En cours » et « ▸ S x E y »,
     et que le menu rapide sache que la série est déjà suivie.
+
+    Ordre : le **dernier épisode regardé en premier** (comme l'historique), pour
+    retrouver tout de suite la série qu'on suit sans avoir à la rechercher. Les
+    séries sans date de visionnage connue (données anciennes) passent ensuite,
+    départagées par la dernière mise à jour.
     """
     rows = db.q(
-        """SELECT id, tmdb_id, type, titre, affiche, annee, note_tmdb, statut, date_ajout
-           FROM titres WHERE type='serie' AND statut='en_cours' AND compte_id = ?
-           ORDER BY maj DESC LIMIT 20""",
+        """SELECT t.id, t.tmdb_id, t.type, t.titre, t.affiche, t.annee,
+                  t.note_tmdb, t.statut, t.date_ajout,
+                  MAX(e.derniere_vue) AS derniere_activite
+           FROM titres t
+           LEFT JOIN episodes e ON e.titre_id = t.id AND e.vu = 1
+           WHERE t.type='serie' AND t.statut='en_cours' AND t.compte_id = ?
+           GROUP BY t.id
+           ORDER BY derniere_activite DESC, t.maj DESC
+           LIMIT 20""",
         (auth.compte_courant_id(),)
     )
     return annotate_series_progress(rows)

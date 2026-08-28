@@ -57,9 +57,14 @@ def _check_episodes():
     today = date.today().isoformat()
     # Notifications réservées aux comptes super-admin : les séries des membres
     # ne déclenchent PAS de notification (voir aussi _check_alertes).
+    #
+    # On inclut aussi les séries déjà **entièrement vues** : quand une nouvelle
+    # saison sort (ex. « Beauty in Black » S3 après S1+S2 vues), il faut la
+    # détecter, la notifier, et repasser la série « en cours » pour qu'elle
+    # revienne dans « Reprendre » sans avoir à la rechercher.
     series = db.q(
-        """SELECT id, tmdb_id, titre, affiche_url FROM titres
-           WHERE type='serie' AND statut IN ('en_cours','a_voir')
+        """SELECT id, tmdb_id, titre, affiche_url, statut FROM titres
+           WHERE type='serie' AND statut IN ('en_cours','a_voir','vu')
            AND tmdb_id IS NOT NULL
            AND compte_id IN (SELECT id FROM comptes WHERE role='super_admin')"""
     )
@@ -70,6 +75,13 @@ def _check_episodes():
             sync.sync_episodes(s["id"], tmdb, s["tmdb_id"], detail.get("saisons", []))
         except TMDBError:
             continue
+        # Une série « vue » qui a désormais des épisodes non vus (nouvelle saison)
+        # repasse « en cours » : elle réapparaît dans « Reprendre ».
+        if s["statut"] == "vu":
+            reste = db.q1("SELECT 1 FROM episodes WHERE titre_id=? AND vu=0 LIMIT 1",
+                          (s["id"],))
+            if reste:
+                db.run("UPDATE titres SET statut='en_cours' WHERE id=?", (s["id"],))
         # Renseigne l'URL publique de l'affiche pour les séries ajoutées avant
         # (les notifications peuvent alors inclure le poster).
         if not s["affiche_url"] and detail.get("affiche"):
