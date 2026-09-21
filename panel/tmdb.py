@@ -6,13 +6,61 @@ Encapsule tous les appels à TMDB derrière une petite classe. Utilise
 Attribution obligatoire (affichée en pied de page du site) :
 « This product uses the TMDb API but is not endorsed or certified by TMDb. »
 """
+import copy
 import json
+import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
 
 API_BASE = "https://api.themoviedb.org/3"
 IMG_BASE = "https://image.tmdb.org/t/p"
+
+
+# -- cache mémoire partagé des réponses TMDB --------------------------------
+# L'accueil enchaîne 20+ requêtes portant sur du catalogue public identique
+# d'une ouverture à l'autre (tendances, populaires, genres…). On mémorise
+# chaque réponse quelques minutes → premier chargement bien plus rapide et
+# beaucoup moins d'appels à TMDB (on s'éloigne aussi des limites de débit).
+# Cache en mémoire du processus (vidé au redémarrage/mise à jour), partagé
+# entre threads. On ne mémorise QUE le catalogue public : les données perso
+# (bibliothèque, statuts) ne passent jamais par TMDB.
+_CACHE = {}
+_CACHE_LOCK = threading.Lock()
+_CACHE_MAX = 500  # nombre d'entrées max (garde-fou mémoire)
+
+
+def _cache_ttl(path):
+    """Durée de vie d'une entrée selon le type de ressource (en secondes)."""
+    if path.startswith("/genre/") or path.startswith("/watch/providers"):
+        return 86400   # genres / plateformes : quasi statiques → 24 h
+    if path.startswith("/search/"):
+        return 120     # recherche : court, pour dédupliquer la frappe
+    return 600         # catalogue & fiches : 10 min
+
+
+def _cache_get(url):
+    """Renvoie une COPIE de la réponse mémorisée si encore valide, sinon None."""
+    now = time.time()
+    with _CACHE_LOCK:
+        entry = _CACHE.get(url)
+        if entry and entry[0] > now:
+            return copy.deepcopy(entry[1])   # copie : l'appelant peut la modifier
+        if entry:                            # expirée : on la retire au passage
+            _CACHE.pop(url, None)
+    return None
+
+
+def _cache_put(url, data, ttl):
+    with _CACHE_LOCK:
+        if len(_CACHE) >= _CACHE_MAX:        # plein : purge des expirées, puis reset
+            now = time.time()
+            for k in [k for k, v in _CACHE.items() if v[0] <= now]:
+                _CACHE.pop(k, None)
+            if len(_CACHE) >= _CACHE_MAX:
+                _CACHE.clear()
+        _CACHE[url] = (time.time() + ttl, data)
 
 
 class TMDBError(RuntimeError):
@@ -33,15 +81,20 @@ class TMDB:
         params.setdefault("api_key", self.api_key)
         params.setdefault("language", self.language)
         url = f"{API_BASE}{path}?{urllib.parse.urlencode(params)}"
+        cached = _cache_get(url)   # réponse mémorisée récente → pas d'appel réseau
+        if cached is not None:
+            return cached
         try:
             with urllib.request.urlopen(url, timeout=self.timeout) as resp:
-                return json.loads(resp.read().decode("utf-8", "replace"))
+                data = json.loads(resp.read().decode("utf-8", "replace"))
         except urllib.error.HTTPError as exc:
             if exc.code == 401:
                 raise TMDBError("Clé API TMDB invalide.") from exc
             raise TMDBError(f"TMDB a répondu HTTP {exc.code}.") from exc
         except (urllib.error.URLError, OSError, ValueError, TimeoutError) as exc:
             raise TMDBError(f"TMDB injoignable : {exc}") from exc
+        _cache_put(url, data, _cache_ttl(path))   # on ne mémorise que les succès
+        return data
 
     # -- images ------------------------------------------------------------
     @staticmethod
