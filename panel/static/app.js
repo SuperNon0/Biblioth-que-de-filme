@@ -40,6 +40,8 @@ let toastTimer;
 function toast(msg) {
   const el = $("#toast");
   el.textContent = msg;
+  el.classList.add("hidden");
+  void el.offsetWidth;              // reflow → l'animation d'entrée se rejoue
   el.classList.remove("hidden");
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.add("hidden"), 2800);
@@ -70,6 +72,42 @@ function confirmDialog(message, okLabel = "Confirmer") {
 
 const STATUTS = { vu: "Vu", a_voir: "À voir plus tard", en_cours: "En cours" };
 const posterSrc = (u) => u || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E";
+
+/* Rejoue l'animation d'entrée en cascade des enfants d'un conteneur
+   (retrait de la classe + reflow forcé + remise, pour repartir de zéro). */
+function animateIn(el) {
+  if (!el) return;
+  el.classList.remove("anim-in");
+  void el.offsetWidth;   // force un reflow → l'animation se relance
+  el.classList.add("anim-in");
+}
+
+/* Squelettes de chargement (shimmer) — plus vivant qu'un « Chargement… ». */
+function skelGrid(n = 12) {
+  return Array.from({ length: n }, () => `<div class="skel skel-poster"></div>`).join("");
+}
+function skelRows(n = 4) {
+  const cards = skelGrid(7);
+  return Array.from({ length: n }, () => `
+    <div class="skel-row">
+      <div class="skel skel-row-title"></div>
+      <div class="skel-row-scroll">${cards}</div>
+    </div>`).join("");
+}
+
+/* Petit cache local (localStorage) pour afficher instantanément le dernier
+   contenu connu au lancement, puis rafraîchir en arrière-plan. Tolérant aux
+   erreurs (navigation privée, quota) : n'échoue jamais l'affichage. */
+function cacheGet(key) {
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; }
+  catch (_) { return null; }
+}
+function cacheSet(key, value) {
+  try {
+    const s = JSON.stringify(value);
+    if (s.length < 600000) localStorage.setItem(key, s);  // garde-fou de quota
+  } catch (_) { /* quota plein / mode privé : on ignore */ }
+}
 
 /* Couleur par genre — un peu de vie dans les fiches et les cartes. */
 const GENRE_COLORS = {
@@ -422,26 +460,43 @@ searchBox.addEventListener("click", (e) => {
 
 /* ============================ SUGGESTIONS ============================== */
 let sugMedia = "all";
+function renderSuggestions(wrap, blocs) {
+  wrap.innerHTML = blocs.map((b) => `
+    <div class="row-block">
+      <h3>${esc(b.titre)}</h3>
+      <div class="row-wrap">
+        <button class="row-arrow left" aria-label="Précédent">‹</button>
+        <div class="row-scroll">${b.items.map(posterCard).join("")}</div>
+        <button class="row-arrow right" aria-label="Suivant">›</button>
+      </div>
+    </div>`).join("");
+}
+
 async function loadSuggestions(silent = false) {
   const wrap = $("#suggestions-rows");
   const y = window.scrollY;
-  if (!silent) wrap.innerHTML = `<p class="muted">Chargement…</p>`;
+  const key = "sug:" + sugMedia;
+  // Affichage instantané du dernier contenu connu (cache local), puis on
+  // rafraîchit en arrière-plan → plus de « Chargement… » figé au lancement.
+  let painted = false;
+  if (!silent) {
+    const cached = cacheGet(key);
+    if (cached && cached.length) { renderSuggestions(wrap, cached); animateIn(wrap); painted = true; }
+    else wrap.innerHTML = skelRows(4);
+  }
   try {
     const { blocs } = await api(`/api/suggestions?media=${sugMedia}`);
     if (!blocs || !blocs.length) {
-      if (!silent) wrap.innerHTML = `<p class="muted">Rien à afficher.</p>`;
+      if (!silent && !painted) wrap.innerHTML = `<p class="muted">Rien à afficher.</p>`;
       return;
     }
-    wrap.innerHTML = blocs.map((b) => `
-      <div class="row-block">
-        <h3>${esc(b.titre)}</h3>
-        <div class="row-wrap">
-          <button class="row-arrow left" aria-label="Précédent">‹</button>
-          <div class="row-scroll">${b.items.map(posterCard).join("")}</div>
-          <button class="row-arrow right" aria-label="Suivant">›</button>
-        </div>
-      </div>`).join("");
-  } catch (e) { if (!silent) wrap.innerHTML = `<p class="muted">${esc(e.message)}</p>`; return; }
+    renderSuggestions(wrap, blocs);
+    if (!silent && !painted) animateIn(wrap);  // évite un 2ᵉ flash si déjà peint via le cache
+    cacheSet(key, blocs);
+  } catch (e) {
+    if (!silent && !painted) wrap.innerHTML = `<p class="muted">${esc(e.message)}</p>`;
+    return;
+  }
   if (silent) window.scrollTo(0, y);
 }
 $("[data-filter='suggestions']").addEventListener("click", (e) => {
@@ -483,13 +538,14 @@ async function loadLibrary(silent = false) {
     q: $("#lib-search").value.trim(),
   });
   const y = window.scrollY;
-  if (!silent) grid.innerHTML = `<p class="muted">Chargement…</p>`;
+  if (!silent) grid.innerHTML = skelGrid(12);
   try {
     const { titres } = await api(`/api/library?${params}`);
     grid.innerHTML = titres.length
       ? titres.map(posterCard).join("")
       : `<p class="muted">Bibliothèque vide — cherche un film ou une série en haut,
          ou explore l'onglet Découverte.</p>`;
+    if (!silent && titres.length) animateIn(grid);
   } catch (e) { if (!silent) grid.innerHTML = `<p class="muted">${esc(e.message)}</p>`; return; }
   if (silent) window.scrollTo(0, y);
 }
@@ -559,12 +615,13 @@ async function loadDiscover() {
     genre: $("#dec-genre").value, annee: $("#dec-annee").value, pays: $("#dec-pays").value,
     plateforme: $("#dec-plateforme").value, note: $("#dec-note").value,
   });
-  grid.innerHTML = `<p class="muted">Chargement…</p>`;
+  grid.innerHTML = skelGrid(12);
   try {
     const data = await api(`/api/discover?${params}`);
     grid.innerHTML = data.results.length
       ? data.results.map(posterCard).join("")
       : `<p class="muted">Aucun résultat.</p>`;
+    if (data.results.length) animateIn(grid);
     $("#dec-page").textContent = `Page ${data.page} / ${data.total_pages}`;
   } catch (e) { grid.innerHTML = `<p class="muted">${esc(e.message)}</p>`; }
 }
