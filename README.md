@@ -4,32 +4,61 @@ Bibliothèque personnelle de **films et séries**, auto-hébergée : enregistre 
 que tu as vu, ce que tu veux voir, suis tes séries épisode par épisode, mesure
 le temps passé et découvre de nouveaux films.
 
-Site mono-utilisateur (compte `admin`), thème sombre doré, construit avec
-**Python + Flask** et **SQLite**, alimenté par l'**API TMDB**. Aucune
-dépendance front (HTML/CSS/JS vanilla), aucun build.
+**Multi-comptes à données cloisonnées** (chaque compte a SA bibliothèque)
+derrière **Cloudflare Zero Trust**, thème sombre doré, installable en **PWA**
+(iPhone/Android). Construit avec **Python + Flask** et **SQLite**, alimenté par
+l'**API TMDB**. Aucune dépendance front (HTML/CSS/JS vanilla), aucun build ;
+côté serveur, seule la vérification du JWT Cloudflare ajoute **PyJWT +
+cryptography** (installés via `apt`).
 
 ---
 
 ## Fonctionnalités
 
-- **Bibliothèque** : films et séries, statuts (Vu / À voir / En cours),
+- **Comptes** : plusieurs utilisateurs, **bibliothèques cloisonnées** (chacun ne
+  voit que la sienne). Validation par le super-admin, blocage/suppression,
+  « voir en tant que » (impersonation). Voir *Auth v2* plus bas.
+- **Bibliothèque** : films et séries, statuts (Vu / À voir plus tard / En cours),
   progression des séries (« où j'en suis : S x E y »), tri par date, genre,
   année, note, alphabétique.
-- **Fiches** : durée, résumé, plateformes de streaming, bande-annonce.
+- **Fiches** : durée, résumé, plateformes de streaming, bande-annonce, casting.
   - Films : dates de visionnage multiples + revisionnages (« ↻ ×N »).
   - Séries : saisons dépliables, épisodes (nom, image, résumé, durée), marquage
     Vu/Revu par épisode / saison / série entière, prochain épisode.
 - **Suggestions** (accueil) : carrousels Tendances, Au cinéma, Populaires, Mieux
-  notés, « Parce que tu as aimé », sagas/chronologies.
+  notés, « Parce que tu as aimé », sagas/chronologies, et **« Reprendre »**
+  (séries en cours, triées par dernier épisode vu).
 - **Découverte** : catalogue filtrable (genre, année, note, pays, plateforme) et
   paginé.
 - **Futur** : films à venir + alertes de sortie (cinéma / streaming).
-- **Listes** : « À voir » et « Favoris » par défaut, listes perso.
-- **Historique** : journal chronologique de chaque marquage (affiche + libellé
-  + date/heure).
-- **Profil** : temps total regardé, compteurs, genres les plus vus.
-- **Notifications** : Discord via *botpanel* (voir plus bas).
+- **Listes** : « À voir plus tard » et « Favoris » par défaut, listes perso.
+- **Profil** : temps total regardé, statistiques, genres les plus vus, et
+  **historique** (journal des visionnages en grille d'affiches).
+- **Notifications** : Discord via *botpanel* (comptes super-admin uniquement ;
+  voir plus bas).
+- **PWA & rapidité** : installable sur l'écran d'accueil (icône dédiée),
+  démarrage quasi instantané (coquille en cache + cache mémoire des réponses
+  TMDB), squelettes de chargement et animations discrètes.
 - **Sauvegarde** : export/import complet des données.
+
+---
+
+## Auth v2 (multi-comptes cloisonnés)
+
+- **Cloudflare Access = portier** : il authentifie l'e-mail (JWT vérifié côté app,
+  `aud` + `iss`). L'app gère ensuite les **rôles** et le **cycle de vie** des
+  comptes.
+- **Rôles** : `super_admin` (toi — connexion locale par mot de passe **+** e-mail)
+  et `membre`. Le **dernier super-admin est indestructible**.
+- **Cloisonnement** : `titres` et `listes` portent un `compte_id` ; tout le reste
+  en hérite via `titre_id`. Chaque requête filtre par `compte_courant_id()`, les
+  écritures sont gardées par `_owns()`.
+- **Impersonation** (« voir en tant que ») : un super-admin peut consulter le
+  compte d'un membre, avec un bandeau et un retour en arrière.
+- **Site « perso »** : un e-mail autorisé par Cloudflare mais inconnu est créé
+  automatiquement en `actif` (réglage `cap_account_management=off`).
+- Permissions par site dans `config.json` (clés `cap_*`). Détails complets :
+  [`docs/authentification-v2.md`](docs/authentification-v2.md).
 
 ---
 
@@ -40,30 +69,36 @@ Tout le code applicatif est dans **`panel/`** :
 | Fichier / dossier | Rôle |
 |---|---|
 | `app.py` | Création de l'app Flask + enregistrement des blueprints. |
-| `config.py` | Chargement de la config (`PANEL_CONFIG`, défauts, mode dev). |
+| `config.py` | Chargement de la config (`PANEL_CONFIG`, défauts, clés `cf_*`/`cap_*`). |
 | `settings_store.py` | Réglages éditables à l'exécution (clé TMDB, notifs…). |
-| `auth.py` | Login `admin` unique, décorateurs, auto-login Cloudflare Access. |
-| `db.py` | Connexion SQLite par thread, schéma, migrations, helpers. |
-| `tmdb.py` | Client de l'API TMDB (urllib, sans dépendance). |
-| `routes/` | Blueprints : `pages`, `library`, `titles`, `discover`, `lists`, `alerts`, `people`, `stats`, `settings`. |
-| `services/` | `posters` (cache local), `sync` (TMDB→base), `statistics`, `notifications`, `scheduler`. |
-| `static/` | `style.css`, `app.js`, `fonts.css`, `logo.svg`, `favicon.svg`, `logo.png`, `sw.js`. |
-| `templates/` | `index.html`, `login.html`, `forgot.html`. |
+| `auth.py` | Cloudflare Access (JWT + diagnostic), sessions `compte_id`/`role`, impersonation, `compte_courant_id()`, décorateurs. |
+| `permissions.py` | Capacités par site (`off` / `membre` / `super_admin`). |
+| `db.py` | SQLite par thread ; schéma `comptes`/`audit`/`app_settings` + `compte_id` ; `bootstrap_accounts()` (amorce + migration), `audit()`. |
+| `tmdb.py` | Client de l'API TMDB (urllib, sans dépendance) + cache mémoire des réponses. |
+| `routes/` | Blueprints : `pages`, `auth_routes` (passerelle), `accounts_routes` (comptes + impersonation + Cloudflare/diagnostic), `library`, `titles`, `discover`, `lists`, `alerts`, `people`, `stats`, `settings`. |
+| `services/` | `posters` (cache local), `sync` (TMDB→base, par compte), `statistics` (par compte), `notifications`, `scheduler`. |
+| `static/` | `style.css`, `app.js`, `fonts.css`, `logo.svg`, `favicon.svg`, `logo.png`, `icon-512.png`, `icon-maskable-512.png`, `manifest.webmanifest`, `sw.js`. |
+| `templates/` | `index.html`, `login.html`, `forgot.html`, `comptes.html`, écrans d'accès (`demande`, `attente`, `refus`, `bloque`), `bienvenue.html`. |
 
 **Conventions**
 
 - Langue : **français** partout (UI, docs, commits).
 - Couleurs uniquement via les variables `:root` de `style.css`.
 - Endpoints dynamiques : JSON sous `/api/*`, en `Cache-Control: no-store`.
+- Requêtes métier : toujours **cloisonner par `auth.compte_courant_id()`** et
+  garder les écritures par `_owns()`.
 - Secrets (`config.json`, `users.json`, `settings.json`, base) **jamais** commités.
-- PWA : `static/sw.js` — penser à **incrémenter la version du cache** (`cinetheque-vNN`) à chaque changement de front.
-- Version affichée : fichier **`VERSION`** à la racine (ex. `26.1`), montré dans Paramètres → « Version installée ». Le **monter** à chaque changement notable ; repli automatique sur le commit git si le fichier manque.
+- PWA : `static/sw.js` — penser à **incrémenter la version du cache**
+  (`cinetheque-vNN`) à chaque changement de front.
+- Version affichée (Paramètres → « Version installée ») : le **commit git court**
+  par défaut ; un fichier `VERSION` optionnel à la racine le remplace par un
+  numéro lisible s'il est présent.
 
 **Vérifications avant chaque commit**
 
 ```bash
 python3 -m py_compile panel/*.py panel/routes/*.py panel/services/*.py
-node --check panel/static/app.js
+node --check panel/static/app.js panel/static/sw.js
 bash -n install.sh scripts/*.sh proxmox/*.sh
 ```
 
