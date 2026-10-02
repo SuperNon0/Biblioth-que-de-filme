@@ -8,6 +8,7 @@
   --bg: #0e0f11;
   --bg-panel: #16181c;
   --bg-card: #1c1f25;
+  --bg-sheet: #272b34;                 /* feuilles/panneaux surélevés (filtres mobile) */
   --bg-input: #0e0f11;
   --border: #2a2d35;
   --text: #f0ede6;
@@ -737,13 +738,23 @@ h2 svg.ic, h3 svg.ic { width: 18px; height: 18px; vertical-align: -3px; margin-r
   /* Barres d'ACTIONS (ex. page Listes) : toujours visibles sur mobile — ce ne
      sont pas des filtres, il n'y a pas de bouton pour les déplier. */
   .toolbar.always { display: flex; }
+  /* Panneau de filtres (feuille du bas) — doit TRÈS clairement se détacher de
+     l'écran assombri : fond surélevé plus clair, liseré doré, ombre marquée,
+     titre, et assez d'espace en bas pour que « Appliquer » passe au-dessus de
+     la barre de navigation. z-index au-dessus du voile (65) et de la barre (50). */
   .toolbar.open { display: flex; flex-direction: column; align-items: stretch;
-                  gap: 12px; position: fixed; left: 0; right: 0; bottom: 0; z-index: 70;
-                  background: var(--bg-panel); border-top: 1px solid var(--border);
-                  border-radius: 18px 18px 0 0; padding: 20px;
-                  padding-bottom: calc(20px + env(safe-area-inset-bottom));
-                  max-height: 80vh; overflow-y: auto; box-shadow: var(--shadow); }
+                  gap: 12px; position: fixed; left: 0; right: 0; bottom: 0; z-index: 80;
+                  background: var(--bg-sheet); border-top: 2px solid var(--accent);
+                  border-radius: 18px 18px 0 0; padding: 16px 20px;
+                  padding-bottom: calc(92px + env(safe-area-inset-bottom));
+                  max-height: 82vh; overflow-y: auto;
+                  box-shadow: 0 -12px 44px rgba(0,0,0,0.7); }
+  /* Petite poignée + titre pour que ça se lise comme un vrai panneau. */
+  .toolbar.open::before { content: "Filtres"; font-family: var(--font-serif);
+                  color: var(--accent); font-size: 1.15rem; line-height: 1;
+                  padding-top: 6px; margin-bottom: 4px; }
   .toolbar.open .select, .toolbar.open .input, .toolbar.open .chips { width: 100%; }
+  .toolbar.open .select, .toolbar.open .input { background: var(--bg-input); }
   .toolbar.open .chips { justify-content: center; }
   .filter-done { display: block; }
 }
