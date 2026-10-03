@@ -283,6 +283,20 @@ main { padding: 20px; max-width: 1400px; margin: 0 auto; }
                cursor: pointer; font-size: 0.9rem; }
 .modal-close:hover { border-color: var(--accent); color: var(--accent); }
 
+/* Modale « simple » (roulette « Que regarder ? », aperçus…) sur mobile :
+   - la grille d'affiches tenait sur 3 colonnes trop larges → elle DÉBORDAIT à
+     droite, ce qui agrandissait les affiches ET poussait la croix ✕ hors de
+     l'écran. On force 2 colonnes qui rentrent (minmax(0,1fr)) + pas de débord.
+   - la croix devient « collante » : elle reste en haut à droite et donc
+     toujours atteignable, même en faisant défiler la liste. */
+@media (max-width: 759px) {
+  .modal:not(.full) .modal-card { overflow-x: hidden; }
+  .modal:not(.full) .detail-body { padding: 16px; }
+  .modal:not(.full) .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .modal:not(.full) .modal-close { position: sticky; top: 10px; z-index: 10;
+    display: block; margin: 2px 2px -36px auto; }
+}
+
 /* fiche détaillée */
 .detail-hero { position: relative; padding: 64px 24px 24px; display: flex; gap: 22px;
                background-size: cover; background-position: center; }
