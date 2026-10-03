@@ -1,7 +1,7 @@
 /* Service worker de cinéthèque (PWA).
    Met en cache la coquille de l'app pour un démarrage rapide et un affichage
    même hors ligne. Les appels /api/ et /media/ ne sont jamais mis en cache. */
-const CACHE = "cinetheque-v43";
+const CACHE = "cinetheque-v44";
 
 self.addEventListener("install", () => self.skipWaiting());
 
@@ -16,7 +16,8 @@ self.addEventListener("activate", (e) => {
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== "GET" ||
-      url.pathname.startsWith("/api/") || url.pathname.startsWith("/media/")) {
+      url.pathname.startsWith("/api/") || url.pathname.startsWith("/media/") ||
+      url.pathname.startsWith("/apple-touch-icon")) {
     return;
   }
   const isHTML = e.request.mode === "navigate" ||

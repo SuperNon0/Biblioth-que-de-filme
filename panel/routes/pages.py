@@ -66,6 +66,21 @@ def service_worker():
     return resp
 
 
+@bp.get("/apple-touch-icon.png")
+@bp.get("/apple-touch-icon-precomposed.png")
+def apple_touch_icon():
+    """Icône d'écran d'accueil iOS, servie à la RACINE du site.
+
+    iOS va chercher cette icône à ``/apple-touch-icon.png`` tout seul, même si le
+    ``<link>`` de la page (ou l'app déjà installée) pointe vers une ancienne
+    version en cache. Comme cette adresse n'a jamais été servie auparavant, iOS
+    n'a rien en cache pour elle et retélécharge donc le bon logo (clap doré,
+    PNG opaque)."""
+    resp = send_from_directory(current_app.static_folder, "apple-touch-icon.png")
+    resp.headers["Content-Type"] = "image/png"
+    return resp
+
+
 @bp.get("/media/<path:name>")
 @auth.login_required
 def media(name):

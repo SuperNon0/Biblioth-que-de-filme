@@ -562,6 +562,22 @@ $("#lib-roulette").addEventListener("click", () => openRoulette("library"));
 bindGrid($("#lib-grid"));
 
 /* -------------------------------------------------- roulette « que regarder » */
+/* Nombre de propositions à tirer pour REMPLIR l'écran sans avoir à défiler :
+   on estime le nombre de colonnes et de lignes qui tiennent dans la modale
+   selon la taille de l'écran (2 colonnes sur mobile, plus sur grand écran). */
+function rouletteCount() {
+  const mobile = window.innerWidth < 760;
+  const pad = mobile ? 32 : 64;                       // marges de la modale
+  const inner = Math.min(window.innerWidth - pad, 900) - (mobile ? 32 : 44);
+  const gap = mobile ? 12 : 16;
+  const cols = mobile ? 2 : Math.max(3, Math.floor((inner + gap) / (170 + gap)));
+  const colW = (inner - gap * (cols - 1)) / cols;
+  const cardH = colW * 1.5 + 64;                      // affiche 2/3 + titre/infos
+  const availH = window.innerHeight - 180;            // en-tête + intro + bouton + marges
+  const rows = Math.max(2, Math.floor((availH + gap) / (cardH + gap)));
+  return Math.min(Math.max(cols * rows, 4), 24);
+}
+
 async function openRoulette(source) {
   modal.classList.remove("hidden"); modal.classList.remove("full");
   modalContent.innerHTML = `<div class="detail-body"><h2>${ICONS.dice}Que regarder ?</h2>
@@ -569,7 +585,7 @@ async function openRoulette(source) {
   rollRoulette(source);
 }
 async function rollRoulette(source) {
-  const params = new URLSearchParams({ source, count: source === "catalog" ? 12 : 10 });
+  const params = new URLSearchParams({ source, count: rouletteCount() });
   if (source === "catalog") params.set("type", dec.type);
   try {
     const { results } = await api(`/api/roulette?${params}`);

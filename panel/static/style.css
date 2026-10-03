@@ -846,13 +846,13 @@ h2 svg.ic, h3 svg.ic { width: 18px; height: 18px; vertical-align: -3px; margin-r
                          to   { opacity: 1; transform: translate(-50%, 0); } }
 @keyframes ct-shimmer { 0% { background-position: -500px 0; } 100% { background-position: 500px 0; } }
 
-/* Entrée de la page au changement d'onglet.
-   IMPORTANT : fondu d'OPACITÉ uniquement, sans `transform`. Un ancêtre qui a
-   animé un transform devient un « bloc conteneur » pour les éléments
-   position:fixed (bug WebKit/iOS) → le panneau de filtres (fixé en bas) se
-   retrouvait positionné par rapport à la page au lieu de l'écran, donc hors
-   champ. En restant en opacité pure, `.page` ne crée jamais ce bloc conteneur. */
-.page.active { animation: ct-fade .3s ease both; }
+/* Changement d'onglet : AUCUNE animation sur `.page` elle-même.
+   Raison : sur iOS, une page animée (opacité ou transform) crée un
+   « contexte d'empilement »/bloc conteneur qui piégeait le panneau de filtres
+   DERRIÈRE le voile flou (d'où l'écran « juste flouté » sans panneau visible).
+   On laisse donc la page apparaître instantanément ; seules les cartes à
+   l'intérieur gardent leur petite animation d'entrée (.anim-in), ce qui ne
+   touche aucun élément en position:fixed. */
 
 /* Entrée en cascade : on ajoute ponctuellement .anim-in au conteneur (rangées
    de suggestions ou grille de cartes) juste après un chargement non silencieux. */
