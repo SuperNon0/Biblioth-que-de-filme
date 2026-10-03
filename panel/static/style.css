@@ -162,16 +162,24 @@ main { padding: 20px; max-width: 1400px; margin: 0 auto; }
 /* ----------------------------------------------------------- grille cartes */
 .grid { display: grid; gap: 16px;
         grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+/* Message « vide / aucun résultat » placé dans une grille : il doit occuper
+   toute la largeur et être centré (sinon il se tasse dans la 1re colonne). */
+.grid > .muted { grid-column: 1 / -1; text-align: center; padding: 36px 16px;
+                 max-width: 520px; margin: 0 auto; }
 .poster { position: relative; border-radius: var(--radius); overflow: hidden;
           background: var(--bg-card); border: 1px solid var(--border);
-          cursor: pointer; transition: transform .15s, border-color .15s; }
+          cursor: pointer; transition: transform .15s, border-color .15s;
+          display: flex; flex-direction: column; }
 .poster:hover { transform: translateY(-3px); border-color: var(--accent); }
 .poster-img { aspect-ratio: 2/3; width: 100%; object-fit: cover; display: block;
               background: linear-gradient(135deg, #1c1f25, #0e0f11); }
 .poster-body { padding: 8px 10px; }
+/* Titre sur 2 lignes TOUJOURS (hauteur réservée) → toutes les cartes d'une même
+   rangée ont la même hauteur, qu'un titre tienne sur 1 ou 2 lignes, sans couper. */
 .poster-title { font-size: 0.78rem; font-weight: 500; line-height: 1.25;
                 display: -webkit-box; -webkit-line-clamp: 2;
-                -webkit-box-orient: vertical; overflow: hidden; }
+                -webkit-box-orient: vertical; overflow: hidden;
+                min-height: 2.5em; }
 .poster-meta { font-size: 0.68rem; color: var(--muted); margin-top: 3px;
                display: flex; justify-content: space-between; flex-wrap: wrap;
                gap: 0 6px; }
@@ -277,6 +285,10 @@ main { padding: 20px; max-width: 1400px; margin: 0 auto; }
               border: 1px solid var(--border); border-radius: var(--radius);
               max-width: 900px; width: 100%; max-height: 88vh; overflow-y: auto;
               box-shadow: var(--shadow); z-index: 2; }
+/* Roulette « Que regarder ? » : modale plus large sur grand écran (remplit mieux
+   la page). Sans effet sur mobile (width:100% la borne au viewport) ni sur la
+   fiche détaillée (.full garde sa propre largeur). */
+.modal.wide:not(.full) .modal-card { max-width: 1200px; }
 .modal-close { position: absolute; top: 12px; right: 12px; z-index: 5;
                background: rgba(14,15,17,0.8); border: 1px solid var(--border);
                color: var(--text); width: 34px; height: 34px; border-radius: 50%;
@@ -757,16 +769,16 @@ h2 svg.ic, h3 svg.ic { width: 18px; height: 18px; vertical-align: -3px; margin-r
      titre, et assez d'espace en bas pour que « Appliquer » passe au-dessus de
      la barre de navigation. z-index au-dessus du voile (65) et de la barre (50). */
   .toolbar.open { display: flex; flex-direction: column; align-items: stretch;
-                  gap: 12px; position: fixed; left: 0; right: 0; bottom: 0; z-index: 80;
+                  gap: 10px; position: fixed; left: 0; right: 0; bottom: 0; z-index: 80;
                   background: var(--bg-sheet); border-top: 2px solid var(--accent);
-                  border-radius: 18px 18px 0 0; padding: 16px 20px;
-                  padding-bottom: calc(92px + env(safe-area-inset-bottom));
+                  border-radius: 18px 18px 0 0; padding: 14px 18px;
+                  padding-bottom: calc(18px + env(safe-area-inset-bottom));
                   max-height: 82vh; overflow-y: auto;
                   box-shadow: 0 -12px 44px rgba(0,0,0,0.7); }
-  /* Petite poignée + titre pour que ça se lise comme un vrai panneau. */
+  /* Titre du panneau (compact). */
   .toolbar.open::before { content: "Filtres"; font-family: var(--font-serif);
-                  color: var(--accent); font-size: 1.15rem; line-height: 1;
-                  padding-top: 6px; margin-bottom: 4px; }
+                  color: var(--accent); font-size: 1.05rem; line-height: 1;
+                  margin-bottom: 2px; }
   .toolbar.open .select, .toolbar.open .input, .toolbar.open .chips { width: 100%; }
   .toolbar.open .select, .toolbar.open .input { background: var(--bg-input); }
   .toolbar.open .chips { justify-content: center; }

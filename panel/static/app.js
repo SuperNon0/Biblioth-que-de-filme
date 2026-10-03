@@ -567,19 +567,23 @@ bindGrid($("#lib-grid"));
    selon la taille de l'écran (2 colonnes sur mobile, plus sur grand écran). */
 function rouletteCount() {
   const mobile = window.innerWidth < 760;
-  const pad = mobile ? 32 : 64;                       // marges de la modale
-  const inner = Math.min(window.innerWidth - pad, 900) - (mobile ? 32 : 44);
+  const maxW = mobile ? 900 : 1200;                   // largeur max de la modale
+  const cardW = Math.min(window.innerWidth - 32, maxW);  // .modal : 16px de marge/côté
+  const bodyPad = mobile ? 16 : 22;                   // padding de .detail-body
+  const inner = cardW - 2 * bodyPad;
   const gap = mobile ? 12 : 16;
-  const cols = mobile ? 2 : Math.max(3, Math.floor((inner + gap) / (170 + gap)));
+  // Colonnes : 2 fixes sur mobile ; sur grand écran, comme le CSS (minmax 150px).
+  const cols = mobile ? 2 : Math.max(3, Math.floor((inner + gap) / (150 + gap)));
   const colW = (inner - gap * (cols - 1)) / cols;
-  const cardH = colW * 1.5 + 64;                      // affiche 2/3 + titre/infos
-  const availH = window.innerHeight - 180;            // en-tête + intro + bouton + marges
+  const cardH = colW * 1.5 + 62;                      // affiche 2/3 + titre 2 lignes + infos
+  const availH = window.innerHeight * 0.88 - 200;     // modale 88vh − en-tête/intro/bouton
   const rows = Math.max(2, Math.floor((availH + gap) / (cardH + gap)));
   return Math.min(Math.max(cols * rows, 4), 24);
 }
 
 async function openRoulette(source) {
   modal.classList.remove("hidden"); modal.classList.remove("full");
+  modal.classList.add("wide");   // roulette plus large sur grand écran (remplit mieux)
   modalContent.innerHTML = `<div class="detail-body"><h2>${ICONS.dice}Que regarder ?</h2>
     <p class="muted">Tirage en cours…</p></div>`;
   rollRoulette(source);
@@ -613,8 +617,11 @@ async function fillGenres(selectId, type = "movie") {
     const { genres } = await api(`/api/genres?type=${type === "movie" ? "film" : "serie"}`);
     const sel = $("#" + selectId);
     const current = sel.value;
+    // La bibliothèque filtre par NOM de genre (les titres stockent les genres en
+    // toutes lettres) ; la Découverte interroge TMDB qui attend l'ID numérique.
+    const useName = selectId === "lib-genre";
     sel.innerHTML = `<option value="">Tous genres</option>` +
-      genres.map((g) => `<option value="${g.id}">${esc(g.name)}</option>`).join("");
+      genres.map((g) => `<option value="${esc(String(useName ? g.name : g.id))}">${esc(g.name)}</option>`).join("");
     sel.value = current;
     _genresFilled.add(key);
   } catch (_) { /* TMDB non configuré : on garde le menu vide */ }
@@ -1020,7 +1027,7 @@ function navBack() {
   if (card) card.scrollTop = v.y;
 }
 function closeModal() {
-  modal.classList.add("hidden"); modal.classList.remove("full");
+  modal.classList.add("hidden"); modal.classList.remove("full"); modal.classList.remove("wide");
   modalContent.innerHTML = ""; viewStack = [];
 }
 modal.addEventListener("click", (e) => {
