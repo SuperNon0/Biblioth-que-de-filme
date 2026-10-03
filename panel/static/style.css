@@ -346,16 +346,22 @@ main { padding: 20px; max-width: 1400px; margin: 0 auto; }
 .prov.grise:hover, .prov.grise:active { opacity: 0.85; filter: none; }
 
 /* Sélecteur « mes plateformes » (réglages). */
-.plat-picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-               gap: 8px; max-height: 320px; overflow-y: auto; margin: 10px 0;
-               padding: 2px; }
-.plat-opt { display: flex; align-items: center; gap: 8px; cursor: pointer;
-            padding: 7px 9px; border-radius: 9px; background: var(--bg-card);
-            border: 1px solid var(--border); font-size: 0.74rem; }
-.plat-opt img { width: 26px; height: 26px; border-radius: 6px; flex-shrink: 0; }
-.plat-opt span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.plat-opt input { flex-shrink: 0; accent-color: var(--accent); }
+/* Sélecteur « mes plateformes » (pop-up) : noms complets + étiquette de type. */
+.plat-picker { display: flex; flex-direction: column; gap: 6px; max-height: 52vh;
+               overflow-y: auto; margin: 10px 0; padding: 2px; }
+.plat-opt { display: flex; align-items: center; gap: 10px; cursor: pointer;
+            padding: 8px 10px; border-radius: 9px; background: var(--bg-card);
+            border: 1px solid var(--border); font-size: 0.8rem; }
+.plat-opt img { width: 30px; height: 30px; border-radius: 6px; flex-shrink: 0;
+                background: var(--bg-panel); }
+.plat-name { flex: 1; min-width: 0; }
+.plat-opt input { flex-shrink: 0; accent-color: var(--accent); width: 18px; height: 18px; }
 .plat-opt.on { border-color: var(--accent); background: rgba(232,197,71,0.10); }
+.plat-tag { flex-shrink: 0; font-size: 0.6rem; text-transform: uppercase;
+            letter-spacing: .03em; padding: 2px 7px; border-radius: 999px;
+            border: 1px solid var(--border); color: var(--muted); }
+.plat-tag.sub { color: var(--green); border-color: var(--green); }
+.plat-tag.buy { color: var(--orange); border-color: var(--orange); }
 
 /* accordéon des saisons */
 .season { border: 1px solid var(--border); border-radius: var(--radius);

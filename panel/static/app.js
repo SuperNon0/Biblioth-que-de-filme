@@ -932,44 +932,81 @@ async function loadSettings() {
     $("#set-slug-cine").value = s.botpanel_slug_cine || "";
     $("#set-slug-streaming").value = s.botpanel_slug_streaming || "";
     MES_PLATEFORMES = new Set((s.mes_plateformes || []).map((x) => String(x).toLowerCase()));
-    renderPlatformPicker(s.mes_plateformes || []);
+    updatePlatsCount(s.mes_plateformes || []);
   } catch (_) { /* ignore */ }
   loadVersion();
 }
 
-let _platsCache = null;  // liste des plateformes (TMDB) mise en cache une fois
-async function renderPlatformPicker(selected) {
-  const box = $("#plat-picker");
-  const sel = new Set((selected || []).map((x) => String(x).toLowerCase()));
+let _platsCache = null;  // liste des plateformes (TMDB), mise en cache une fois
+function updatePlatsCount(list) {
+  const el = $("#plats-count");
+  if (el) el.textContent = (list && list.length) ? `${list.length} sélectionnée(s)` : "Aucune pour l'instant";
+}
+
+/* Type d'une plateforme (indicatif) : TMDB ne le donne pas globalement, on le
+   déduit des grandes plateformes connues. « Abonnement » vs « Achat / Location ». */
+function platformType(nom) {
+  const n = String(nom || "").toLowerCase();
+  const strongBuy = ["vod", "google play", "play store", "microsoft", "rakuten",
+    "youtube", "amazon video"];
+  if (strongBuy.some((k) => n.includes(k))) return "buy";
+  const sub = ["netflix", "disney", "prime video", "amazon prime", "paramount", "max",
+    "hbo", "mycanal", "canal+", "ciné+", "cine+", "crunchyroll", "adn",
+    "animation digital", "ocs", "universal+", "pass warner", "mubi", "shadowz",
+    "filmo", "insomnia", "molotov", "tf1+", "m6+", "6play", "france tv", "arte",
+    "britbox", "skyshowtime", "starz", "peacock", "hulu", "apple tv+", "apple tv plus",
+    "universcine"];
+  if (sub.some((k) => n.includes(k)) || n.includes("+") || /\bplus\b/.test(n)) return "sub";
+  if (["apple tv", "orange", "bbox", "sfr", "fnac"].some((k) => n.includes(k))) return "buy";
+  return "";
+}
+
+async function openPlatformsModal() {
+  modal.classList.remove("hidden", "full", "wide");
+  modalContent.innerHTML = `<div class="detail-body"><h2>${ICONS.film}Mes plateformes</h2>
+    <p class="muted">Coche les plateformes auxquelles tu es abonné. L'étiquette
+      (Abonnement / Achat · Location) est indicative.</p>
+    <input id="plat-search" class="input" type="search"
+           placeholder="Rechercher une plateforme…" autocomplete="off">
+    <div id="plat-list" class="plat-picker"><span class="muted">Chargement…</span></div>
+    <div class="row-inline"><button id="btn-save-plats" class="btn primary">Enregistrer</button>
+      <span id="plats-status" class="muted"></span></div></div>`;
+  const list = $("#plat-list");
   try {
     if (!_platsCache) _platsCache = (await api("/api/providers/all")).providers || [];
-    box.innerHTML = _platsCache.length ? _platsCache.map((p) => {
-      const on = sel.has(p.nom.toLowerCase());
+    list.innerHTML = _platsCache.length ? _platsCache.map((p) => {
+      const on = MES_PLATEFORMES.has(p.nom.toLowerCase());
+      const t = platformType(p.nom);
+      const tag = t ? `<span class="plat-tag ${t}">${
+        t === "sub" ? "Abonnement" : "Achat · Location"}</span>` : "";
       return `<label class="plat-opt${on ? " on" : ""}" data-nom="${esc(p.nom)}">
         <input type="checkbox"${on ? " checked" : ""}>
-        <img src="${p.logo}" alt="" loading="lazy"><span>${esc(p.nom)}</span></label>`;
+        <img src="${p.logo}" alt="" loading="lazy">
+        <span class="plat-name">${esc(p.nom)}</span>${tag}</label>`;
     }).join("") : `<span class="muted">Aucune plateforme (clé TMDB non configurée ?)</span>`;
-  } catch (e) { box.innerHTML = `<span class="muted">${esc(e.message)}</span>`; }
+  } catch (e) { list.innerHTML = `<span class="muted">${esc(e.message)}</span>`; }
+  list.addEventListener("change", (e) => {
+    const o = e.target.closest(".plat-opt");
+    if (o) o.classList.toggle("on", e.target.checked);
+  });
+  $("#plat-search").addEventListener("input", (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    $$("#plat-list .plat-opt").forEach((o) =>
+      { o.style.display = o.dataset.nom.toLowerCase().includes(q) ? "" : "none"; });
+  });
+  $("#btn-save-plats").addEventListener("click", async () => {
+    const noms = $$("#plat-list .plat-opt input:checked")
+      .map((i) => i.closest(".plat-opt").dataset.nom);
+    try {
+      await api("/api/settings", { method: "POST", body: { mes_plateformes: noms } });
+      MES_PLATEFORMES = new Set(noms.map((x) => x.toLowerCase()));
+      updatePlatsCount(noms);
+      $("#plats-status").textContent = `✅ ${noms.length} enregistrée(s).`;
+      toast("Plateformes enregistrées");
+    } catch (e) { $("#plats-status").textContent = "❌ " + e.message; }
+  });
 }
-$("#plat-picker").addEventListener("change", (e) => {
-  const opt = e.target.closest(".plat-opt");
-  if (opt) opt.classList.toggle("on", e.target.checked);
-});
-$("#plat-search").addEventListener("input", (e) => {
-  const q = e.target.value.trim().toLowerCase();
-  $$("#plat-picker .plat-opt").forEach((o) =>
-    { o.style.display = o.dataset.nom.toLowerCase().includes(q) ? "" : "none"; });
-});
-$("#btn-save-plats").addEventListener("click", async () => {
-  const noms = $$("#plat-picker .plat-opt input:checked")
-    .map((i) => i.closest(".plat-opt").dataset.nom);
-  try {
-    await api("/api/settings", { method: "POST", body: { mes_plateformes: noms } });
-    MES_PLATEFORMES = new Set(noms.map((x) => x.toLowerCase()));
-    $("#plats-status").textContent = `✅ ${noms.length} plateforme(s) enregistrée(s).`;
-    toast("Plateformes enregistrées");
-  } catch (e) { $("#plats-status").textContent = "❌ " + e.message; }
-});
+$("#btn-open-plats")?.addEventListener("click", openPlatformsModal);
 async function loadVersion() {
   try {
     const v = await api("/api/version");
