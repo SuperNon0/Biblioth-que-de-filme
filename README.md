@@ -75,9 +75,9 @@ Tout le code applicatif est dans **`panel/`** :
 | `permissions.py` | Capacités par site (`off` / `membre` / `super_admin`). |
 | `db.py` | SQLite par thread ; schéma `comptes`/`audit`/`app_settings` + `compte_id` ; `bootstrap_accounts()` (amorce + migration), `audit()`. |
 | `tmdb.py` | Client de l'API TMDB (urllib, sans dépendance) + cache mémoire des réponses. |
-| `routes/` | Blueprints : `pages`, `auth_routes` (passerelle), `accounts_routes` (comptes + impersonation + Cloudflare/diagnostic), `library`, `titles`, `discover`, `lists`, `alerts`, `people`, `stats`, `settings`. |
+| `routes/` | Blueprints : `pages` (dont l'icône iOS servie à la racine `/apple-touch-icon.png`), `auth_routes` (passerelle), `accounts_routes` (comptes + impersonation + Cloudflare/diagnostic), `library`, `titles`, `discover`, `lists`, `alerts`, `people`, `stats`, `settings`. |
 | `services/` | `posters` (cache local), `sync` (TMDB→base, par compte), `statistics` (par compte), `notifications`, `scheduler`. |
-| `static/` | `style.css`, `app.js`, `fonts.css`, `logo.svg`, `favicon.svg`, `logo.png`, `icon-512.png`, `icon-maskable-512.png`, `manifest.webmanifest`, `sw.js`. |
+| `static/` | `style.css`, `app.js`, `fonts.css`, `logo.svg`, `favicon.svg`, `logo.png`, icônes PWA (`apple-touch-icon.png` 180, `icon-192.png`, `icon-512.png`, `icon-maskable-512.png`), `manifest.webmanifest`, `sw.js`. |
 | `templates/` | `index.html`, `login.html`, `forgot.html`, `comptes.html`, écrans d'accès (`demande`, `attente`, `refus`, `bloque`), `bienvenue.html`. |
 
 **Conventions**
@@ -225,10 +225,17 @@ utilisables tels quels (miniature botpanel, favicon, etc.) :
 |---|---|---|
 | `logo.png` (512×512) | Miniature Discord / thumbnail | `https://raw.githubusercontent.com/SuperNon0/Biblioth-que-de-filme/main/panel/static/logo.png` |
 | `logo.svg` | Logo vectoriel (UI, impression) | `https://raw.githubusercontent.com/SuperNon0/Biblioth-que-de-filme/main/panel/static/logo.svg` |
-| `favicon.svg` | Icône d'onglet / PWA | `https://raw.githubusercontent.com/SuperNon0/Biblioth-que-de-filme/main/panel/static/favicon.svg` |
+| `favicon.svg` | Icône d'onglet navigateur | `https://raw.githubusercontent.com/SuperNon0/Biblioth-que-de-filme/main/panel/static/favicon.svg` |
+| `apple-touch-icon.png` (180×180) | Icône d'accueil iOS (PWA) | `https://raw.githubusercontent.com/SuperNon0/Biblioth-que-de-filme/main/panel/static/apple-touch-icon.png` |
 
 > C'est le `logo.png` ci-dessus qui est envoyé comme variable `logo` dans les
 > notifications (constante `LOGO_URL` de `services/notifications.py`).
+>
+> **PWA** : sur l'appareil, l'icône d'écran d'accueil iOS est servie à la
+> **racine** du site (`/apple-touch-icon.png`, route du blueprint `pages`) pour
+> qu'iOS la retrouve même quand une ancienne version est en cache ; les icônes
+> `icon-192/512.png` et `icon-maskable-512.png` alimentent le `manifest`
+> (Android). Toutes sont des PNG opaques dérivés du même clap doré.
 
 **Couleurs du thème** (variables `:root` de `style.css`) : fond `#0e0f11`,
 accent or `#e8c547`, vert `#4fc3a1`, violet `#a78bfa`, orange `#e87c47`,
