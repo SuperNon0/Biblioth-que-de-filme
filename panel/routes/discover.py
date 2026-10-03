@@ -244,13 +244,16 @@ def providers_all():
     triées par priorité d'affichage — pour le choix « mes plateformes » des
     réglages."""
     tmdb = get_tmdb()
+    from tmdb import canon_platform
     try:
         merged = {}
         for media in ("movie", "tv"):
             for p in tmdb.watch_providers(media):
-                cur = merged.get(p["nom"])
+                name = canon_platform(p["nom"])      # fusionne les variantes (ex. « Netflix … »)
+                key = name.lower()
+                cur = merged.get(key)
                 if not cur or p.get("prio", 999) < cur.get("prio", 999):
-                    merged[p["nom"]] = p
+                    merged[key] = {"nom": name, "logo": p["logo"], "prio": p.get("prio", 999)}
     except TMDBError as exc:
         return jsonify(error=str(exc)), 502
     out = sorted(merged.values(), key=lambda x: x.get("prio", 999))

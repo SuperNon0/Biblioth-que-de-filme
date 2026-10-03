@@ -8,6 +8,7 @@ Attribution obligatoire (affichée en pied de page du site) :
 """
 import copy
 import json
+import re
 import threading
 import time
 import urllib.error
@@ -16,6 +17,32 @@ import urllib.request
 
 API_BASE = "https://api.themoviedb.org/3"
 IMG_BASE = "https://image.tmdb.org/t/p"
+
+
+# -- regroupement des variantes de plateformes ------------------------------
+# TMDB liste de nombreuses variantes d'une même plateforme (« Netflix »,
+# « Netflix basic with Ads », « Paramount+ Amazon Channel »…). On les ramène à
+# la plateforme principale en retirant ces suffixes, pour une liste propre.
+_PLAT_SUFFIXES = re.compile(
+    r"\s*(?:-\s*)?(?:"
+    r"(?:basic|standard|premium|essential)?\s*with ads|"
+    r"avec (?:pub|pubs|publicit[ée]s?)|"
+    r"amazon channel|apple tv channel|"
+    r"with showtime|kids)\s*$",
+    re.IGNORECASE)
+
+
+def canon_platform(name):
+    """Nom « canonique » d'une plateforme (sans suffixe de variante)."""
+    if not name:
+        return name
+    s = str(name).strip()
+    prev = None
+    while prev != s:          # retire les suffixes en cascade (ex. « … with Ads Kids »)
+        prev = s
+        s = _PLAT_SUFFIXES.sub("", s).strip()
+    return s or str(name).strip()
+
 
 
 # -- cache mémoire partagé des réponses TMDB --------------------------------

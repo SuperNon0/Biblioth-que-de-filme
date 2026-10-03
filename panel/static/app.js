@@ -114,7 +114,15 @@ function cacheSet(key, value) {
    regarder » sur les fiches : les plateformes possédées sont en couleur, les
    autres grisées (le nom reste visible). Comparaison insensible à la casse. */
 let MES_PLATEFORMES = new Set();
-function ownsPlatform(nom) { return MES_PLATEFORMES.has(String(nom || "").toLowerCase()); }
+/* Regroupe les variantes d'une plateforme (miroir de canon_platform côté serveur) :
+   « Netflix basic with Ads » → « Netflix », « Paramount+ Amazon Channel » → « Paramount+ ». */
+const _PLAT_SUFFIX = /\s*(?:-\s*)?(?:(?:basic|standard|premium|essential)?\s*with ads|avec (?:pub|pubs|publicit[ée]s?)|amazon channel|apple tv channel|with showtime|kids)\s*$/i;
+function canonPlatform(nom) {
+  let s = String(nom || "").trim(), prev = null;
+  while (prev !== s) { prev = s; s = s.replace(_PLAT_SUFFIX, "").trim(); }
+  return s || String(nom || "").trim();
+}
+function ownsPlatform(nom) { return MES_PLATEFORMES.has(canonPlatform(nom).toLowerCase()); }
 async function loadMesPlateformes() {
   try {
     const s = await api("/api/settings");
@@ -1284,8 +1292,15 @@ function renderTitlePage(n) {
        href="https://www.youtube.com/watch?v=${n.bande_annonce}">▶ Bande-annonce</a>` : "";
   const note = n.note_tmdb ? `<div class="dv-note">
        <span class="dv-note-val">★ ${n.note_tmdb}</span><span class="muted">/ 10 · TMDB</span></div>` : "";
-  const providers = (n.plateformes || []).length ? `<h3 class="dv-h3">Où regarder</h3>
-       <div class="providers">${n.plateformes.map(providerChip).join("")}</div>` : "";
+  // Regroupe les variantes (Netflix / Netflix with Ads…) → une seule puce par plateforme.
+  const _vus = new Set();
+  const platsUniq = (n.plateformes || []).filter((p) => {
+    const k = canonPlatform(p.nom).toLowerCase();
+    if (_vus.has(k)) return false;
+    _vus.add(k); return true;
+  }).map((p) => ({ ...p, nom: canonPlatform(p.nom) }));
+  const providers = platsUniq.length ? `<h3 class="dv-h3">Où regarder</h3>
+       <div class="providers">${platsUniq.map(providerChip).join("")}</div>` : "";
   const watchChips = n.watches.length ? `<div class="dv-watches">${n.watches.map((w) =>
       `<span class="watch-chip">${w.date ? fmtDate(w.date) : "déjà vu"}<button
          class="watch-del" data-delwatch="${w.id}" aria-label="Supprimer ce visionnage">✕</button></span>`).join("")}</div>` : "";
