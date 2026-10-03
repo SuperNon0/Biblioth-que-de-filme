@@ -237,6 +237,26 @@ def providers():
         return jsonify(error=str(exc)), 502
 
 
+@bp.get("/providers/all")
+@auth.login_required
+def providers_all():
+    """Toutes les plateformes (films ET séries fusionnés, dédoublonnées par nom),
+    triées par priorité d'affichage — pour le choix « mes plateformes » des
+    réglages."""
+    tmdb = get_tmdb()
+    try:
+        merged = {}
+        for media in ("movie", "tv"):
+            for p in tmdb.watch_providers(media):
+                cur = merged.get(p["nom"])
+                if not cur or p.get("prio", 999) < cur.get("prio", 999):
+                    merged[p["nom"]] = p
+    except TMDBError as exc:
+        return jsonify(error=str(exc)), 502
+    out = sorted(merged.values(), key=lambda x: x.get("prio", 999))
+    return jsonify(providers=[{"nom": p["nom"], "logo": p["logo"]} for p in out])
+
+
 @bp.get("/roulette")
 @auth.login_required
 def roulette():

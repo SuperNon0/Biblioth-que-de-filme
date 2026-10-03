@@ -227,16 +227,42 @@ class TMDB:
         }
 
     def _providers(self, d):
+        """Plateformes de streaming (région courante), avec le MODE d'accès :
+        Abonnement / Gratuit / Avec pubs / Location / Achat. Une même plateforme
+        peut proposer plusieurs modes → on garde le plus favorable (abonnement en
+        tête). Renvoie [{nom, logo, mode}] trié (abonnement d'abord)."""
         block = (d.get("watch/providers", {}).get("results", {})
                  .get(self.region, {}))
-        seen, out = set(), []
+        found = {}  # nom -> {logo, cats:set}
         for key in ("flatrate", "free", "ads", "rent", "buy"):
             for p in block.get(key, []):
                 name = p.get("provider_name")
-                if name and name not in seen:
-                    seen.add(name)
-                    out.append({"nom": name,
-                                "logo": self.image_url(p.get("logo_path"), "w92")})
+                if not name:
+                    continue
+                e = found.setdefault(name, {
+                    "logo": self.image_url(p.get("logo_path"), "w92"), "cats": set()})
+                e["cats"].add(key)
+
+        def mode_of(cats):
+            if "flatrate" in cats:
+                return "Abonnement"
+            if "free" in cats:
+                return "Gratuit"
+            if "ads" in cats:
+                return "Avec pubs"
+            if "rent" in cats and "buy" in cats:
+                return "Achat/Location"
+            if "rent" in cats:
+                return "Location"
+            if "buy" in cats:
+                return "Achat"
+            return ""
+
+        order = {"Abonnement": 0, "Gratuit": 1, "Avec pubs": 2,
+                 "Achat/Location": 3, "Location": 4, "Achat": 5}
+        out = [{"nom": n, "logo": e["logo"], "mode": mode_of(e["cats"])}
+               for n, e in found.items()]
+        out.sort(key=lambda x: order.get(x["mode"], 9))
         return out
 
     @staticmethod

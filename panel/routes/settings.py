@@ -45,6 +45,16 @@ def set_settings():
                 values[key] = str(data[key]).strip()
         elif isinstance(default, bool):
             values[key] = bool(data[key])
+        elif isinstance(default, list):
+            # Liste de chaînes (ex. « mes plateformes ») : on nettoie et dédoublonne.
+            raw = data[key] if isinstance(data[key], list) else []
+            seen, clean = set(), []
+            for x in raw:
+                s = str(x).strip()
+                if s and s not in seen:
+                    seen.add(s)
+                    clean.append(s)
+            values[key] = clean
         else:
             values[key] = str(data[key]).strip()
     settings_store.update(values)

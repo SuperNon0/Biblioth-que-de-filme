@@ -210,6 +210,20 @@
         </div>
 
         <div class="card">
+          <h3 class="sub-title">Mes plateformes</h3>
+          <p class="muted">Coche les plateformes de streaming auxquelles tu es abonné.
+            Sur les fiches, elles ressortent dans « Où regarder » (les autres sont
+            grisées, mais leur nom reste visible).</p>
+          <input id="plat-search" class="input" type="search"
+                 placeholder="Filtrer les plateformes…" autocomplete="off">
+          <div id="plat-picker" class="plat-picker"><span class="muted">Chargement…</span></div>
+          <div class="row-inline">
+            <button id="btn-save-plats" class="btn primary small">Enregistrer</button>
+            <span id="plats-status" class="muted"></span>
+          </div>
+        </div>
+
+        <div class="card">
           <h3 class="sub-title">Mot de passe</h3>
           <p class="muted">Compte unique « admin ». 8 caractères minimum.</p>
           <input id="set-password" class="input" type="password" placeholder="Nouveau mot de passe">

@@ -21,7 +21,10 @@ cryptography** (installés via `apt`).
 - **Bibliothèque** : films et séries, statuts (Vu / À voir plus tard / En cours),
   progression des séries (« où j'en suis : S x E y »), tri par date, genre,
   année, note, alphabétique.
-- **Fiches** : durée, résumé, plateformes de streaming, bande-annonce, casting.
+- **Fiches** : durée, résumé, bande-annonce, casting, et **« Où regarder »** —
+  plateformes de streaming avec le **mode** (Abonnement / Achat / Location) ; tes
+  plateformes (réglage **Paramètres → Mes plateformes**) ressortent, les autres
+  sont grisées. Vaut pour les films **et** les séries.
   - Films : dates de visionnage multiples + revisionnages (« ↻ ×N »).
   - Séries : saisons dépliables, épisodes (nom, image, résumé, durée), marquage
     Vu/Revu par épisode / saison / série entière, prochain épisode.

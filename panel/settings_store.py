@@ -30,13 +30,16 @@ EDITABLES = {
     "botpanel_slug_episode": "",
     "botpanel_slug_cine": "",
     "botpanel_slug_streaming": "",
+    # Plateformes de streaming auxquelles l'utilisateur est abonné (noms TMDB).
+    # Sert à mettre en avant « où regarder » sur les fiches (les autres grisées).
+    "mes_plateformes": [],
 }
 
 # Ces clés sont renvoyées telles quelles à l'interface (pas de secret sensible).
 PUBLIC_KEYS = (
     "tmdb_language", "tmdb_region", "cf_sso_enabled", "cf_access_email",
     "notif_discord_enabled", "botpanel_url", "botpanel_slug_episode",
-    "botpanel_slug_cine", "botpanel_slug_streaming",
+    "botpanel_slug_cine", "botpanel_slug_streaming", "mes_plateformes",
 )
 
 

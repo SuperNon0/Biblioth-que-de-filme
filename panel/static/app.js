@@ -109,6 +109,30 @@ function cacheSet(key, value) {
   } catch (_) { /* quota plein / mode privé : on ignore */ }
 }
 
+/* Plateformes de streaming auxquelles l'utilisateur est abonné (« mes
+   plateformes », réglées dans Paramètres). Sert à mettre en avant « où
+   regarder » sur les fiches : les plateformes possédées sont en couleur, les
+   autres grisées (le nom reste visible). Comparaison insensible à la casse. */
+let MES_PLATEFORMES = new Set();
+function ownsPlatform(nom) { return MES_PLATEFORMES.has(String(nom || "").toLowerCase()); }
+async function loadMesPlateformes() {
+  try {
+    const s = await api("/api/settings");
+    MES_PLATEFORMES = new Set((s.mes_plateformes || []).map((x) => String(x).toLowerCase()));
+  } catch (_) { /* non connecté / TMDB absent : on ignore */ }
+}
+
+/* Puce d'une plateforme sur la fiche : logo + nom + mode (Abonnement / Achat /
+   Location…). Grisée si tu n'y es pas abonné, le nom reste toujours lisible. */
+function providerChip(p) {
+  const owned = ownsPlatform(p.nom);
+  const mode = p.mode ? `<span class="prov-mode">${esc(p.mode)}</span>` : "";
+  return `<div class="prov${owned ? " owned" : " grise"}" title="${esc(p.nom)}${
+    p.mode ? " · " + esc(p.mode) : ""}">
+    <img src="${p.logo}" alt="${esc(p.nom)}" loading="lazy">
+    <span class="prov-nom">${esc(p.nom)}</span>${mode}</div>`;
+}
+
 /* Couleur par genre — un peu de vie dans les fiches et les cartes. */
 const GENRE_COLORS = {
   "Action": "#e85c47", "Aventure": "#e8a24a", "Comédie": "#f2c14e",
@@ -614,14 +638,24 @@ async function fillGenres(selectId, type = "movie") {
   const key = selectId + ":" + type;
   if (_genresFilled.has(key)) return;  // évite de recharger les genres à chaque visite
   try {
-    const { genres } = await api(`/api/genres?type=${type === "movie" ? "film" : "serie"}`);
     const sel = $("#" + selectId);
     const current = sel.value;
-    // La bibliothèque filtre par NOM de genre (les titres stockent les genres en
-    // toutes lettres) ; la Découverte interroge TMDB qui attend l'ID numérique.
-    const useName = selectId === "lib-genre";
-    sel.innerHTML = `<option value="">Tous genres</option>` +
-      genres.map((g) => `<option value="${esc(String(useName ? g.name : g.id))}">${esc(g.name)}</option>`).join("");
+    if (selectId === "lib-genre") {
+      // Bibliothèque = films + séries → on FUSIONNE les deux listes de genres TMDB
+      // (par nom), pour ne manquer aucune catégorie (ex. genres propres aux séries).
+      // La valeur est le NOM (les titres stockent les genres en toutes lettres).
+      const [mv, tv] = await Promise.all([
+        api(`/api/genres?type=film`), api(`/api/genres?type=serie`)]);
+      const names = [...new Set([...(mv.genres || []), ...(tv.genres || [])]
+        .map((g) => g.name))].sort((a, b) => a.localeCompare(b, "fr"));
+      sel.innerHTML = `<option value="">Tous genres</option>` +
+        names.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
+    } else {
+      // Découverte : TMDB attend l'ID numérique du genre.
+      const { genres } = await api(`/api/genres?type=${type === "movie" ? "film" : "serie"}`);
+      sel.innerHTML = `<option value="">Tous genres</option>` +
+        (genres || []).map((g) => `<option value="${g.id}">${esc(g.name)}</option>`).join("");
+    }
     sel.value = current;
     _genresFilled.add(key);
   } catch (_) { /* TMDB non configuré : on garde le menu vide */ }
@@ -897,9 +931,45 @@ async function loadSettings() {
     $("#set-slug-episode").value = s.botpanel_slug_episode || "";
     $("#set-slug-cine").value = s.botpanel_slug_cine || "";
     $("#set-slug-streaming").value = s.botpanel_slug_streaming || "";
+    MES_PLATEFORMES = new Set((s.mes_plateformes || []).map((x) => String(x).toLowerCase()));
+    renderPlatformPicker(s.mes_plateformes || []);
   } catch (_) { /* ignore */ }
   loadVersion();
 }
+
+let _platsCache = null;  // liste des plateformes (TMDB) mise en cache une fois
+async function renderPlatformPicker(selected) {
+  const box = $("#plat-picker");
+  const sel = new Set((selected || []).map((x) => String(x).toLowerCase()));
+  try {
+    if (!_platsCache) _platsCache = (await api("/api/providers/all")).providers || [];
+    box.innerHTML = _platsCache.length ? _platsCache.map((p) => {
+      const on = sel.has(p.nom.toLowerCase());
+      return `<label class="plat-opt${on ? " on" : ""}" data-nom="${esc(p.nom)}">
+        <input type="checkbox"${on ? " checked" : ""}>
+        <img src="${p.logo}" alt="" loading="lazy"><span>${esc(p.nom)}</span></label>`;
+    }).join("") : `<span class="muted">Aucune plateforme (clé TMDB non configurée ?)</span>`;
+  } catch (e) { box.innerHTML = `<span class="muted">${esc(e.message)}</span>`; }
+}
+$("#plat-picker").addEventListener("change", (e) => {
+  const opt = e.target.closest(".plat-opt");
+  if (opt) opt.classList.toggle("on", e.target.checked);
+});
+$("#plat-search").addEventListener("input", (e) => {
+  const q = e.target.value.trim().toLowerCase();
+  $$("#plat-picker .plat-opt").forEach((o) =>
+    { o.style.display = o.dataset.nom.toLowerCase().includes(q) ? "" : "none"; });
+});
+$("#btn-save-plats").addEventListener("click", async () => {
+  const noms = $$("#plat-picker .plat-opt input:checked")
+    .map((i) => i.closest(".plat-opt").dataset.nom);
+  try {
+    await api("/api/settings", { method: "POST", body: { mes_plateformes: noms } });
+    MES_PLATEFORMES = new Set(noms.map((x) => x.toLowerCase()));
+    $("#plats-status").textContent = `✅ ${noms.length} plateforme(s) enregistrée(s).`;
+    toast("Plateformes enregistrées");
+  } catch (e) { $("#plats-status").textContent = "❌ " + e.message; }
+});
 async function loadVersion() {
   try {
     const v = await api("/api/version");
@@ -1178,7 +1248,7 @@ function renderTitlePage(n) {
   const note = n.note_tmdb ? `<div class="dv-note">
        <span class="dv-note-val">★ ${n.note_tmdb}</span><span class="muted">/ 10 · TMDB</span></div>` : "";
   const providers = (n.plateformes || []).length ? `<h3 class="dv-h3">Où regarder</h3>
-       <div class="providers">${n.plateformes.map((p) => `<img title="${esc(p.nom)}" src="${p.logo}" alt="${esc(p.nom)}">`).join("")}</div>` : "";
+       <div class="providers">${n.plateformes.map(providerChip).join("")}</div>` : "";
   const watchChips = n.watches.length ? `<div class="dv-watches">${n.watches.map((w) =>
       `<span class="watch-chip">${w.date ? fmtDate(w.date) : "déjà vu"}<button
          class="watch-del" data-delwatch="${w.id}" aria-label="Supprimer ce visionnage">✕</button></span>`).join("")}</div>` : "";
@@ -1622,6 +1692,7 @@ if ("serviceWorker" in navigator) {
 /* Au démarrage : onglet Suggestions (marqué chargé pour éviter un rechargement). */
 _tabLoaded.add("suggestions");
 loadSuggestions();
+loadMesPlateformes();   // « mes plateformes » pour l'affichage « où regarder »
 
 /* ============ Auth v2 : impersonation, Cloudflare, diagnostic ============ */
 // Revenir à son compte depuis le bandeau « voir en tant que ».

@@ -101,17 +101,23 @@ def detail(titre_id):
         return jsonify(error="Titre introuvable."), 404
     # Complète casting/équipe pour les titres ajoutés avant (mise à jour légère
     # des seules colonnes concernées : pas de ré-écriture ni de re-téléchargement
-    # de l'affiche, pour un chargement rapide).
-    if t["tmdb_id"] and not t.get("casting"):
+    # de l'affiche, pour un chargement rapide). On rafraîchit aussi les
+    # plateformes si elles n'ont pas encore l'info de MODE (abonnement/achat…),
+    # pour que « où regarder » soit complet sur les titres déjà en base.
+    plats = t.get("plateformes") or []
+    plats_sans_mode = bool(plats) and not any("mode" in p for p in plats)
+    if t["tmdb_id"] and (not t.get("casting") or plats_sans_mode):
         try:
             tmdb = get_tmdb()
             d = tmdb.movie(t["tmdb_id"]) if t["type"] == "film" else tmdb.tv(t["tmdb_id"])
             import json
-            db.run("UPDATE titres SET casting=?, equipe=? WHERE id=?", (
+            db.run("UPDATE titres SET casting=?, equipe=?, plateformes=? WHERE id=?", (
                 json.dumps(d.get("casting", []), ensure_ascii=False),
-                json.dumps(d.get("equipe", []), ensure_ascii=False), titre_id))
+                json.dumps(d.get("equipe", []), ensure_ascii=False),
+                json.dumps(d.get("plateformes", []), ensure_ascii=False), titre_id))
             t["casting"] = d.get("casting", [])
             t["equipe"] = d.get("equipe", [])
+            t["plateformes"] = d.get("plateformes", [])
         except TMDBError:
             pass
     payload = {"titre": t}
