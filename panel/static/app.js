@@ -141,18 +141,36 @@ function providerChip(p) {
     <span class="prov-nom">${esc(p.nom)}</span>${mode}</div>`;
 }
 
-/* Couleur par genre — un peu de vie dans les fiches et les cartes. */
+/* Couleur par genre — chaque genre a SA couleur, bien distincte des autres. */
 const GENRE_COLORS = {
-  "Action": "#e85c47", "Aventure": "#e8a24a", "Comédie": "#f2c14e",
-  "Drame": "#a78bfa", "Science-Fiction": "#4fc3a1", "Horreur": "#c0392b",
-  "Thriller": "#e87c47", "Romance": "#e86ea4", "Animation": "#5aa9e6",
+  "Action": "#e8503f", "Aventure": "#e8a24a", "Comédie": "#f2c14e",
+  "Drame": "#a78bfa", "Science-Fiction": "#2dd4bf", "Horreur": "#8b1f1f",
+  "Thriller": "#e87c47", "Romance": "#ec4899", "Animation": "#38bdf8",
   "Fantastique": "#9b6dff", "Familial": "#5fce8f", "Crime": "#d1495b",
   "Mystère": "#7c6df2", "Guerre": "#b08968", "Histoire": "#c9a26b",
-  "Documentaire": "#4fc3a1", "Musique": "#e86ea4", "Western": "#c98a3b",
+  "Documentaire": "#14b8a6", "Musique": "#f472b6", "Western": "#c98a3b",
+  // Genres propres aux séries — chacun sa teinte, distincte des films.
+  "Action & Adventure": "#ff6b3d", "Science-Fiction & Fantastique": "#22d3ee",
+  "Guerre & Politique": "#8d6e63", "Enfants": "#84cc16", "Kids": "#84cc16",
+  "Téléréalité": "#fb923c", "Reality": "#fb923c", "Feuilleton": "#f9a8d4",
+  "Soap": "#f9a8d4", "Actualités": "#60a5fa", "News": "#60a5fa",
+  "Talk-show": "#fbbf24", "Talk": "#fbbf24",
 };
+// Palette de repli (riche et variée) : toute catégorie inconnue reçoit quand
+// même une couleur stable et distincte → beaucoup de couleurs, vraiment partout.
+const GENRE_FALLBACK = ["#ef4444", "#f97316", "#f59e0b", "#eab308", "#84cc16",
+  "#22c55e", "#10b981", "#14b8a6", "#06b6d4", "#0ea5e9", "#3b82f6", "#6366f1",
+  "#8b5cf6", "#a855f7", "#d946ef", "#ec4899", "#f43f5e", "#e8a24a", "#5fce8f",
+  "#7c6df2", "#e86ea4", "#4db6ac", "#c98a3b", "#64b5f6"];
+function genreColor(name) {
+  if (GENRE_COLORS[name]) return GENRE_COLORS[name];
+  let h = 0; const s = String(name || "");
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return GENRE_FALLBACK[h % GENRE_FALLBACK.length];
+}
 function genreTag(name) {
-  const c = GENRE_COLORS[name];
-  const style = c ? ` style="color:${c};border-color:${c}66;background:${c}22"` : "";
+  const c = genreColor(name);
+  const style = ` style="color:${c};border-color:${c}66;background:${c}22"`;
   return `<span class="tag"${style}>${esc(name)}</span>`;
 }
 
@@ -167,11 +185,11 @@ function posterCard(item) {
   const fav = item.favori ? `<span class="poster-fav">♥</span>` : "";
   const annee = item.annee || "";
   const type = item.type === "serie" ? "Série" : "Film";
-  // Genre principal coloré (quand connu) — un peu de couleur dans la grille.
+  // Genre principal coloré (toujours — couleur de repli si genre inconnu).
   let genre0 = "";
   if (item.genres && item.genres.length) {
-    const g = item.genres[0], c = GENRE_COLORS[g];
-    const st = c ? ` style="color:${c};border-color:${c}66;background:${c}22"` : "";
+    const g = item.genres[0], c = genreColor(g);
+    const st = ` style="color:${c};border-color:${c}66;background:${c}22"`;
     genre0 = `<span class="poster-genre"${st}>${esc(g)}</span>`;
   }
   // Barre de progression pour les séries (épisodes vus / total) + où j'en suis.
@@ -873,8 +891,8 @@ async function loadStats() {
 
       ${s.genres.length ? `<h3 class="sub-title">Genres les plus vus</h3>
         ${s.genres.map((g) => `<div class="bar-row">
-          <span class="bar-label">${esc(g.nom)}</span>
-          <span class="bar-track"><span class="bar-fill" style="width:${g.n / maxG * 100}%"></span></span>
+          <span class="bar-label" style="color:${genreColor(g.nom)}">${esc(g.nom)}</span>
+          <span class="bar-track"><span class="bar-fill" style="width:${g.n / maxG * 100}%;background:${genreColor(g.nom)}"></span></span>
           <span class="bar-num">${g.n}</span></div>`).join("")}` : ""}`;
   } catch (e) { wrap.innerHTML = `<p class="muted">${esc(e.message)}</p>`; }
 }
