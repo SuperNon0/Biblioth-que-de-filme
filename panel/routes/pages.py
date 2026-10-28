@@ -41,6 +41,8 @@ def login():
     # décide quel écran montrer (login local, demande, attente, refus, bloqué).
     if request.method == "GET":
         return redirect(url_for("auth.gateway"))
+    if not cfg().get("allow_local_login", True):
+        return render_template("login.html", error="Connexion locale désactivée."), 403
     if auth.do_login(request.form.get("password", "")):
         return redirect(url_for("pages.index"))
     return render_template("login.html", error="Mot de passe incorrect.")

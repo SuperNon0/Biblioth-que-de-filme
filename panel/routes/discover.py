@@ -354,7 +354,8 @@ def upcoming():
         return jsonify(error=str(exc)), 502
     alertes = {a["titre_id"] for a in db.q(
         "SELECT t.tmdb_id AS titre_id FROM alertes a "
-        "JOIN titres t ON t.id = a.titre_id")}
+        "JOIN titres t ON t.id = a.titre_id WHERE t.compte_id = ?",
+        (auth.compte_courant_id(),))}
     for it in items:
         it["alerte"] = it["tmdb_id"] in alertes
     return jsonify(results=items)

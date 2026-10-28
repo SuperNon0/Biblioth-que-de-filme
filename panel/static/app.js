@@ -1101,9 +1101,11 @@ $("#btn-test-tmdb").addEventListener("click", async () => {
   catch (e) { $("#tmdb-status").textContent = "❌ " + e.message; }
 });
 $("#btn-save-password").addEventListener("click", async () => {
-  const password = $("#set-password").value;
+  const actuel = $("#set-password-actuel").value;
+  const nouveau = $("#set-password").value;
   try {
-    await api("/api/settings/password", { method: "POST", body: { password } });
+    await api("/api/admin/password", { method: "POST", body: { actuel, nouveau } });
+    $("#set-password-actuel").value = "";
     $("#set-password").value = "";
     $("#password-status").textContent = "✅ Mot de passe changé.";
   } catch (e) { $("#password-status").textContent = "❌ " + e.message; }
