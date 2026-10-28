@@ -255,10 +255,14 @@ main { padding: 20px; max-width: 1400px; margin: 0 auto; }
 .row-arrow.right { right: 0; border-radius: 0 var(--radius) var(--radius) 0;
                    background: linear-gradient(270deg, var(--bg) 45%, transparent); }
 .row-arrow:hover { color: var(--accent-hover); }
-/* souris : flèches au survol ; tactile : toujours visibles */
+/* souris : flèches au survol ; tactile : masquées (le glissement au doigt
+   suffit, et la flèche cachait le début de la première carte) */
 @media (hover: hover) {
   .row-arrow { opacity: 0; transition: opacity .15s; }
   .row-wrap:hover .row-arrow { opacity: 1; }
+}
+@media (hover: none) {
+  .row-arrow { display: none; }
 }
 
 /* ----------------------------------------------------------------- pager */
@@ -929,7 +933,10 @@ h2 svg.ic, h3 svg.ic { width: 18px; height: 18px; vertical-align: -3px; margin-r
 
 /* Modale : fondu du voile + petit « pop » de la carte. */
 .modal-backdrop { animation: ct-fade .22s ease; }
-.modal-card { animation: ct-pop .28s cubic-bezier(.2,.7,.3,1) both; }
+/* « backwards » et non « both » : un transform conservé après l'animation
+   ferait de la carte le repère des éléments position:fixed (← et ★ de la
+   fiche plein écran), qui partiraient alors avec le défilement. */
+.modal-card { animation: ct-pop .28s cubic-bezier(.2,.7,.3,1) backwards; }
 .confirm-overlay { animation: ct-fade .18s ease; }
 .confirm-box { animation: ct-pop .24s cubic-bezier(.2,.7,.3,1) both; }
 

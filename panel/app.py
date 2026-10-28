@@ -123,9 +123,9 @@ def create_app():
 
 def _register_blueprints(app):
     from routes import (accounts_routes, alerts, auth_routes, discover, library,
-                        lists, pages, people, settings, stats, titles)
+                        lists, mcp, pages, people, settings, stats, titles)
     for module in (pages, auth_routes, accounts_routes, library, titles,
-                   discover, lists, alerts, people, stats, settings):
+                   discover, lists, alerts, people, stats, settings, mcp):
         app.register_blueprint(module.bp)
 
 

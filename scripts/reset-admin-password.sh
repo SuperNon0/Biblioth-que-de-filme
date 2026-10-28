@@ -53,7 +53,7 @@ if row is None:
                "VALUES ('super_admin','actif',?,?,?)", (h, now, now))
     print("Aucun super-admin : compte administrateur de base créé.")
 else:
-    db.execute("UPDATE comptes SET mdp_hash=? WHERE id=?", (h, row[0]))
+    db.execute("UPDATE comptes SET mdp_hash=?, etat='actif' WHERE id=?", (h, row[0]))
     print("Mot de passe du super-admin de base réinitialisé (compte id %s)." % row[0])
 db.commit(); db.close()
 PY

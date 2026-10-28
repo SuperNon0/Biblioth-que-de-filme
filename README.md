@@ -78,8 +78,8 @@ Tout le code applicatif est dans **`panel/`** :
 | `permissions.py` | Capacités par site (`off` / `membre` / `super_admin`). |
 | `db.py` | SQLite par thread ; schéma `comptes`/`audit`/`app_settings` + `compte_id` ; `bootstrap_accounts()` (amorce + migration), `audit()`. |
 | `tmdb.py` | Client de l'API TMDB (urllib, sans dépendance) + cache mémoire des réponses. |
-| `routes/` | Blueprints : `pages` (dont l'icône iOS servie à la racine `/apple-touch-icon.png`), `auth_routes` (passerelle), `accounts_routes` (comptes + impersonation + Cloudflare/diagnostic), `library`, `titles`, `discover`, `lists`, `alerts`, `people`, `stats`, `settings`. |
-| `services/` | `posters` (cache local), `sync` (TMDB→base, par compte), `statistics` (par compte), `notifications`, `scheduler`. |
+| `routes/` | Blueprints : `pages` (dont l'icône iOS servie à la racine `/apple-touch-icon.png`), `auth_routes` (passerelle), `accounts_routes` (comptes + impersonation + Cloudflare/diagnostic), `library`, `titles`, `discover`, `lists`, `alerts`, `people`, `stats`, `settings`, `mcp` (serveur MCP pour Claude, voir `docs/mcp.md`). |
+| `services/` | `posters` (cache local), `sync` (TMDB→base, par compte), `statistics` (par compte), `notifications`, `scheduler`, `mcp_tools` (outils du connecteur Claude). |
 | `static/` | `style.css`, `app.js`, `fonts.css`, `logo.svg`, `favicon.svg`, `logo.png`, icônes PWA (`apple-touch-icon.png` 180, `icon-192.png`, `icon-512.png`, `icon-maskable-512.png`), `manifest.webmanifest`, `sw.js`. |
 | `templates/` | `index.html`, `login.html`, `forgot.html`, `comptes.html`, écrans d'accès (`demande`, `attente`, `refus`, `bloque`), `bienvenue.html`. |
 
@@ -157,6 +157,12 @@ sudo bash /opt/cinetheque/scripts/reset-admin-password.sh
 ```
 
 ---
+
+## Connecteur Claude (MCP)
+
+Claude peut tester et piloter le site en direct via un serveur MCP intégré
+(`/mcp`), protégé par une **clé API dédiée** à générer dans **Paramètres →
+Connecteur Claude (MCP)**. Installation pas à pas : [`docs/mcp.md`](docs/mcp.md).
 
 ## Notifications (Discord via botpanel)
 

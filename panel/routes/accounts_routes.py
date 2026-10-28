@@ -81,6 +81,8 @@ def refuser(compte_id):
     c = auth.get_compte(compte_id)
     if not c:
         return jsonify(error="Compte introuvable"), 404
+    if c["role"] == "super_admin":
+        return jsonify(error="On ne refuse pas un super-admin."), 400
     _set_etat(compte_id, "refused")
     db.audit("refuser_compte", acteur=_acteur(), cible=c["email"])
     return jsonify(ok=True)
