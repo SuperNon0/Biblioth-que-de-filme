@@ -19,12 +19,17 @@ site »**. Le serveur MCP est alors disponible à l'adresse `/mcp` de ton site.
 **Paramètres → Connecteur Claude (MCP) → « Générer une clé »** (réservé au
 super-admin).
 
-Le site affiche :
+Le site affiche trois valeurs à copier :
 
-- la **clé** (`cine_…`) ;
-- l'**URL du connecteur** : `https://<ton-site>/mcp/cine_…`.
+| Champ | Valeur |
+|---|---|
+| URL du serveur | `https://<ton-site>/mcp` |
+| En-tête | `Authorization` |
+| Valeur | `Bearer cine_…` |
 
-⚠️ Copie l'URL tout de suite : la clé n'est **affichée qu'une seule fois**. Le
+(Variante acceptée : en-tête `X-API-Key` avec la valeur `cine_…` seule.)
+
+⚠️ Copie-les tout de suite : la clé n'est **affichée qu'une seule fois**. Le
 site n'en garde qu'une empreinte (SHA-256), impossible à relire. Clé perdue ?
 Il suffit d'en générer une nouvelle (l'ancienne cesse aussitôt de marcher).
 
@@ -32,8 +37,14 @@ Il suffit d'en générer une nouvelle (l'ancienne cesse aussitôt de marcher).
 
 1. claude.ai → **Paramètres → Connecteurs → Ajouter un connecteur personnalisé**.
 2. Nom : `cinéthèque`.
-3. URL : colle l'**URL du connecteur** copiée à l'étape 2.
-4. Laisse les options OAuth vides → **Ajouter**.
+3. URL : `https://<ton-site>/mcp` (sans la clé).
+4. Dans les paramètres avancés / en-têtes personnalisés : ajoute l'en-tête
+   `Authorization` avec la valeur `Bearer cine_…`.
+5. Laisse les options OAuth vides → **Ajouter**.
+
+> Si ton client MCP ne permet pas d'ajouter un en-tête, l'URL
+> `https://<ton-site>/mcp/cine_…` (clé dans le chemin) fonctionne aussi, mais la
+> clé apparaît alors dans l'URL et les journaux : l'en-tête reste préférable.
 
 ### 4. Vérifier
 
@@ -62,8 +73,9 @@ ouvre chaque écran et renvoie son statut et son temps de réponse.
   reçoit une page de connexion au lieu d'une réponse, c'est que l'accès devant
   le site bloque `/mcp` : reprends le même réglage que pour RecipeLog.
 
-La clé peut aussi être envoyée dans l'en-tête `Authorization: Bearer <clé>`
-(pour un client MCP qui le permet) au lieu d'être dans l'URL.
+La clé voyage dans un **en-tête** (`Authorization: Bearer <clé>` ou
+`X-API-Key: <clé>`) : elle n'apparaît ni dans l'URL ni dans les journaux du
+serveur. La clé dans l'URL (`/mcp/<clé>`) n'est qu'un dernier recours.
 
 ---
 
@@ -125,7 +137,7 @@ curl -s -X POST http://localhost:8080/mcp \
 
 | Symptôme | Cause / solution |
 |---|---|
-| `401 Clé API MCP invalide` | Clé révoquée ou remplacée : génère-en une nouvelle et mets à jour l'URL du connecteur. |
+| `401 Clé API MCP invalide` | En-tête absent, mal écrit (il faut `Bearer ` devant la clé dans `Authorization`), ou clé révoquée/remplacée : génère-en une nouvelle et mets à jour l'en-tête du connecteur. |
 | Page de connexion au lieu de JSON | L'accès devant le site bloque `/mcp` (voir « Sécurité »). |
 | `verifier_site` signale des `502` TMDB | Clé TMDB absente ou invalide (Paramètres → Clé API TMDB). |
 | `405` sur `/mcp` | Normal pour un `GET` : le serveur ne répond qu'en `POST`. |
