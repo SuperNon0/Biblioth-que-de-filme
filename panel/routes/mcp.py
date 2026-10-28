@@ -8,9 +8,11 @@ Authentification : une **clé API MCP dédiée**, distincte du mot de passe du
 site et de la clé TMDB. Elle se génère dans Paramètres → Connecteur Claude
 (super-admin) et n'est affichée qu'une fois. Seule son empreinte SHA-256 est
 gardée en base (``app_settings.mcp_cle_hash``) : rien de secret dans le dépôt
-ni en clair sur le disque. La clé se présente :
-  - dans l'en-tête ``Authorization: Bearer <clé>`` (clients qui le permettent) ;
-  - ou dans l'URL ``/mcp/<clé>`` (connecteur personnalisé de claude.ai).
+ni en clair sur le disque. La clé se présente **dans un en-tête** (méthode
+recommandée, la clé n'apparaît ni dans l'URL ni dans les journaux) :
+  - ``Authorization: Bearer <clé>`` ;
+  - ou ``X-API-Key: <clé>``.
+En dernier recours, ``/mcp/<clé>`` reste accepté pour un client sans en-têtes.
 
 Les outils eux-mêmes sont dans ``services/mcp_tools.py``.
 """
@@ -51,10 +53,11 @@ def _cle_valide(cle):
 
 
 def _cle_presentee(cle_url):
+    """Clé envoyée par le client : en-tête d'abord, URL en dernier recours."""
     entete = request.headers.get("Authorization", "")
     if entete.lower().startswith("bearer "):
         return entete[7:].strip()
-    return cle_url or ""
+    return (request.headers.get("X-API-Key") or cle_url or "").strip()
 
 
 # ── JSON-RPC ─────────────────────────────────────────────────────────────────
