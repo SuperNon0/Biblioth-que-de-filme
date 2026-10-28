@@ -208,7 +208,7 @@ def _top_genres(tmdb, media="movie", limit=3):
 def discover():
     """Catalogue large filtrable + paginé (onglet Découverte)."""
     media = "tv" if request.args.get("type") == "serie" else "movie"
-    page = max(1, int(request.args.get("page", 1) or 1))
+    page = max(1, request.args.get("page", 1, type=int) or 1)
     sorts = SORTS_SERIE if media == "tv" else SORTS_FILM
     sort_by = sorts.get(request.args.get("tri", "populaire"), sorts["populaire"])
     try:
@@ -347,14 +347,15 @@ def genres():
 @auth.login_required
 def upcoming():
     """Films à venir (avec bande-annonce récupérée à l'ouverture de la fiche)."""
-    page = max(1, int(request.args.get("page", 1) or 1))
+    page = max(1, request.args.get("page", 1, type=int) or 1)
     try:
         items = get_tmdb().upcoming(page)
     except TMDBError as exc:
         return jsonify(error=str(exc)), 502
     alertes = {a["titre_id"] for a in db.q(
         "SELECT t.tmdb_id AS titre_id FROM alertes a "
-        "JOIN titres t ON t.id = a.titre_id")}
+        "JOIN titres t ON t.id = a.titre_id WHERE t.compte_id = ?",
+        (auth.compte_courant_id(),))}
     for it in items:
         it["alerte"] = it["tmdb_id"] in alertes
     return jsonify(results=items)

@@ -18,6 +18,7 @@ from flask import (Blueprint, redirect, render_template, request, session,
 
 import auth
 import db
+from context import cfg
 
 bp = Blueprint("auth", __name__, url_prefix="/acces")
 
@@ -36,6 +37,8 @@ def gateway():
     email = auth.cf_access_email()
     if not email:
         # Accès LAN (hors Cloudflare) : mot de passe du super-admin de base.
+        if not cfg().get("allow_local_login", True):
+            return render_template("login.html", error="Connexion locale désactivée."), 403
         return render_template("login.html", error=None)
 
     row = db.q1("SELECT * FROM comptes WHERE email = ?", (email,))

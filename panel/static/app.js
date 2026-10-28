@@ -17,13 +17,33 @@ const ICONS = {
   film: `<svg class="ic" ${SVG}><rect x="3" y="4.5" width="18" height="15" rx="2"/><path d="M8 4.5v15M16 4.5v15M3 9.5h5M16 9.5h5M3 14.5h5M16 14.5h5"/></svg>`,
 };
 
+// Recharge la page pour repasser par la connexion, au plus une fois par minute
+// (évite une boucle de rechargements si le serveur est simplement injoignable).
+function reloadForLogin() {
+  let last = 0;
+  try { last = Number(sessionStorage.getItem("ct-reload")) || 0; } catch (_) { /* privé */ }
+  if (Date.now() - last < 60000) return;
+  try { sessionStorage.setItem("ct-reload", String(Date.now())); } catch (_) { /* privé */ }
+  location.reload();
+}
+
 async function api(path, { method = "GET", body } = {}) {
   const opts = { method, headers: {} };
   if (body !== undefined) {
     opts.headers["Content-Type"] = "application/json";
     opts.body = JSON.stringify(body);
   }
-  const resp = await fetch(path, opts);
+  let resp;
+  try {
+    resp = await fetch(path, opts);
+  } catch (err) {
+    // En ligne mais requête bloquée : en pratique, session Cloudflare expirée
+    // (redirection vers sa page de connexion). On recharge pour se reconnecter.
+    if (navigator.onLine) reloadForLogin();
+    throw err;
+  }
+  // Session de l'app expirée : retour au parcours de connexion.
+  if (resp.status === 401) { reloadForLogin(); throw new Error("Session expirée."); }
   let data = {};
   try { data = await resp.json(); } catch (_) { /* réponse vide */ }
   if (!resp.ok) throw new Error(data.error || `Erreur ${resp.status}`);
@@ -60,7 +80,9 @@ function confirmDialog(message, okLabel = "Confirmer") {
         <button class="btn small danger" data-c="1"></button></div></div>`;
     ov.querySelector(".confirm-msg").textContent = message;
     ov.querySelector("[data-c='1']").textContent = okLabel;
-    const done = (v) => { ov.remove(); resolve(v); };
+    const done = (v) => { ov.remove(); document.removeEventListener("keydown", onKey, true); resolve(v); };
+    const onKey = (e) => { if (e.key === "Escape") { e.stopImmediatePropagation(); done(false); } };
+    document.addEventListener("keydown", onKey, true);
     ov.addEventListener("click", (e) => {
       if (e.target === ov) return done(false);
       const b = e.target.closest("[data-c]");
@@ -705,6 +727,7 @@ async function loadDiscover() {
       ? data.results.map(posterCard).join("")
       : `<p class="muted">Aucun résultat.</p>`;
     if (data.results.length) animateIn(grid);
+    dec.total = data.total_pages;
     $("#dec-page").textContent = `Page ${data.page} / ${data.total_pages}`;
   } catch (e) { grid.innerHTML = `<p class="muted">${esc(e.message)}</p>`; }
 }
@@ -735,7 +758,9 @@ async function fillProviders(media = "movie") {
   } catch (_) { /* TMDB non configuré : menu plateformes vide */ }
 }
 $("#dec-prev").addEventListener("click", () => { if (dec.page > 1) { dec.page--; loadDiscover(); } });
-$("#dec-next").addEventListener("click", () => { dec.page++; loadDiscover(); });
+$("#dec-next").addEventListener("click", () => {
+  if (!dec.total || dec.page < dec.total) { dec.page++; loadDiscover(); }
+});
 $("#dec-roulette").addEventListener("click", () => openRoulette("catalog"));
 bindGrid($("#dec-grid"));
 
@@ -1101,9 +1126,11 @@ $("#btn-test-tmdb").addEventListener("click", async () => {
   catch (e) { $("#tmdb-status").textContent = "❌ " + e.message; }
 });
 $("#btn-save-password").addEventListener("click", async () => {
-  const password = $("#set-password").value;
+  const actuel = $("#set-password-actuel").value;
+  const nouveau = $("#set-password").value;
   try {
-    await api("/api/settings/password", { method: "POST", body: { password } });
+    await api("/api/admin/password", { method: "POST", body: { actuel, nouveau } });
+    $("#set-password-actuel").value = "";
     $("#set-password").value = "";
     $("#password-status").textContent = "✅ Mot de passe changé.";
   } catch (e) { $("#password-status").textContent = "❌ " + e.message; }
@@ -1167,7 +1194,16 @@ modal.addEventListener("click", (e) => {
   if (e.target.closest("[data-back]")) return navBack();
   if (e.target.closest("[data-close]")) closeModal();
 });
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  // Ferme d'abord les surcouches légères ; la fiche seulement s'il n'y en a pas.
+  const ouvert = (sel) => { const el = $(sel); return el && !el.classList.contains("hidden"); };
+  if (ouvert("#quick-menu") || ouvert("#more-sheet") || $(".toolbar.open")) {
+    closeQuickMenu(); closeSheet(); closeToolbars();
+  } else {
+    closeModal();
+  }
+});
 
 const DV_LOADING = `<div class="dv-body"><p class="muted">Chargement…</p></div>`;
 const dvErr = (e) => `<div class="dv-body"><p class="muted">${esc(e.message)}</p></div>`;

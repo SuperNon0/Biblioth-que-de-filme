@@ -21,10 +21,6 @@ bp = Blueprint("settings", __name__, url_prefix="/api")
 
 UPDATE_SCRIPT = "/opt/cinetheque/scripts/update-panel.sh"
 
-# Tables exportées/réimportées (ordre respectant les dépendances).
-TABLES = ["titres", "visionnages", "episodes", "listes", "liste_items", "alertes"]
-
-
 @bp.get("/settings")
 @auth.login_required
 def get_settings():
@@ -62,7 +58,7 @@ def set_settings():
 
 
 @bp.post("/settings/notif-test")
-@auth.login_required
+@auth.super_admin_required
 def notif_test():
     """Envoie une notification de test sur Discord (si activé)."""
     from services import notifications
@@ -81,20 +77,6 @@ def test_tmdb():
         return jsonify(ok=True)
     except TMDBError as exc:
         return jsonify(error=str(exc)), 502
-
-
-@bp.post("/settings/password")
-@require_capability("admin_password")
-def change_password():
-    from flask import session
-    if session.get("impersonator_id"):
-        return jsonify(error="Impossible pendant une impersonation."), 400
-    password = str((request.get_json(silent=True) or {}).get("password", ""))
-    try:
-        auth.set_password(password)
-    except ValueError as exc:
-        return jsonify(error=str(exc)), 400
-    return jsonify(ok=True)
 
 
 def _git(src, *args):
@@ -200,13 +182,30 @@ def reset_data():
     return jsonify(ok=True)
 
 
+# Tables enfants rattachées à un titre (cloisonnement hérité via `titre_id`).
+_TABLES_TITRE = ["visionnages", "episodes", "alertes", "journal"]
+
+
+def _colonnes(conn, table):
+    """Colonnes réelles d'une table (liste blanche pour l'import)."""
+    return [r[1] for r in conn.execute(f"PRAGMA table_info({table})")]
+
+
 @bp.get("/export")
 @auth.super_admin_required
 def export_data():
-    """Exporte toute la base au format JSON (fichier de secours/migration)."""
-    dump = {"version": 1, "exporte_le": int(time.time())}
-    for table in TABLES:
-        dump[table] = db.q(f"SELECT * FROM {table}")
+    """Exporte la bibliothèque DU COMPTE COURANT en JSON (secours/migration)."""
+    cid = auth.compte_courant_id()
+    dump = {"version": 2, "exporte_le": int(time.time())}
+    dump["titres"] = db.q("SELECT * FROM titres WHERE compte_id = ?", (cid,))
+    dump["listes"] = db.q("SELECT * FROM listes WHERE compte_id = ?", (cid,))
+    for table in _TABLES_TITRE:
+        dump[table] = db.q(
+            f"SELECT x.* FROM {table} x JOIN titres t ON t.id = x.titre_id "
+            "WHERE t.compte_id = ?", (cid,))
+    dump["liste_items"] = db.q(
+        "SELECT li.* FROM liste_items li JOIN listes l ON l.id = li.liste_id "
+        "WHERE l.compte_id = ?", (cid,))
     resp = jsonify(dump)
     resp.headers["Content-Disposition"] = (
         f"attachment; filename=cinetheque-export-"
@@ -218,26 +217,51 @@ def export_data():
 @bp.post("/import")
 @auth.super_admin_required
 def import_data():
-    """Réimporte un export : remplace intégralement le contenu de la base."""
+    """Réimporte un export dans le compte courant : remplace SA bibliothèque.
+
+    Les autres comptes ne sont pas touchés. Les identifiants sont renumérotés
+    (titres/listes) pour ne pas entrer en collision avec ceux des autres comptes.
+    """
     dump = request.get_json(silent=True) or {}
-    if "titres" not in dump:
+    if not isinstance(dump.get("titres"), list):
         return jsonify(error="Fichier d'export invalide."), 400
+    cid = auth.compte_courant_id()
     conn = db.connect()
+
+    def _insert(table, row, cols_ok, **force):
+        data = {k: v for k, v in row.items() if k in cols_ok and k != "id"}
+        data.update(force)
+        cols = ", ".join(data)
+        marks = ", ".join("?" for _ in data)
+        cur = conn.execute(f"INSERT INTO {table} ({cols}) VALUES ({marks})",
+                           tuple(data.values()))
+        return cur.lastrowid
+
     try:
-        conn.execute("PRAGMA foreign_keys = OFF")
-        for table in reversed(TABLES):
-            conn.execute(f"DELETE FROM {table}")
-        for table in TABLES:
-            for row in dump.get(table, []):
-                cols = ", ".join(row.keys())
-                marks = ", ".join("?" for _ in row)
-                conn.execute(
-                    f"INSERT INTO {table} ({cols}) VALUES ({marks})",
-                    tuple(row.values()),
-                )
-        conn.execute("PRAGMA foreign_keys = ON")
+        # Les enfants partent en CASCADE avec les titres/listes du compte.
+        conn.execute("DELETE FROM titres WHERE compte_id = ?", (cid,))
+        conn.execute("DELETE FROM listes WHERE compte_id = ?", (cid,))
+        map_titres, map_listes = {}, {}
+        cols = _colonnes(conn, "titres")
+        for row in dump["titres"]:
+            map_titres[row.get("id")] = _insert("titres", row, cols, compte_id=cid)
+        cols = _colonnes(conn, "listes")
+        for row in dump.get("listes") or []:
+            map_listes[row.get("id")] = _insert("listes", row, cols, compte_id=cid)
+        for table in _TABLES_TITRE:
+            cols = _colonnes(conn, table)
+            for row in dump.get(table) or []:
+                if row.get("titre_id") in map_titres:
+                    _insert(table, row, cols, titre_id=map_titres[row["titre_id"]])
+        cols = _colonnes(conn, "liste_items")
+        for row in dump.get("liste_items") or []:
+            if row.get("titre_id") in map_titres and row.get("liste_id") in map_listes:
+                _insert("liste_items", row, cols,
+                        titre_id=map_titres[row["titre_id"]],
+                        liste_id=map_listes[row["liste_id"]])
         conn.commit()
     except Exception as exc:  # noqa: BLE001 - on renvoie l'erreur telle quelle
         conn.rollback()
         return jsonify(error=f"Import échoué : {exc}"), 500
+    db.ensure_system_lists(cid)
     return jsonify(ok=True)

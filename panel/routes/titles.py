@@ -189,8 +189,11 @@ def add_watch(titre_id):
     if not _owns(titre_id):
         return jsonify(error="Titre introuvable."), 404
     data = request.get_json(silent=True) or {}
-    raw = (data.get("date") or "").strip()
-    jour = raw[:10] if raw else date.today().isoformat()
+    raw = str(data.get("date") or "").strip()
+    try:
+        jour = date.fromisoformat(raw[:10]).isoformat() if raw else date.today().isoformat()
+    except ValueError:
+        return jsonify(error="Date invalide (AAAA-MM-JJ)."), 400
     db.run("INSERT INTO visionnages (titre_id, date, cree) VALUES (?,?,?)",
            (titre_id, jour, int(time.time())))
     db.run("UPDATE titres SET statut = 'vu' WHERE id = ?", (titre_id,))
@@ -227,6 +230,9 @@ def _set_episode(ep_id, vu):
                "WHERE id = ?", (ep_id,))
 
 
+EP_ACTIONS = ("seen", "revu", "remove")
+
+
 def _apply_ep(ep, action):
     """Applique une action à un épisode :
     - ``seen`` : le marque vu (×1) SANS incrémenter s'il l'était déjà ;
@@ -261,6 +267,8 @@ def toggle_episode(ep_id):
     if not ep or not _owns(ep["titre_id"]):
         return jsonify(error="Épisode introuvable."), 404
     action = (request.get_json(silent=True) or {}).get("action", "revu")
+    if action not in EP_ACTIONS:
+        return jsonify(error="Action inconnue."), 400
     _apply_ep(ep, action)
     _refresh_serie_statut(ep["titre_id"])
     if action in ("seen", "revu"):
@@ -283,6 +291,8 @@ def toggle_episode_num(titre_id, saison, numero):
     if not ep:
         return jsonify(error="Épisode introuvable."), 404
     action = (request.get_json(silent=True) or {}).get("action", "revu")
+    if action not in EP_ACTIONS:
+        return jsonify(error="Action inconnue."), 400
     _apply_ep(ep, action)
     _refresh_serie_statut(titre_id)
     if action in ("seen", "revu"):
@@ -321,6 +331,8 @@ def mark_season(titre_id, saison):
     if not _owns(titre_id):
         return jsonify(error="Titre introuvable."), 404
     action = _mark_action(request.get_json(silent=True))
+    if action not in EP_ACTIONS + ("unmark",):
+        return jsonify(error="Action inconnue."), 400
     eps = db.q("SELECT id, vu, nb_vues FROM episodes WHERE titre_id = ? AND saison = ?",
                (titre_id, saison))
     _mark_episodes(eps, action)
@@ -337,6 +349,8 @@ def mark_series(titre_id):
     if not _owns(titre_id):
         return jsonify(error="Titre introuvable."), 404
     action = _mark_action(request.get_json(silent=True))
+    if action not in EP_ACTIONS + ("unmark",):
+        return jsonify(error="Action inconnue."), 400
     eps = db.q("SELECT id, vu, nb_vues FROM episodes WHERE titre_id = ?", (titre_id,))
     _mark_episodes(eps, action)
     _refresh_serie_statut(titre_id)
