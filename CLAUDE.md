@@ -42,9 +42,11 @@ Proxmox, mise à jour auto-remplaçante.
 - `tmdb.py` — client de l'API TMDB.
 - `routes/` — `pages`, `auth_routes` (gateway), `accounts_routes` (comptes +
   impersonation + Cloudflare/diagnostic), `library`, `titles`, `discover`,
-  `lists`, `alerts`, `people`, `stats`, `settings`.
+  `lists`, `alerts`, `people`, `stats`, `settings`, `mcp` (serveur MCP,
+  clé API dédiée hachée en base — voir `docs/mcp.md`).
 - `services/` — `posters`, `sync` (upsert par compte), `statistics` (par compte),
-  `notifications`, `scheduler`.
+  `notifications`, `scheduler`, `mcp_tools` (outils MCP = routes /api/*
+  rejouées en interne).
 - `static/` — `style.css`, `app.js`, `fonts.css`, `logo.svg`, `favicon.svg`, `sw.js`.
 - `templates/` — `index.html`, `login.html`, `forgot.html`, écrans d'auth
   (`demande`, `attente`, `refus`, `bloque`), `comptes.html`.

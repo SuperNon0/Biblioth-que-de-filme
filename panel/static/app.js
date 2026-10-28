@@ -1806,3 +1806,34 @@ document.getElementById("btn-diag")?.addEventListener("click", async () => {
   } catch (e) { out.textContent = e.message; }
 });
 loadCloudflare();  // remplit le formulaire Cloudflare si super-admin
+
+// ── Connecteur Claude (MCP) : clé API dédiée (super-admin) ──────────────────
+async function loadMcp() {
+  const state = document.getElementById("mcp-state");
+  if (!state) return;  // pas super-admin
+  try {
+    const m = await api("/api/mcp");
+    state.textContent = m.active ? `✅ actif (clé créée le ${m.cree})` : "désactivé (aucune clé)";
+  } catch (_) { state.textContent = "inconnu"; }
+}
+document.getElementById("btn-mcp-gen")?.addEventListener("click", async () => {
+  if (!(await confirmDialog("Générer une nouvelle clé MCP ? L'ancienne (s'il y en a une) cessera de fonctionner.", "Générer"))) return;
+  const out = document.getElementById("mcp-out");
+  try {
+    const r = await api("/api/mcp/cle", { method: "POST" });
+    out.style.display = "block";
+    out.textContent =
+      `Clé (copie-la maintenant, elle ne sera plus affichée) :\n${r.cle}\n\n` +
+      `URL du connecteur pour claude.ai :\n${location.origin}/mcp/${r.cle}`;
+    loadMcp();
+  } catch (e) { toast(e.message); }
+});
+document.getElementById("btn-mcp-revoke")?.addEventListener("click", async () => {
+  if (!(await confirmDialog("Révoquer la clé MCP ? Claude n'aura plus accès au site.", "Révoquer"))) return;
+  try {
+    await api("/api/mcp/cle", { method: "DELETE" });
+    document.getElementById("mcp-out").style.display = "none";
+    toast("Clé MCP révoquée"); loadMcp();
+  } catch (e) { toast(e.message); }
+});
+loadMcp();

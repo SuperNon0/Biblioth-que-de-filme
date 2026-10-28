@@ -309,6 +309,19 @@
           <button id="btn-diag" class="btn ghost small">Diagnostic</button>
           <pre id="diag-out" class="aide-cmd" style="display:none;white-space:pre-wrap"></pre>
         </div>
+
+        <div class="card">
+          <h3 class="sub-title">Connecteur Claude (MCP)</h3>
+          <p class="muted">Permet à Claude de tester et piloter le site en direct.
+            Accès protégé par une <b>clé API dédiée</b> (distincte du mot de passe
+            et de la clé TMDB), affichée une seule fois. Mode d'emploi : docs/mcp.md.</p>
+          <p class="muted">État : <span id="mcp-state">…</span></p>
+          <div class="row-inline">
+            <button id="btn-mcp-gen" class="btn primary small">Générer une clé</button>
+            <button id="btn-mcp-revoke" class="btn danger small">Révoquer</button>
+          </div>
+          <pre id="mcp-out" class="aide-cmd" style="display:none;white-space:pre-wrap;word-break:break-all"></pre>
+        </div>
         {% endif %}
       </div>
     </section>
