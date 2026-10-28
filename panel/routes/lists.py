@@ -42,10 +42,25 @@ def _import_items(nom, entrees):
     return liste_id, ajoutes
 
 
+# Listes système : en plus des titres ajoutés à la main, elles reprennent
+# automatiquement les titres au statut « à voir » / marqués favoris.
+_REGLE_SYSTEME = {"a_voir": "t.statut = 'a_voir'", "favoris": "t.favori = 1"}
+
+
+def _titres_sql(liste):
+    """Requête (sans colonnes) des titres d'une liste, système ou perso."""
+    regle = _REGLE_SYSTEME.get(liste.get("systeme"))
+    where = "li.liste_id IS NOT NULL" + (f" OR {regle}" if regle else "")
+    return (" FROM titres t LEFT JOIN liste_items li "
+            "ON li.titre_id = t.id AND li.liste_id = ? "
+            f"WHERE t.compte_id = ? AND ({where})",
+            (liste["id"], liste["compte_id"]))
+
+
 def _liste(row):
     row["systeme_flag"] = bool(row.get("systeme"))
-    row["nb"] = db.q1("SELECT COUNT(*) AS n FROM liste_items WHERE liste_id = ?",
-                      (row["id"],))["n"]
+    sql, params = _titres_sql(row)
+    row["nb"] = db.q1("SELECT COUNT(*) AS n" + sql, params)["n"]
     return row
 
 
@@ -91,11 +106,9 @@ def items(liste_id):
                   (liste_id, auth.compte_courant_id()))
     if not liste:
         return jsonify(error="Liste introuvable."), 404
-    rows = db.q(
-        """SELECT t.* FROM liste_items li JOIN titres t ON t.id = li.titre_id
-           WHERE li.liste_id = ? ORDER BY li.rang, li.ajoute""",
-        (liste_id,),
-    )
+    sql, params = _titres_sql(liste)
+    rows = db.q("SELECT t.*" + sql +
+                " ORDER BY li.rang IS NULL, li.rang, li.ajoute, t.date_ajout DESC", params)
     from routes.library import _row
     return jsonify(liste=liste, titres=[_row(r) for r in rows])
 
@@ -105,10 +118,15 @@ def items(liste_id):
 def add_item(liste_id):
     cid = auth.compte_courant_id()
     titre_id = (request.get_json(silent=True) or {}).get("titre_id")
-    if not db.q1("SELECT id FROM listes WHERE id = ? AND compte_id = ?", (liste_id, cid)):
+    liste = db.q1("SELECT systeme FROM listes WHERE id = ? AND compte_id = ?",
+                  (liste_id, cid))
+    if not liste:
         return jsonify(error="Liste introuvable."), 404
     if not db.q1("SELECT id FROM titres WHERE id = ? AND compte_id = ?", (titre_id, cid)):
         return jsonify(error="Titre introuvable."), 404
+    if liste["systeme"] == "favoris":
+        db.run("UPDATE titres SET favori = 1 WHERE id = ? AND compte_id = ?",
+               (titre_id, cid))
     rang = db.q1("SELECT COALESCE(MAX(rang),0)+1 AS r FROM liste_items "
                  "WHERE liste_id = ?", (liste_id,))["r"]
     db.run("INSERT OR IGNORE INTO liste_items (liste_id, titre_id, rang, ajoute) "
@@ -119,11 +137,16 @@ def add_item(liste_id):
 @bp.delete("/lists/<int:liste_id>/items/<int:titre_id>")
 @auth.login_required
 def remove_item(liste_id, titre_id):
-    if not db.q1("SELECT id FROM listes WHERE id = ? AND compte_id = ?",
-                 (liste_id, auth.compte_courant_id())):
+    cid = auth.compte_courant_id()
+    liste = db.q1("SELECT systeme FROM listes WHERE id = ? AND compte_id = ?",
+                  (liste_id, cid))
+    if not liste:
         return jsonify(error="Liste introuvable."), 404
     db.run("DELETE FROM liste_items WHERE liste_id = ? AND titre_id = ?",
            (liste_id, titre_id))
+    if liste["systeme"] == "favoris":
+        db.run("UPDATE titres SET favori = 0 WHERE id = ? AND compte_id = ?",
+               (titre_id, cid))
     return jsonify(ok=True)
 
 

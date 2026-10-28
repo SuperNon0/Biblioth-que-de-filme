@@ -51,7 +51,10 @@ self.addEventListener("fetch", (e) => {
   e.respondWith(
     caches.match(e.request).then((cached) => cached ||
       fetch(e.request).then((resp) => {
-        caches.open(CACHE).then((c) => c.put(e.request, resp.clone())).catch(() => {});
+        // Jamais d'erreur ni de redirection (page de connexion Cloudflare) en cache.
+        if (resp && resp.ok && resp.type === "basic") {
+          caches.open(CACHE).then((c) => c.put(e.request, resp.clone())).catch(() => {});
+        }
         return resp;
       }))
   );
