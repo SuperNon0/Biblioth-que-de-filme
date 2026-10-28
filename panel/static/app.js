@@ -1859,8 +1859,11 @@ document.getElementById("btn-mcp-gen")?.addEventListener("click", async () => {
     const r = await api("/api/mcp/cle", { method: "POST" });
     out.style.display = "block";
     out.textContent =
-      `Clé (copie-la maintenant, elle ne sera plus affichée) :\n${r.cle}\n\n` +
-      `URL du connecteur pour claude.ai :\n${location.origin}/mcp/${r.cle}`;
+      `Copie ces valeurs maintenant : la clé ne sera plus affichée.\n\n` +
+      `URL du serveur :\n${location.origin}/mcp\n\n` +
+      `En-tête :\nAuthorization\n\n` +
+      `Valeur :\nBearer ${r.cle}\n\n` +
+      `(Variante : en-tête X-API-Key avec la valeur ${r.cle})`;
     loadMcp();
   } catch (e) { toast(e.message); }
 });

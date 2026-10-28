@@ -315,7 +315,8 @@
           <h3 class="sub-title">Connecteur Claude (MCP)</h3>
           <p class="muted">Permet à Claude de tester et piloter le site en direct.
             Accès protégé par une <b>clé API dédiée</b> (distincte du mot de passe
-            et de la clé TMDB), affichée une seule fois. Mode d'emploi : docs/mcp.md.</p>
+            et de la clé TMDB), envoyée dans l'en-tête <code>Authorization</code>
+            et affichée une seule fois. Mode d'emploi : docs/mcp.md.</p>
           <p class="muted">État : <span id="mcp-state">…</span></p>
           <div class="row-inline">
             <button id="btn-mcp-gen" class="btn primary small">Générer une clé</button>
