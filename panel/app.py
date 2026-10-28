@@ -10,6 +10,7 @@ Lancement :
 En développement, sans config déployée, l'app tourne avec des valeurs par
 défaut et une base locale dans ./.data/.
 """
+import base64
 import json
 import os
 
@@ -67,6 +68,25 @@ def create_app():
         except OSError:
             version = 0
         return url_for("static", filename=filename) + f"?v={version}"
+
+    # Icône d'accueil iPhone INTÉGRÉE À LA PAGE (data URI base64), plutôt que
+    # servie comme fichier séparé : le site est derrière Cloudflare Access, et
+    # l'iPhone qui télécharge l'icône dans une requête à part peut recevoir la
+    # page de connexion Cloudflare au lieu de l'image. En l'intégrant, iOS n'a
+    # rien à télécharger → le logo s'affiche sans ouvrir de règle Cloudflare.
+    # Source : panel/static/apple-touch-icon.png (PNG carré plein, opaque, 180px).
+    _apple_icon = {}
+
+    @app.template_global()
+    def apple_touch_icon():
+        if "uri" not in _apple_icon:
+            try:
+                with open(os.path.join(app.static_folder, "apple-touch-icon.png"), "rb") as fh:
+                    _apple_icon["uri"] = "data:image/png;base64," + \
+                        base64.b64encode(fh.read()).decode("ascii")
+            except OSError:
+                _apple_icon["uri"] = ""
+        return _apple_icon["uri"]
 
     # Auto-login Cloudflare Access (sinon mot de passe requis).
     @app.before_request
