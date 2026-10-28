@@ -96,10 +96,8 @@ def items(liste_id):
            WHERE li.liste_id = ? ORDER BY li.rang, li.ajoute""",
         (liste_id,),
     )
-    for r in rows:
-        r["genres"] = db.jload(r.get("genres"), [])
-        r["favori"] = bool(r["favori"])
-    return jsonify(liste=liste, titres=rows)
+    from routes.library import _row
+    return jsonify(liste=liste, titres=[_row(r) for r in rows])
 
 
 @bp.post("/lists/<int:liste_id>/items")

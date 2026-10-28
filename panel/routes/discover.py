@@ -208,7 +208,7 @@ def _top_genres(tmdb, media="movie", limit=3):
 def discover():
     """Catalogue large filtrable + paginé (onglet Découverte)."""
     media = "tv" if request.args.get("type") == "serie" else "movie"
-    page = max(1, int(request.args.get("page", 1) or 1))
+    page = max(1, request.args.get("page", 1, type=int) or 1)
     sorts = SORTS_SERIE if media == "tv" else SORTS_FILM
     sort_by = sorts.get(request.args.get("tri", "populaire"), sorts["populaire"])
     try:
@@ -347,7 +347,7 @@ def genres():
 @auth.login_required
 def upcoming():
     """Films à venir (avec bande-annonce récupérée à l'ouverture de la fiche)."""
-    page = max(1, int(request.args.get("page", 1) or 1))
+    page = max(1, request.args.get("page", 1, type=int) or 1)
     try:
         items = get_tmdb().upcoming(page)
     except TMDBError as exc:

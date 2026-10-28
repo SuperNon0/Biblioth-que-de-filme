@@ -7,6 +7,7 @@ titre, mise en cache de l'affiche, et pour les séries, remplissage des
 import json
 import threading
 import time
+from datetime import date
 
 from flask import current_app
 
@@ -97,6 +98,10 @@ def sync_episodes(titre_id, tmdb, tmdb_id, saisons):
     suivante au lieu de tout interrompre — évite de n'avoir que la saison 1.
     Renvoie le nombre de saisons effectivement récupérées.
     """
+    # Première synchro (ajout par liste, alerte, import…) : on retient qu'elle
+    # l'est pour poser ensuite la baseline anti-spam des notifications.
+    premiere = db.q1("SELECT 1 FROM episodes WHERE titre_id = ? LIMIT 1",
+                     (titre_id,)) is None
     ok = 0
     for saison in saisons:
         num = saison["numero"]
@@ -117,4 +122,10 @@ def sync_episodes(titre_id, tmdb, tmdb_id, saisons):
                 (titre_id, ep["saison"], ep["numero"], ep["nom"],
                  ep["resume"], ep["image"], ep["duree"], ep["date_diff"]),
             )
+    if premiere:
+        # Baseline anti-spam : les épisodes déjà diffusés ne déclenchent pas de
+        # notification « nouvel épisode » (sinon rafale de toute la série).
+        db.run("UPDATE episodes SET notifie=1 WHERE titre_id=? AND "
+               "date_diff IS NOT NULL AND date_diff <= ?",
+               (titre_id, date.today().isoformat()))
     return ok

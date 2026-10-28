@@ -257,13 +257,19 @@ def add_manual():
     typ = data.get("type")
     if not titre or typ not in ("film", "serie"):
         return jsonify(error="Titre et type requis."), 400
+    statut = data.get("statut") if data.get("statut") in STATUTS else "a_voir"
+    try:
+        annee = int(data["annee"]) if data.get("annee") not in (None, "") else None
+        duree = int(data["duree"]) if data.get("duree") not in (None, "") else None
+    except (TypeError, ValueError):
+        return jsonify(error="Année et durée doivent être des nombres."), 400
     now = int(time.time())
     titre_id = db.run(
         """INSERT INTO titres (compte_id, type, titre, annee, resume, duree, statut,
                                ajout_manuel, date_ajout, maj)
            VALUES (?,?,?,?,?,?,?,1,?,?)""",
-        (auth.compte_courant_id(), typ, titre, data.get("annee"), data.get("resume"),
-         data.get("duree"), data.get("statut", "a_voir"), now, now),
+        (auth.compte_courant_id(), typ, titre, annee, data.get("resume"),
+         duree, statut, now, now),
     )
     return jsonify(ok=True, id=titre_id)
 
