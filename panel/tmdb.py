@@ -171,8 +171,13 @@ class TMDB:
         return [self._brief(r, "movie") for r in data.get("results", [])]
 
     def upcoming(self, page=1):
+        return self.upcoming_page(page)["results"]
+
+    def upcoming_page(self, page=1):
+        """Une page des prochaines sorties au cinéma, avec le nombre de pages."""
         data = self._get("/movie/upcoming", page=page, region=self.region)
-        return [self._brief(r, "movie") for r in data.get("results", [])]
+        return {"results": [self._brief(r, "movie") for r in data.get("results", [])],
+                "total_pages": min(data.get("total_pages", 1) or 1, 500)}
 
     def recommendations(self, media, tmdb_id, page=1):
         data = self._get(f"/{media}/{tmdb_id}/recommendations", page=page)
@@ -180,9 +185,16 @@ class TMDB:
 
     def discover(self, media="movie", page=1, sort_by="popularity.desc",
                  genre=None, year=None, country=None, vote_count_gte=None,
-                 year_gte=None, year_lte=None, provider=None, note_min=None):
-        """Catalogue filtrable pour l'onglet Découverte et les suggestions."""
+                 year_gte=None, year_lte=None, provider=None, note_min=None,
+                 runtime_lte=None, inclus=False):
+        """Catalogue filtrable pour l'onglet Découverte et les suggestions.
+
+        ``runtime_lte`` : durée maximale (minutes) ; ``inclus`` : avec
+        ``provider``, seulement ce qui est compris dans l'abonnement (ni achat
+        ni location)."""
         params = {"page": page, "sort_by": sort_by, "include_adult": "false"}
+        if runtime_lte:
+            params["with_runtime.lte"] = runtime_lte
         if genre:
             params["with_genres"] = genre
         if country:
@@ -198,6 +210,8 @@ class TMDB:
             # Filtre par plateforme de streaming (région requise par TMDB).
             params["with_watch_providers"] = provider
             params["watch_region"] = self.region
+            if inclus:
+                params["with_watch_monetization_types"] = "flatrate|free|ads"
         date_field = "primary_release_date" if media == "movie" else "first_air_date"
         if year:
             params["primary_release_year" if media == "movie"
@@ -371,6 +385,26 @@ class TMDB:
                 break
         return out
 
+    METIERS = {"Acting": "Interprétation", "Directing": "Réalisation",
+               "Writing": "Scénario", "Production": "Production", "Sound": "Musique",
+               "Camera": "Image", "Editing": "Montage", "Art": "Décors",
+               "Costume & Make-Up": "Costumes", "Visual Effects": "Effets visuels",
+               "Lighting": "Lumière", "Crew": "Équipe technique"}
+
+    def search_person(self, query):
+        """Acteurs et réalisateurs dont le nom correspond (recherche « acteurs »)."""
+        data = self._get("/search/person", query=query, include_adult="false")
+        out = []
+        for r in data.get("results", [])[:12]:
+            connu = [k.get("title") or k.get("name") for k in r.get("known_for", [])
+                     if k.get("title") or k.get("name")]
+            metier = r.get("known_for_department") or ""
+            out.append({"id": r.get("id"), "nom": r.get("name"),
+                        "metier": self.METIERS.get(metier, metier),
+                        "photo": self.image_url(r.get("profile_path"), "w185"),
+                        "connu_pour": connu[:3]})
+        return out
+
     def person(self, person_id):
         """Fiche d'une personne : infos + filmographie (films et séries)."""
         d = self._get(f"/person/{person_id}",
@@ -396,7 +430,8 @@ class TMDB:
             "bio": d.get("biography") or "",
             "naissance": d.get("birthday"),
             "lieu": d.get("place_of_birth"),
-            "metier": d.get("known_for_department"),
+            "metier": self.METIERS.get(d.get("known_for_department") or "",
+                                       d.get("known_for_department")),
             "photo": self.image_url(d.get("profile_path"), "w185"),
             "films": films[:40],
         }

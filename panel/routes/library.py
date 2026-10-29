@@ -12,9 +12,11 @@ from flask import Blueprint, jsonify, request
 
 import auth
 import db
+import genres as genres_fr
+import settings_store
 from context import get_tmdb
-from services import sync
-from tmdb import TMDBError
+from services import sync, undo
+from tmdb import TMDBError, canon_platform
 
 bp = Blueprint("library", __name__, url_prefix="/api")
 
@@ -32,7 +34,7 @@ TRIS = {
 # /api/title/<id> : renvoyer `SELECT *` faisait ~6 Ko par titre, soit ~3 Mo
 # pour une bibliothèque de 500 titres à chaque affichage sur téléphone.
 CARTE_COLS = ("id", "tmdb_id", "type", "titre", "annee", "affiche", "note_tmdb",
-              "genres", "statut", "favori", "date_ajout", "nb_saisons")
+              "genres", "statut", "favori", "date_ajout", "nb_saisons", "date_sortie")
 
 
 def carte_cols(alias=""):
@@ -41,46 +43,88 @@ def carte_cols(alias=""):
 
 
 def _row(t):
-    """Sérialise une ligne de titre pour le front."""
-    t["genres"] = db.jload(t.get("genres"), [])
+    """Sérialise une ligne de titre pour le front (genres regroupés en français)."""
+    t["genres"] = genres_fr.normaliser(db.jload(t.get("genres"), []))
     if "plateformes" in t:
         t["plateformes"] = db.jload(t.get("plateformes"), [])
     t["favori"] = bool(t.get("favori"))
     return t
 
 
+# Modes d'accès « inclus » dans un abonnement (sans achat ni location).
+MODES_INCLUS = {"Abonnement", "Gratuit", "Avec pubs", ""}
+
+
+def mes_plateformes():
+    """Noms canoniques (minuscules) des plateformes auxquelles on est abonné."""
+    return {canon_platform(n).lower() for n in settings_store.get("mes_plateformes") or []}
+
+
+def plateforme_incluse(plateformes, mes):
+    """Première de MES plateformes où le titre est inclus : {nom, logo} ou None."""
+    for p in plateformes or []:
+        nom = canon_platform(p.get("nom"))
+        if nom and nom.lower() in mes and p.get("mode", "") in MODES_INCLUS:
+            return {"nom": nom, "logo": p.get("logo")}
+    return None
+
+
 def annotate_cards(rows):
     """Prépare des lignes de titres pour les cartes : genres décodés, « vu ×N »
-    des films (nombre de visionnages) et progression des séries."""
+    des films (nombre de visionnages), progression des séries, date du dernier
+    visionnage (``vu_le``, rangée « Vus récemment ») et badge de la plateforme
+    où le titre est inclus dans mes abonnements."""
     out = [_row(r) for r in rows]
     film_ids = [r["id"] for r in out if r["type"] == "film"]
     vues = {}
     if film_ids:
         marks = ",".join("?" * len(film_ids))
-        for v in db.q(f"""SELECT titre_id, COUNT(*) AS n FROM visionnages
-                          WHERE titre_id IN ({marks}) GROUP BY titre_id""", film_ids):
-            vues[v["titre_id"]] = v["n"]
+        for v in db.q(f"""SELECT titre_id, COUNT(*) AS n, MAX(cree) AS dernier
+                          FROM visionnages WHERE titre_id IN ({marks})
+                          GROUP BY titre_id""", film_ids):
+            vues[v["titre_id"]] = v
     # Progression + prochain épisode des séries (barre + « où j'en suis »).
     annotate_series_progress(out)
     for row in out:
         if row["type"] == "film":
-            row["nb_vues"] = vues.get(row["id"], 0)
+            v = vues.get(row["id"]) or {}
+            row["nb_vues"] = v.get("n", 0)
+            if v.get("dernier"):
+                row["vu_le"] = time.strftime("%Y-%m-%d", time.localtime(v["dernier"]))
+    mes = mes_plateformes()
+    if mes and out:
+        ids = [r["id"] for r in out]
+        plats = {}
+        for i in range(0, len(ids), 500):  # limite de variables SQLite
+            lot = ids[i:i + 500]
+            for p in db.q(f"SELECT id, plateformes FROM titres WHERE id IN "
+                          f"({','.join('?' * len(lot))})", lot):
+                plats[p["id"]] = p["plateformes"]
+        for row in out:
+            d = plateforme_incluse(db.jload(plats.get(row["id"]), []), mes)
+            if d:
+                row["dispo"] = d
     return out
 
 
-def _mark_seen(titre_id, typ):
+def _mark_seen(titre_id, typ, lot=None):
     """Fait qu'un titre marqué « vu » compte dans les statistiques.
 
     - Film : ajoute un visionnage « déjà vu » (date NULL) s'il n'y en a aucun,
       donc sans forcer de date. Les re-visionnages s'ajoutent depuis la fiche.
     - Série : marque tous les épisodes comme vus (comptent dans le temps passé).
+
+    ``lot`` (facultatif) retient de quoi annuler ces changements.
     """
+    lot = lot or undo.Lot()
     if typ == "film":
         if not db.q1("SELECT 1 FROM visionnages WHERE titre_id = ? LIMIT 1", (titre_id,)):
-            db.run("INSERT OR IGNORE INTO visionnages (titre_id, date, cree) VALUES (?,?,?)",
-                   (titre_id, time.strftime("%Y-%m-%d"), int(time.time())))
-            db.log_event(titre_id, "film")
+            lot.ajoute("visionnages", db.run(
+                "INSERT OR IGNORE INTO visionnages (titre_id, date, cree) VALUES (?,?,?)",
+                (titre_id, time.strftime("%Y-%m-%d"), int(time.time()))))
+            lot.ajoute("journal", db.log_event(titre_id, "film"))
     else:
+        lot.episodes(titre_id)
         # Épisodes déjà diffusés seulement : une saison à venir cochée d'avance
         # ne reviendrait jamais dans « Reprendre » à sa sortie.
         db.run(f"""UPDATE episodes SET vu = 1,
@@ -100,8 +144,9 @@ def annotate_series_progress(rows):
         return rows
     marks = ",".join("?" * len(ids))
     eps_by = {}
-    for e in db.q(f"""SELECT titre_id, saison, numero, vu, nb_vues, date_diff FROM episodes
-                      WHERE titre_id IN ({marks})
+    for e in db.q(f"""SELECT titre_id, saison, numero, nom, duree, vu, nb_vues, date_diff,
+                             derniere_vue
+                      FROM episodes WHERE titre_id IN ({marks})
                       ORDER BY titre_id, saison, numero""", ids):
         eps_by.setdefault(e["titre_id"], []).append(e)
     today = date.today().isoformat()
@@ -120,6 +165,9 @@ def annotate_series_progress(rows):
             continue
         total = len(eps)
         vus = sum(1 for e in eps if e["vu"])
+        vu_le = max((e["derniere_vue"] or "" for e in eps if e["vu"]), default="")
+        if vu_le:
+            r["vu_le"] = vu_le
         maxi = max((e["nb_vues"] or 0) for e in eps)
         mini = min((e["nb_vues"] or 0) for e in eps)
         r["total_ep"] = total
@@ -134,6 +182,13 @@ def annotate_series_progress(rows):
         if nxt is not None:
             r["next_saison"] = nxt["saison"]
             r["next_numero"] = nxt["numero"]
+            r["next_nom"] = nxt["nom"]
+            r["next_duree"] = nxt["duree"]
+        # Prochaine diffusion annoncée (saison à venir) : date du 1er épisode.
+        futur = next((e for e in tous if e.get("date_diff") and e["date_diff"] > today), None)
+        if futur is not None:
+            r["prochaine_diffusion"] = {"saison": futur["saison"], "numero": futur["numero"],
+                                        "date": futur["date_diff"]}
         # Série entièrement vue N fois (min des revisionnages) → « ↻ ×N ».
         if total and vus >= total:
             r["nb_vues"] = mini
@@ -203,8 +258,10 @@ def library():
         params.append(typ)
     genre = request.args.get("genre")
     if genre:
-        where.append("genres LIKE ?")
-        params.append(f'%"{genre}"%')
+        # « Action » retrouve aussi les séries classées « Action & Adventure ».
+        noms = genres_fr.variantes(genre)
+        where.append("(" + " OR ".join("genres LIKE ?" for _ in noms) + ")")
+        params.extend(f'%"{g}"%' for g in noms)
     if request.args.get("favori") == "1":
         where.append("favori = 1")
     recherche = request.args.get("q", "").strip()
@@ -217,6 +274,20 @@ def library():
         params,
     )
     return jsonify(titres=annotate_cards(rows))
+
+
+@bp.get("/library/genres")
+@auth.login_required
+def library_genres():
+    """Genres présents dans la bibliothèque (regroupés, en français), avec le
+    nombre de titres de chacun : sert au filtre « Genre » de la bibliothèque."""
+    compte = {}
+    for r in db.q("SELECT genres FROM titres WHERE compte_id = ?", (auth.compte_courant_id(),)):
+        for g in genres_fr.normaliser(db.jload(r["genres"], [])):
+            compte[g] = compte.get(g, 0) + 1
+    out = [{"nom": g, "n": n} for g, n in compte.items()]
+    out.sort(key=lambda x: (-x["n"], x["nom"]))
+    return jsonify(genres=out)
 
 
 @bp.post("/library")
@@ -235,7 +306,15 @@ def add():
         detail = tmdb.movie(tmdb_id) if typ == "film" else tmdb.tv(tmdb_id)
     except TMDBError as exc:
         return jsonify(error=str(exc)), 502
-    titre_id = sync.upsert_titre(detail, statut, auth.compte_courant_id())
+    cid = auth.compte_courant_id()
+    lot = undo.Lot()
+    existant = db.q1("SELECT id FROM titres WHERE compte_id = ? AND tmdb_id = ? AND type = ?",
+                     (cid, tmdb_id, typ))
+    if existant:
+        lot.colonnes("titres", existant["id"], ["statut"])
+    titre_id = sync.upsert_titre(detail, statut, cid)
+    if not existant:
+        lot.ajoute("titres", titre_id)  # « Annuler » retire le titre ajouté
     # Applique le statut choisi même si le titre existait déjà (upsert ne le
     # change pas à la mise à jour) — utile depuis le menu rapide. Sans statut
     # explicite, un titre déjà présent garde le sien : « ajoute Inception »
@@ -247,8 +326,8 @@ def add():
         # pour que l'ajout réponde instantanément, même pour les longues séries.
         _sync_episodes_bg(tmdb, titre_id, tmdb_id, detail.get("saisons", []), statut)
     elif statut == "vu":
-        _mark_seen(titre_id, typ)
-    return jsonify(ok=True, id=titre_id)
+        _mark_seen(titre_id, typ, lot if existant else None)
+    return jsonify(ok=True, id=titre_id, annuler=undo.enregistrer(lot, cid))
 
 
 def _sync_episodes_bg(tmdb, titre_id, tmdb_id, saisons, statut):
@@ -322,21 +401,27 @@ def update(titre_id):
         return jsonify(error="Titre introuvable."), 404
     if "statut" in data and data["statut"] not in STATUTS:
         return jsonify(error="Statut invalide (a_voir, en_cours ou vu)."), 400
+    lot = undo.Lot()
+    lot.colonnes("titres", titre_id, ["statut", "favori"])
     if "statut" in data:
         db.run("UPDATE titres SET statut = ? WHERE id = ? AND compte_id = ?",
                (data["statut"], titre_id, cid))
         if data["statut"] == "vu":
-            _mark_seen(titre_id, row["type"])
+            _mark_seen(titre_id, row["type"], lot)
     if "favori" in data:
         db.run("UPDATE titres SET favori = ? WHERE id = ? AND compte_id = ?",
                (1 if data["favori"] else 0, titre_id, cid))
         if not data["favori"]:
             # Ancien ajout manuel dans « Favoris » : le titre y restait affiché
             # alors que le cœur était décoché.
+            lot.supprime("liste_items", db.q(
+                "SELECT * FROM liste_items WHERE titre_id = ? AND liste_id IN "
+                "(SELECT id FROM listes WHERE compte_id = ? AND systeme = 'favoris')",
+                (titre_id, cid)))
             db.run("DELETE FROM liste_items WHERE titre_id = ? AND liste_id IN "
                    "(SELECT id FROM listes WHERE compte_id = ? AND systeme = 'favoris')",
                    (titre_id, cid))
-    return jsonify(ok=True)
+    return jsonify(ok=True, annuler=undo.enregistrer(lot, cid))
 
 
 @bp.delete("/library/<int:titre_id>")
@@ -346,9 +431,21 @@ def delete(titre_id):
                 (titre_id, auth.compte_courant_id()))
     if not row:
         return jsonify(error="Titre introuvable."), 404
+    lot = undo.Lot()
+    lot.titre_complet(titre_id)
     db.run("DELETE FROM titres WHERE id = ? AND compte_id = ?",
            (titre_id, auth.compte_courant_id()))
     db.audit("supprimer_titre", acteur=auth.acteur(), cible=row["titre"])
+    return jsonify(ok=True, annuler=undo.enregistrer(lot, auth.compte_courant_id()))
+
+
+@bp.post("/undo")
+@auth.login_required
+def annuler():
+    """Annule la dernière action désignée par son jeton (« Annuler », 5 s)."""
+    jeton = str((request.get_json(silent=True) or {}).get("jeton") or "")
+    if not jeton or not undo.annuler(jeton, auth.compte_courant_id()):
+        return jsonify(error="Trop tard pour annuler cette action."), 410
     return jsonify(ok=True)
 
 

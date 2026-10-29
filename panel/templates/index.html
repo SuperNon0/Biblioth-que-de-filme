@@ -1,541 +1,685 @@
-<!doctype html>
-<html lang="fr">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-  <title>cinéthèque</title>
-  <meta name="theme-color" content="#0e0f11">
-  <link rel="icon" href="{{ asset('favicon.svg') }}" type="image/svg+xml">
+{% extends "_base.html" %}
+{% block tete %}
   <link rel="manifest" href="{{ asset('manifest.webmanifest') }}">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="cinéthèque">
   <link rel="apple-touch-icon" sizes="180x180" type="image/png" href="{{ apple_touch_icon() }}">
-  <!-- Connexion anticipée au CDN d'images TMDB : évite le lag au premier chargement
-       (le handshake TLS est fait pendant que la page se construit). -->
+  {#- Connexion anticipée au CDN d'images TMDB : moins d'attente au premier affichage. #}
   <link rel="preconnect" href="https://image.tmdb.org" crossorigin>
   <link rel="dns-prefetch" href="https://image.tmdb.org">
-  <link rel="stylesheet" href="{{ asset('fonts.css') }}">
-  <link rel="stylesheet" href="{{ asset('style.css') }}">
-</head>
-<body>
-  {% if impersonation %}
-  <div class="imp-banner">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
-    <span>Tu consultes le compte de <b>{{ impersonation.email }}</b></span>
-    <button class="btn small" id="imp-stop">Revenir à mon compte</button>
-  </div>
-  {% endif %}
-  <header class="topbar">
-    <div class="brand">
-      <img class="logo-mark" src="{{ asset('logo.svg') }}" alt="" width="34" height="34">
-      <span class="logo"><span class="g">ciné</span><span class="i">thèque</span></span>
+{% endblock %}
+{% block corps %}
+<div class="app">
+  {# ---------------------------------------------- menu de gauche (ordinateur, N2) #}
+  <aside class="side" aria-label="Menu principal">
+    <div class="ligne">
+      <a class="brand" href="#accueil" data-page="accueil" aria-label="cinéthèque, accueil">{% include "_logo.html" %}</a>
+      <span class="ver" id="side-ver" title="Version du site"></span>
     </div>
-
-    <div class="search">
-      <input id="search-input" type="search" placeholder="Rechercher un film ou une série…"
-             autocomplete="off">
-      <div id="search-results" class="search-results hidden"></div>
-    </div>
-
-    <form action="{{ url_for('pages.logout') }}" method="post" class="inline logout-form">
-      <button type="submit" class="btn ghost small">Déconnexion</button>
-    </form>
-  </header>
-
-  {% if not tmdb_ok %}
-  <div id="tmdb-banner" class="banner">
-    <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 20h20L12 3z"/><path d="M12 10v4"/><circle cx="12" cy="17" r="0.6" fill="currentColor" stroke="none"/></svg> <b>Clé API TMDB non configurée.</b> Renseigne-la dans
-    <a href="#" data-goto="parametres">Paramètres</a> pour activer la recherche,
-    les suggestions et les fiches.
-  </div>
-  {% endif %}
-
-  <nav class="tabs" id="main-tabs">
-    <button class="tab active" data-tab="suggestions">Suggestions</button>
-    <button class="tab" data-tab="bibliotheque">Bibliothèque</button>
-    <button class="tab" data-tab="decouverte">Découverte</button>
-    <button class="tab" data-tab="futur">Futur</button>
-    <button class="tab" data-tab="listes">Listes</button>
-    <button class="tab" data-tab="profil">Profil</button>
-    <button class="tab" data-tab="parametres">Paramètres</button>
-    <button class="tab" data-tab="aide">Aide</button>
-  </nav>
-
-  <main>
-    <!-- Suggestions (accueil) : carrousels -->
-    <section id="page-suggestions" class="page active">
-      <div class="page-head">
-        <h2>Suggestions</h2>
-        <div class="row-inline">
-          <div class="chips" data-filter="suggestions">
-            <button class="chip active" data-media="all">Tout</button>
-            <button class="chip" data-media="movie">Films</button>
-            <button class="chip" data-media="tv">Séries</button>
-          </div>
-          <button id="sug-refresh" class="btn small" title="Renouveler les suggestions"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2 5.3"/><path d="M20 4v5h-5"/></svg>Actualiser</button>
-        </div>
+    <button class="side-search" type="button" data-palette>
+      <svg class="i s18" aria-hidden="true"><use href="#i-search"/></svg>Rechercher…<span class="kbd">Ctrl K</span>
+    </button>
+    <nav aria-label="Pages">
+      <a class="side-it" href="#accueil" data-page="accueil"><svg class="i" aria-hidden="true"><use href="#i-home"/></svg><span class="nom">Accueil</span></a>
+      <a class="side-it" href="#bibliotheque" data-page="bibliotheque"><svg class="i" aria-hidden="true"><use href="#i-lib"/></svg><span class="nom">Bibliothèque</span><span class="n" id="side-n-biblio"></span></a>
+      <a class="side-it" href="#decouvrir" data-page="decouvrir"><svg class="i" aria-hidden="true"><use href="#i-compass"/></svg><span class="nom">Découvrir</span></a>
+      <a class="side-it" href="#futur" data-page="futur"><svg class="i" aria-hidden="true"><use href="#i-bell"/></svg><span class="nom">Futur</span></a>
+      <a class="side-it" href="#listes" data-page="listes"><svg class="i" aria-hidden="true"><use href="#i-list"/></svg><span class="nom">Listes</span></a>
+    </nav>
+    <div class="side-lbl">Mes listes <button type="button" data-nouvelle-liste title="Nouvelle liste" aria-label="Nouvelle liste"><svg class="i s16" aria-hidden="true"><use href="#i-plus"/></svg></button></div>
+    <div id="side-listes" class="side-listes"></div>
+    <div class="side-foot">
+      <a class="side-it" href="#profil" data-page="profil"><svg class="i" aria-hidden="true"><use href="#i-chart"/></svg><span class="nom">Profil</span></a>
+      <a class="side-it" href="#parametres" data-page="parametres"><svg class="i" aria-hidden="true"><use href="#i-gear"/></svg><span class="nom">Paramètres</span></a>
+      <a class="side-it" href="#aide" data-page="aide"><svg class="i" aria-hidden="true"><use href="#i-help"/></svg><span class="nom">Aide</span></a>
+      <div class="side-compte">
+        <span class="av" aria-hidden="true">{{ (moi or 'A')[0]|upper }}</span><span title="{{ moi }}">{{ moi or 'Administrateur' }}</span>
+        <form action="{{ url_for('pages.logout') }}" method="post" class="form-deco">
+          <button type="submit" class="ib" title="Se déconnecter" aria-label="Se déconnecter"><svg class="i s18" aria-hidden="true"><use href="#i-logout"/></svg></button>
+        </form>
       </div>
-      <div id="suggestions-rows" class="rows"></div>
-    </section>
+    </div>
+  </aside>
 
-    <!-- Bibliothèque -->
-    <section id="page-bibliotheque" class="page">
-      <div class="page-head">
-        <h2>Ma bibliothèque</h2>
-        <button class="btn small filter-btn" data-toolbar="lib-toolbar"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="8" x2="20" y2="8"/><line x1="4" y1="16" x2="20" y2="16"/><circle cx="9" cy="8" r="2.3" fill="currentColor" stroke="none"/><circle cx="15" cy="16" r="2.3" fill="currentColor" stroke="none"/></svg>Filtres</button>
-        <div class="toolbar" id="lib-toolbar">
-          <select id="lib-statut" class="select">
-            <option value="">Tous les statuts</option>
-            <option value="en_cours">En cours</option>
-            <option value="a_voir">À voir plus tard</option>
-            <option value="vu">Vu</option>
-          </select>
-          <select id="lib-type" class="select">
-            <option value="">Films &amp; séries</option>
-            <option value="film">Films</option>
-            <option value="serie">Séries</option>
-          </select>
-          <select id="lib-genre" class="select"><option value="">Tous genres</option></select>
-          <select id="lib-tri" class="select">
+  <div class="main">
+    {# ------------------------------------------------ barre du haut (téléphone) #}
+    <header class="top" id="top">
+      <a class="brand" href="#accueil" data-page="accueil" aria-label="cinéthèque, accueil">{% include "_logo.html" %}</a>
+      <span class="esp"></span>
+      <button class="ib" type="button" data-palette aria-label="Rechercher"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg></button>
+    </header>
+    {% if impersonation %}
+    <div class="bandeau imp">
+      <svg class="i" aria-hidden="true"><use href="#i-eye"/></svg>
+      <span>Tu consultes le compte de <b>{{ impersonation.email }}</b></span>
+      <span class="esp"></span>
+      <button class="btn xs" type="button" id="imp-stop">Revenir à mon compte</button>
+    </div>
+    {% endif %}
+    {% if not tmdb_ok %}
+    <div class="bandeau" id="tmdb-bandeau">
+      <svg class="i" aria-hidden="true"><use href="#i-alert"/></svg>
+      <span><b>Clé TMDB non configurée.</b> La recherche, les suggestions et les fiches en ont besoin.
+        {% if is_super_admin %}<a href="#parametres/tmdb">L'ajouter</a>{% endif %}</span>
+    </div>
+    {% endif %}
+
+    <main class="pages" id="pages">
+      {# =========================================================== ACCUEIL #}
+      <section class="page" id="p-accueil" data-page="accueil" aria-labelledby="t-accueil">
+        <div class="page-h">
+          <h1 class="page-t" id="t-accueil">Suggestions</h1>
+          <div class="seg" id="acc-media" role="group" aria-label="Type de titres">
+            <button type="button" class="on" data-media="all">Tout</button>
+            <button type="button" data-media="movie">Films</button>
+            <button type="button" data-media="tv">Séries</button>
+          </div>
+          <button class="ib" type="button" id="acc-actu" title="Renouveler les suggestions" aria-label="Renouveler les suggestions"><svg class="i" aria-hidden="true"><use href="#i-refresh"/></svg></button>
+        </div>
+        <div id="acc-reprendre"></div>
+        <div id="acc-rangees" class="rangees-l"></div>
+      </section>
+
+      {# ====================================================== BIBLIOTHÈQUE #}
+      <section class="page" id="p-bibliotheque" data-page="bibliotheque" aria-labelledby="t-bib">
+        <div class="page-h">
+          <h1 class="page-t" id="t-bib">Bibliothèque<span class="n" id="bib-total"></span></h1>
+          <div class="seg ico" id="bib-vue" role="group" aria-label="Affichage">
+            <button type="button" data-vue="grille" title="Grille d'affiches" aria-label="Grille d'affiches"><svg class="i s18" aria-hidden="true"><use href="#i-grid"/></svg></button>
+            <button type="button" data-vue="liste" title="Liste" aria-label="Liste"><svg class="i s18" aria-hidden="true"><use href="#i-rows"/></svg></button>
+            <button type="button" data-vue="rangees" title="Rangées par statut" aria-label="Rangées par statut"><svg class="i s18" aria-hidden="true"><use href="#i-layers"/></svg></button>
+          </div>
+          <button class="btn sm" type="button" id="bib-roulette"><svg class="i s18" aria-hidden="true"><use href="#i-dice"/></svg>Que regarder ?</button>
+          <button class="btn sm ico" type="button" id="bib-manuel" title="Ajouter un titre absent de TMDB" aria-label="Ajout manuel"><svg class="i s18" aria-hidden="true"><use href="#i-plus"/></svg></button>
+        </div>
+        <div class="outils">
+          <label class="champ">
+            <svg class="i s18" aria-hidden="true"><use href="#i-search"/></svg>
+            <input id="bib-q" type="search" placeholder="Chercher un titre, sur TMDB, un acteur…" autocomplete="off" enterkeyhint="search" aria-label="Chercher dans ma bibliothèque">
+          </label>
+        </div>
+        <div class="filtres-l">
+          <div class="chips" id="bib-chips" role="group" aria-label="Filtrer">
+            <button type="button" class="chip on" data-f="tout">Tout <span class="n"></span></button>
+            <button type="button" class="chip" data-f="film">Films <span class="n"></span></button>
+            <button type="button" class="chip" data-f="serie">Séries <span class="n"></span></button>
+            <button type="button" class="chip" data-f="en_cours">En cours <span class="n"></span></button>
+            <button type="button" class="chip" data-f="a_voir">À voir <span class="n"></span></button>
+            <button type="button" class="chip" data-f="vu">Vus <span class="n"></span></button>
+            <button type="button" class="chip" data-f="favori"><svg class="i s16" aria-hidden="true"><use href="#i-heart"/></svg>Favoris <span class="n"></span></button>
+          </div>
+        </div>
+        <div class="outils">
+          <select class="select tri-sel" id="bib-genre" aria-label="Genre"><option value="">Tous les genres</option></select>
+          <select class="select tri-sel" id="bib-tri" aria-label="Trier">
             <option value="ajout">Ajout récent</option>
-            <option value="titre">Alphabétique</option>
-            <option value="annee">Année</option>
-            <option value="note">Note</option>
+            <option value="titre">Titre (A → Z)</option>
+            <option value="annee">Année de sortie</option>
+            <option value="note">Note TMDB</option>
           </select>
-          <button id="btn-manuel" class="btn small">+ Ajout manuel</button>
-          <button class="btn small primary filter-done">Appliquer</button>
+          <span class="esp"></span>
+          <button type="button" class="btn sm gh" id="bib-choisir" title="Choisir plusieurs titres (ou appui long sur une affiche)"><svg class="i s18" aria-hidden="true"><use href="#i-checks"/></svg>Choisir</button>
         </div>
-      </div>
-      <div class="sub-bar">
-        <input id="lib-search" class="search-inline" type="search"
-               placeholder="Rechercher dans ma bibliothèque…" autocomplete="off">
-        <button id="lib-roulette" class="btn small"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3.5"/><circle cx="8.5" cy="8.5" r="1" fill="currentColor" stroke="none"/><circle cx="15.5" cy="8.5" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="8.5" cy="15.5" r="1" fill="currentColor" stroke="none"/><circle cx="15.5" cy="15.5" r="1" fill="currentColor" stroke="none"/></svg>Que regarder ?</button>
-      </div>
-      <div id="lib-grid" class="grid"></div>
-    </section>
+        <div id="bib-contenu"></div>
+        <div id="bib-ext" class="res-ext"></div>
+      </section>
 
-    <!-- Découverte -->
-    <section id="page-decouverte" class="page">
-      <div class="page-head">
-        <h2>Découverte</h2>
-        <button class="btn small filter-btn" data-toolbar="dec-toolbar"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="8" x2="20" y2="8"/><line x1="4" y1="16" x2="20" y2="16"/><circle cx="9" cy="8" r="2.3" fill="currentColor" stroke="none"/><circle cx="15" cy="16" r="2.3" fill="currentColor" stroke="none"/></svg>Filtres</button>
-        <div class="toolbar" id="dec-toolbar">
-          <div class="chips" data-filter="decouverte">
-            <button class="chip active" data-type="film">Films</button>
-            <button class="chip" data-type="serie">Séries</button>
+      {# ========================================================= DÉCOUVRIR #}
+      <section class="page" id="p-decouvrir" data-page="decouvrir" aria-labelledby="t-dec">
+        <div class="page-h">
+          <h1 class="page-t" id="t-dec">Découvrir</h1>
+          <div class="seg" id="dec-type" role="group" aria-label="Films ou séries">
+            <button type="button" class="on" data-type="film">Films</button>
+            <button type="button" data-type="serie">Séries</button>
           </div>
-          <select id="dec-tri" class="select">
+          <button class="btn sm" type="button" id="dec-roulette"><svg class="i s18" aria-hidden="true"><use href="#i-dice"/></svg>Au hasard</button>
+        </div>
+        <div class="filtres-l">
+          <div class="chips" id="dec-genres" role="group" aria-label="Genres"></div>
+        </div>
+        <div class="outils">
+          <select class="select tri-sel" id="dec-tri" aria-label="Trier">
             <option value="populaire">Populaires</option>
             <option value="note">Mieux notés</option>
             <option value="recent">Plus récents</option>
           </select>
-          <select id="dec-genre" class="select"><option value="">Tous genres</option></select>
-          <select id="dec-plateforme" class="select"><option value="">Toutes plateformes</option></select>
-          <select id="dec-note" class="select">
-            <option value="">Toutes notes</option>
-            <option value="8">★ 8+ (excellents)</option>
-            <option value="7">★ 7+ (très bons)</option>
-            <option value="6">★ 6+ (bons)</option>
-            <option value="5">★ 5+ (corrects)</option>
-          </select>
-          <input id="dec-annee" class="select" type="number" placeholder="Année" min="1900" max="2100">
-          <input id="dec-pays" class="select" type="text" placeholder="Pays (FR, US…)" maxlength="2">
-          <button class="btn small primary filter-done">Appliquer</button>
+          <button type="button" class="chip" id="dec-filtres" aria-haspopup="dialog"><svg class="i s16" aria-hidden="true"><use href="#i-filter"/></svg>Filtres<span class="pastille" id="dec-nb-filtres" hidden></span></button>
+          <span class="esp"></span>
+          <label class="ligne soft" style="font-size:13px"><input type="checkbox" class="sw" id="dec-mes"> Sur mes plateformes</label>
         </div>
-      </div>
-      <div class="sub-bar">
-        <button id="dec-roulette" class="btn small"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3.5"/><circle cx="8.5" cy="8.5" r="1" fill="currentColor" stroke="none"/><circle cx="15.5" cy="8.5" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="8.5" cy="15.5" r="1" fill="currentColor" stroke="none"/><circle cx="15.5" cy="15.5" r="1" fill="currentColor" stroke="none"/></svg>Roulette aléatoire</button>
-        <span class="muted">Pioche des titres au hasard dans tout le catalogue.</span>
-      </div>
-      <div id="dec-grid" class="grid"></div>
-      <div class="pager">
-        <button id="dec-prev" class="btn small">← Précédent</button>
-        <span id="dec-page" class="muted">Page 1</span>
-        <button id="dec-next" class="btn small">Suivant →</button>
-      </div>
-    </section>
+        <div id="dec-resultats" class="grille"></div>
+        <div class="plus-res"><button type="button" class="btn" id="dec-plus" hidden>Voir plus</button></div>
+      </section>
 
-    <!-- Futur -->
-    <section id="page-futur" class="page">
-      <div class="page-head"><h2>Futur — sorties à venir</h2></div>
-      <div id="futur-grid" class="grid"></div>
-    </section>
-
-    <!-- Listes -->
-    <section id="page-listes" class="page">
-      <div class="page-head">
-        <h2>Mes listes</h2>
-        <div class="toolbar always">
-          <button id="btn-liste-new" class="btn small">+ Nouvelle liste</button>
-          <button id="btn-liste-presets" class="btn small"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="15" rx="2"/><path d="M8 4.5v15M16 4.5v15M3 9.5h5M16 9.5h5M3 14.5h5M16 14.5h5"/></svg>Listes prêtes</button>
-          <button id="btn-liste-import" class="btn small">↧ Importer (JSON)</button>
-        </div>
-      </div>
-      <div id="listes-grid" class="cards-list"></div>
-      <div id="liste-detail" class="hidden">
-        <button class="btn ghost small" id="liste-back">← Retour aux listes</button>
-        <h3 id="liste-detail-nom" class="sub-title"></h3>
-        <div id="liste-detail-grid" class="grid"></div>
-      </div>
-    </section>
-
-    <!-- Profil / Statistiques (+ Historique intégré) -->
-    <section id="page-profil" class="page">
-      <div class="page-head"><h2>Profil &amp; statistiques</h2></div>
-      <div id="stats-content"></div>
-      <h3 class="sub-title" style="margin-top:28px">Historique</h3>
-      <p class="muted" style="margin-bottom:12px">Chaque marquage (film, série,
-        saison, épisode), du plus récent au plus ancien.</p>
-      <div id="journal-list"></div>
-    </section>
-
-    <!-- Paramètres -->
-    <section id="page-parametres" class="page">
-      <div class="page-head"><h2>Paramètres</h2></div>
-      <div class="settings-grid">
-        <div class="card">
-          <h3 class="sub-title">Clé API TMDB</h3>
-          <p class="muted">Gratuite sur themoviedb.org (Paramètres → API). Nécessaire
-            pour la recherche, les fiches et les suggestions.</p>
-          <input id="set-tmdb-key" class="input" type="password" placeholder="Clé API TMDB">
-          <div class="row-inline">
-            <input id="set-region" class="input small-input" type="text" placeholder="Région (FR)" maxlength="2">
-            <button id="btn-save-tmdb" class="btn primary small">Enregistrer</button>
-            <button id="btn-test-tmdb" class="btn small">Tester</button>
-          </div>
-          <span id="tmdb-status" class="muted"></span>
-        </div>
-
-        <div class="card">
-          <h3 class="sub-title">Mes plateformes</h3>
-          <p class="muted">Indique les plateformes de streaming auxquelles tu es abonné.
-            Sur les fiches, elles ressortent dans « Où regarder » (les autres sont
-            grisées, mais leur nom reste visible).</p>
-          <div class="row-inline">
-            <button id="btn-open-plats" class="btn primary small">Gérer mes plateformes</button>
-            <span id="plats-count" class="muted"></span>
+      {# ============================================================= FUTUR #}
+      <section class="page" id="p-futur" data-page="futur" aria-labelledby="t-fut">
+        <div class="page-h">
+          <h1 class="page-t" id="t-fut">Futur</h1>
+          <div class="seg" id="fut-filtre" role="group" aria-label="Sorties">
+            <button type="button" class="on" data-f="tout">Toutes les sorties</button>
+            <button type="button" data-f="alertes">Mes alertes</button>
           </div>
         </div>
+        <p class="soft intro-p">Les films qui sortent au cinéma, de la date la plus proche à la plus lointaine.
+          La cloche te prévient sur Discord le jour de la sortie.
+          <button type="button" class="q" data-q="futur" aria-label="Explication">?</button></p>
+        <div id="fut-agenda" class="agenda"></div>
+      </section>
 
-        <div class="card">
-          <h3 class="sub-title">Mot de passe</h3>
-          <p class="muted">Mot de passe de la connexion locale (super-admin). 8 caractères minimum.</p>
-          <input id="set-password-actuel" class="input" type="password" placeholder="Mot de passe actuel" autocomplete="current-password">
-          <input id="set-password" class="input" type="password" placeholder="Nouveau mot de passe" autocomplete="new-password">
-          <button id="btn-save-password" class="btn primary small">Changer le mot de passe</button>
-          <span id="password-status" class="muted"></span>
+      {# ============================================================ LISTES #}
+      <section class="page" id="p-listes" data-page="listes" aria-labelledby="t-lst">
+        <div id="lst-index">
+          <div class="page-h">
+            <h1 class="page-t" id="t-lst">Listes</h1>
+            <button class="btn sm pri" type="button" data-nouvelle-liste><svg class="i s18" aria-hidden="true"><use href="#i-plus"/></svg>Nouvelle liste</button>
+            <button class="btn sm" type="button" id="lst-presets"><svg class="i s18" aria-hidden="true"><use href="#i-layers"/></svg>Listes prêtes</button>
+            <button class="btn sm" type="button" id="lst-import"><svg class="i s18" aria-hidden="true"><use href="#i-upload"/></svg>Importer</button>
+          </div>
+          <div id="lst-grille" class="listes-g"></div>
         </div>
+        <div id="lst-detail" hidden></div>
+      </section>
 
-        <div class="card">
-          <h3 class="sub-title">Notifications</h3>
-          <p class="muted">Être prévenu des nouveaux épisodes de tes séries et des
-            sorties de films (ciné / streaming).</p>
+      {# ============================================================ PROFIL #}
+      <section class="page" id="p-profil" data-page="profil" aria-labelledby="t-pro">
+        <div class="page-h">
+          <h1 class="page-t" id="t-pro">Profil</h1>
+        </div>
+        <div id="pro-stats"></div>
+        <div class="sec-h"><h2 class="sec-t">Journal <button type="button" class="q" data-q="journal" aria-label="Explication">?</button></h2></div>
+        <div id="pro-journal" class="tl"></div>
+        <div class="plus-res"><button type="button" class="btn" id="pro-journal-plus" hidden>Voir plus ancien</button></div>
+      </section>
 
-          <label class="switch-row">
-            <input type="checkbox" id="set-discord-enabled">
-            <span>Discord (via botpanel)</span>
-          </label>
-          <input id="set-botpanel-url" class="input" type="text"
-                 placeholder="URL botpanel (ex. http://192.168.1.x:8080)">
-          <div class="row-inline">
-            <input id="set-slug-episode" class="input small-input" type="text" placeholder="slug épisode">
-            <input id="set-slug-cine" class="input small-input" type="text" placeholder="slug ciné">
-            <input id="set-slug-streaming" class="input small-input" type="text" placeholder="slug streaming">
+      {# ======================================================== PARAMÈTRES #}
+      <section class="page" id="p-parametres" data-page="parametres" aria-labelledby="t-reg">
+        <div class="page-h">
+          <h1 class="page-t" id="t-reg">Paramètres</h1>
+        </div>
+        <div class="reglages" id="reglages">
+          <div class="reg-liste">
+            <label class="champ reg-cherche cherche-r">
+              <svg class="i s18" aria-hidden="true"><use href="#i-search"/></svg>
+              <input id="reg-q" type="search" placeholder="Chercher un réglage (ex. « disc »)" autocomplete="off" aria-label="Chercher un réglage">
+            </label>
+            <p class="muted reg-rien" id="reg-rien" hidden>Aucun réglage ne correspond.</p>
+
+            <div class="reg-bloc">
+              <div class="reg-g">Mon compte</div>
+              <div class="liste-r">
+                <a class="li" href="#parametres/apparence" data-reg="apparence" data-mots="apparence couleur accent thème clair sombre affiches taille titres légendes vue grille liste rangées police">
+                  <span class="li-ic acc"><svg class="i" aria-hidden="true"><use href="#i-palette"/></svg></span>
+                  <span class="tx">Apparence<small>Couleur, thème clair ou sombre, affiches</small></span>
+                  <svg class="i s18 muted" aria-hidden="true"><use href="#i-chev"/></svg></a>
+                <a class="li" href="#parametres/accueil" data-reg="accueil" data-mots="accueil rangées ordre masquer reprendre carte suggestions">
+                  <span class="li-ic"><svg class="i" aria-hidden="true"><use href="#i-home"/></svg></span>
+                  <span class="tx">Page d'accueil<small>Rangées et carte « Reprendre »</small></span>
+                  <svg class="i s18 muted" aria-hidden="true"><use href="#i-chev"/></svg></a>
+                {% if can('admin_password') %}
+                <a class="li" href="#parametres/motdepasse" data-reg="motdepasse" data-mots="mot de passe connexion sécurité">
+                  <span class="li-ic"><svg class="i" aria-hidden="true"><use href="#i-lock"/></svg></span>
+                  <span class="tx">Mot de passe<small>Connexion locale du super-admin</small></span>
+                  <svg class="i s18 muted" aria-hidden="true"><use href="#i-chev"/></svg></a>
+                {% endif %}
+              </div>
+            </div>
+
+            <div class="reg-bloc">
+              <div class="reg-g">Ma bibliothèque</div>
+              <div class="liste-r">
+                {% if is_super_admin %}
+                <a class="li" href="#parametres/plateformes" data-reg="plateformes" data-mots="plateformes abonnements netflix disney prime canal streaming où regarder">
+                  <span class="li-ic"><svg class="i" aria-hidden="true"><use href="#i-tv"/></svg></span>
+                  <span class="tx">Mes plateformes<small id="reg-plats-n">Tes abonnements de streaming</small></span>
+                  <svg class="i s18 muted" aria-hidden="true"><use href="#i-chev"/></svg></a>
+                {% endif %}
+                <a class="li" href="#parametres/reparer" data-reg="reparer" data-mots="vérifier réparer cohérence erreurs statistiques">
+                  <span class="li-ic"><svg class="i" aria-hidden="true"><use href="#i-wrench"/></svg></span>
+                  <span class="tx">Vérifier et réparer<small>Corrige les incohérences, sans rien supprimer</small></span>
+                  <svg class="i s18 muted" aria-hidden="true"><use href="#i-chev"/></svg></a>
+              </div>
+            </div>
+
+            {% if is_super_admin %}
+            <div class="reg-bloc">
+              <div class="reg-g">Notifications</div>
+              <div class="liste-r">
+                <a class="li" href="#parametres/notifications" data-reg="notifications" data-mots="notifications discord botpanel alertes épisodes sorties slug">
+                  <span class="li-ic"><svg class="i" aria-hidden="true"><use href="#i-bell"/></svg></span>
+                  <span class="tx">Discord (botpanel)<small id="reg-notif-etat">Nouveaux épisodes et sorties</small></span>
+                  <svg class="i s18 muted" aria-hidden="true"><use href="#i-chev"/></svg></a>
+              </div>
+            </div>
+
+            <div class="reg-bloc">
+              <div class="reg-g">Données</div>
+              <div class="liste-r">
+                <a class="li" href="#parametres/sauvegarde" data-reg="sauvegarde" data-mots="sauvegarde export exporter import importer restaurer fichier json">
+                  <span class="li-ic"><svg class="i" aria-hidden="true"><use href="#i-download"/></svg></span>
+                  <span class="tx">Sauvegarde<small>Exporter ou restaurer tes données</small></span>
+                  <svg class="i s18 muted" aria-hidden="true"><use href="#i-chev"/></svg></a>
+              </div>
+            </div>
+            {% endif %}
+
+            <div class="reg-bloc">
+              <div class="reg-g">Site</div>
+              <div class="liste-r">
+                <a class="li" href="#parametres/site" data-reg="site" data-mots="version mise à jour mettre à jour github redémarrer">
+                  <span class="li-ic"><svg class="i" aria-hidden="true"><use href="#i-refresh"/></svg></span>
+                  <span class="tx">Version{% if can('site_update') %} et mise à jour{% endif %}<small id="reg-version">…</small></span>
+                  <svg class="i s18 muted" aria-hidden="true"><use href="#i-chev"/></svg></a>
+                <a class="li" href="#aide" data-mots="aide questions faq support raccourcis">
+                  <span class="li-ic"><svg class="i" aria-hidden="true"><use href="#i-help"/></svg></span>
+                  <span class="tx">Aide<small>Questions fréquentes et raccourcis</small></span>
+                  <svg class="i s18 muted" aria-hidden="true"><use href="#i-chev"/></svg></a>
+              </div>
+            </div>
+
+            {% if is_super_admin or can('account_management') or can('profiles') %}
+            <div class="reg-bloc">
+              <div class="reg-g">Administration</div>
+              <div class="liste-r">
+                {% if can('account_management') or can('profiles') %}
+                <a class="li" href="{{ url_for('accounts.comptes_page') }}" data-mots="comptes membres profils accès voir en tant que bloquer">
+                  <span class="li-ic"><svg class="i" aria-hidden="true"><use href="#i-users"/></svg></span>
+                  <span class="tx">Comptes et profils<small>Accès, « voir en tant que »</small></span>
+                  <svg class="i s18 muted" aria-hidden="true"><use href="#i-chev"/></svg></a>
+                {% endif %}
+                {% if is_super_admin %}
+                <a class="li" href="#parametres/tmdb" data-reg="tmdb" data-mots="avancé clé api tmdb région themoviedb">
+                  <span class="li-ic"><svg class="i" aria-hidden="true"><use href="#i-key"/></svg></span>
+                  <span class="tx">Clé TMDB<small>Avancé · fiches, recherche, suggestions</small></span>
+                  <svg class="i s18 muted" aria-hidden="true"><use href="#i-chev"/></svg></a>
+                <a class="li" href="#parametres/cloudflare" data-reg="cloudflare" data-mots="avancé cloudflare access jwt équipe aud diagnostic connexion automatique">
+                  <span class="li-ic"><svg class="i" aria-hidden="true"><use href="#i-cloud"/></svg></span>
+                  <span class="tx">Cloudflare Access<small>Avancé · connexion automatique</small></span>
+                  <svg class="i s18 muted" aria-hidden="true"><use href="#i-chev"/></svg></a>
+                <a class="li" href="#parametres/mcp" data-reg="mcp" data-mots="avancé connecteur claude mcp clé api">
+                  <span class="li-ic"><svg class="i" aria-hidden="true"><use href="#i-plug"/></svg></span>
+                  <span class="tx">Connecteur Claude (MCP)<small id="reg-mcp-etat">Avancé · piloter le site avec Claude</small></span>
+                  <svg class="i s18 muted" aria-hidden="true"><use href="#i-chev"/></svg></a>
+                {% endif %}
+              </div>
+            </div>
+            {% endif %}
+
+            <div class="reg-bloc">
+              <div class="reg-g">Zone sensible</div>
+              <div class="liste-r">
+                <a class="li dn" href="#parametres/reinitialiser" data-reg="reinitialiser" data-mots="réinitialiser effacer supprimer tout zone sensible danger">
+                  <span class="li-ic"><svg class="i" aria-hidden="true"><use href="#i-trash"/></svg></span>
+                  <span class="tx">Réinitialiser ma bibliothèque<small>Efface tous tes titres et ton historique</small></span>
+                  <svg class="i s18" aria-hidden="true"><use href="#i-chev"/></svg></a>
+              </div>
+            </div>
           </div>
 
-          <div class="row-inline">
-            <button id="btn-save-notif" class="btn primary small">Enregistrer</button>
-            <button id="btn-test-notif" class="btn small">Tester l'envoi</button>
+          {# ---------------------------------------------- détail des réglages #}
+          <div class="reg-det" id="reg-det">
+            <a class="btn sm gh reg-retour" href="#parametres"><svg class="i s18" aria-hidden="true"><use href="#i-chevl"/></svg>Paramètres</a>
+
+            <section class="carte reg-panneau" data-reg="apparence" hidden>
+              <h2><svg class="i s22 acc" aria-hidden="true"><use href="#i-palette"/></svg>Apparence</h2>
+              <p class="intro">Tout s'enregistre dès que tu changes un réglage, et vaut pour ton compte sur tous tes appareils.</p>
+              <div class="reg-sec">
+                <div class="lbl-mono">Couleur d'accent <button type="button" class="q" data-q="accent" aria-label="Explication">?</button></div>
+                <div class="pastilles" id="reg-accents" role="radiogroup" aria-label="Couleur d'accent">
+                  <button type="button" class="past" data-v="or" role="radio"><i></i>Or</button>
+                  <button type="button" class="past" data-v="ambre" role="radio"><i></i>Ambre</button>
+                  <button type="button" class="past" data-v="corail" role="radio"><i></i>Corail</button>
+                  <button type="button" class="past" data-v="menthe" role="radio"><i></i>Menthe</button>
+                  <button type="button" class="past" data-v="lavande" role="radio"><i></i>Lavande</button>
+                </div>
+              </div>
+              <div class="reg-sec">
+                <div class="lbl-mono">Thème <button type="button" class="q" data-q="theme" aria-label="Explication">?</button></div>
+                <div class="seg" id="reg-theme" role="group" aria-label="Thème">
+                  <button type="button" data-v="auto"><svg class="i s18" aria-hidden="true"><use href="#i-sparkle"/></svg>Automatique</button>
+                  <button type="button" data-v="sombre"><svg class="i s18" aria-hidden="true"><use href="#i-moon"/></svg>Sombre</button>
+                  <button type="button" data-v="clair"><svg class="i s18" aria-hidden="true"><use href="#i-sun"/></svg>Clair</button>
+                </div>
+              </div>
+              <div class="reg-sec">
+                <div class="lbl-mono">Taille des affiches sur téléphone</div>
+                <div class="seg" id="reg-affiche" role="group" aria-label="Taille des affiches">
+                  <button type="button" data-v="s">Petites · 4</button>
+                  <button type="button" data-v="m">Moyennes · 3</button>
+                  <button type="button" data-v="l">Grandes · 2</button>
+                </div>
+              </div>
+              <div class="reg-sec">
+                <div class="reg-l">
+                  <div class="tx"><b>Titre sous les affiches</b><span>Le nom et une info utile (épisode à voir, date de sortie).</span></div>
+                  <input type="checkbox" class="sw" id="reg-legendes" aria-label="Titre sous les affiches">
+                </div>
+                <div class="reg-l">
+                  <div class="tx"><b>Bibliothèque au démarrage</b><span>L'affichage choisi quand tu ouvres ta bibliothèque.</span></div>
+                  <select class="select tri-sel" id="reg-vue" aria-label="Affichage de la bibliothèque">
+                    <option value="grille">Grille</option>
+                    <option value="liste">Liste</option>
+                    <option value="rangees">Rangées par statut</option>
+                  </select>
+                </div>
+              </div>
+            </section>
+
+            <section class="carte reg-panneau" data-reg="accueil" hidden>
+              <h2><svg class="i s22 acc" aria-hidden="true"><use href="#i-home"/></svg>Page d'accueil</h2>
+              <p class="intro">Choisis les rangées de suggestions et leur ordre. Les changements s'enregistrent tout seuls.</p>
+              <div class="reg-l">
+                <div class="tx"><b>Grande carte « Reprendre »</b><span>La série que tu regardes en ce moment, en grand, avec le bouton « Marquer vu ».</span></div>
+                <input type="checkbox" class="sw" id="reg-reprendre" aria-label="Grande carte Reprendre">
+              </div>
+              <div class="reg-sec">
+                <div class="lbl-mono">Rangées</div>
+                <div class="rg-ord" id="reg-rangees"></div>
+              </div>
+            </section>
+
+            {% if can('admin_password') %}
+            <section class="carte reg-panneau" data-reg="motdepasse" hidden>
+              <h2><svg class="i s22 acc" aria-hidden="true"><use href="#i-lock"/></svg>Mot de passe</h2>
+              <p class="intro">Le mot de passe de la connexion locale (super-admin). 8 caractères minimum.</p>
+              <form class="form" id="reg-mdp-form" autocomplete="on">
+                <div><label class="lbl" for="reg-mdp-actuel">Mot de passe actuel</label>
+                  <input id="reg-mdp-actuel" class="input" type="password" autocomplete="current-password" required></div>
+                <div><label class="lbl" for="reg-mdp-nouveau">Nouveau mot de passe</label>
+                  <input id="reg-mdp-nouveau" class="input" type="password" autocomplete="new-password" minlength="8" required></div>
+                <div class="ligne"><button class="btn pri" type="submit">Changer le mot de passe</button>
+                  <span class="statut" id="reg-mdp-statut" role="status"></span></div>
+              </form>
+            </section>
+            {% endif %}
+
+            {% if is_super_admin %}
+            <section class="carte reg-panneau" data-reg="plateformes" hidden>
+              <h2><svg class="i s22 acc" aria-hidden="true"><use href="#i-tv"/></svg>Mes plateformes</h2>
+              <p class="intro">Coche les services auxquels tu es abonné : ils passent en premier dans « Où regarder », avec la mention « Inclus », et servent au filtre « Sur mes plateformes ».</p>
+              <label class="champ">
+                <svg class="i s18" aria-hidden="true"><use href="#i-search"/></svg>
+                <input id="reg-plats-q" type="search" placeholder="Chercher une plateforme" autocomplete="off" aria-label="Chercher une plateforme">
+              </label>
+              <div class="plats" id="reg-plats"></div>
+            </section>
+            {% endif %}
+
+            <section class="carte reg-panneau" data-reg="reparer" hidden>
+              <h2><svg class="i s22 acc" aria-hidden="true"><use href="#i-wrench"/></svg>Vérifier et réparer</h2>
+              <p class="intro">Cherche les incohérences sans rien supprimer : films marqués « vu » qui ne comptent pas dans les statistiques, épisodes au compteur incohérent. Tu vois d'abord ce qui serait corrigé.</p>
+              <div class="ligne">
+                <button class="btn" type="button" id="reg-verifier"><svg class="i s18" aria-hidden="true"><use href="#i-search"/></svg>Vérifier</button>
+                <button class="btn pri" type="button" id="reg-reparer" hidden>Corriger</button>
+              </div>
+              <p class="statut" id="reg-reparer-statut" role="status"></p>
+            </section>
+
+            {% if is_super_admin %}
+            <section class="carte reg-panneau" data-reg="notifications" hidden>
+              <h2><svg class="i s22 acc" aria-hidden="true"><use href="#i-bell"/></svg>Notifications Discord</h2>
+              <p class="intro">cinéthèque prévient sur Discord des nouveaux épisodes de tes séries et des sorties de films, en passant par botpanel. Chaque champ s'enregistre quand tu le quittes.
+                <a href="#aide/notifications">Comment configurer botpanel</a></p>
+              <div class="reg-l">
+                <div class="tx"><b>Envoyer les notifications</b><span>Discord, via botpanel.</span></div>
+                <input type="checkbox" class="sw" id="reg-discord" aria-label="Envoyer les notifications Discord">
+              </div>
+              <div class="form reg-sec">
+                <div><label class="lbl" for="reg-bp-url">Adresse de botpanel <button type="button" class="q" data-q="botpanel" aria-label="Explication">?</button></label>
+                  <input id="reg-bp-url" class="input" type="url" inputmode="url" placeholder="http://192.168.1.x:8080" data-cle="botpanel_url"></div>
+                <div><label class="lbl" for="reg-bp-ep">Slug « nouvel épisode »</label>
+                  <input id="reg-bp-ep" class="input" type="text" placeholder="ex. cine-episode" data-cle="botpanel_slug_episode"></div>
+                <div><label class="lbl" for="reg-bp-cine">Slug « sortie au cinéma »</label>
+                  <input id="reg-bp-cine" class="input" type="text" placeholder="ex. cine-sortie" data-cle="botpanel_slug_cine"></div>
+                <div><label class="lbl" for="reg-bp-stream">Slug « disponible en streaming »</label>
+                  <input id="reg-bp-stream" class="input" type="text" placeholder="ex. cine-streaming" data-cle="botpanel_slug_streaming"></div>
+              </div>
+              <div class="ligne reg-sec">
+                <button class="btn" type="button" id="reg-notif-test"><svg class="i s18" aria-hidden="true"><use href="#i-zap"/></svg>Envoyer un test</button>
+                <span class="statut" id="reg-notif-statut" role="status"></span>
+              </div>
+            </section>
+
+            <section class="carte reg-panneau" data-reg="sauvegarde" hidden>
+              <h2><svg class="i s22 acc" aria-hidden="true"><use href="#i-download"/></svg>Sauvegarde</h2>
+              <p class="intro">Un fichier de secours avec toute ta bibliothèque : titres, épisodes vus, visionnages, listes et journal.</p>
+              <div class="reg-l">
+                <div class="tx"><b>Télécharger une sauvegarde</b><span>Fichier JSON, à garder en lieu sûr.</span></div>
+                <a class="btn sm" href="/api/export" download><svg class="i s18" aria-hidden="true"><use href="#i-download"/></svg>Télécharger</a>
+              </div>
+              <div class="reg-l">
+                <div class="tx"><b>Restaurer une sauvegarde</b><span>Remplace ta bibliothèque actuelle par celle du fichier.</span></div>
+                <button class="btn sm" type="button" id="reg-import"><svg class="i s18" aria-hidden="true"><use href="#i-upload"/></svg>Choisir un fichier</button>
+                <input type="file" id="reg-import-fichier" accept="application/json,.json" hidden>
+              </div>
+              <p class="statut" id="reg-import-statut" role="status"></p>
+              <p class="muted petit">Archive complète, avec les affiches, depuis le serveur : <code>sudo bash /opt/cinetheque/scripts/backup.sh</code></p>
+            </section>
+            {% endif %}
+
+            <section class="carte reg-panneau" data-reg="site" hidden>
+              <h2><svg class="i s22 acc" aria-hidden="true"><use href="#i-refresh"/></svg>Version{% if can('site_update') %} et mise à jour{% endif %}</h2>
+              <p class="intro">Version installée : <b id="reg-version-n">…</b><br><span class="muted" id="reg-version-msg"></span></p>
+              {% if can('site_update') %}
+              <p class="soft">Récupère la dernière version depuis GitHub et redémarre le site, sans toucher à tes données. Si le site ne répond plus après la mise à jour, la version précédente revient toute seule.</p>
+              <div class="ligne reg-sec">
+                <button class="btn pri" type="button" id="reg-maj"><svg class="i s18" aria-hidden="true"><use href="#i-refresh"/></svg>Mettre à jour le site</button>
+                <span class="statut" id="reg-maj-statut" role="status"></span>
+              </div>
+              {% endif %}
+            </section>
+
+            {% if is_super_admin %}
+            <section class="carte reg-panneau" data-reg="tmdb" hidden>
+              <h2><svg class="i s22 acc" aria-hidden="true"><use href="#i-key"/></svg>Clé TMDB</h2>
+              <p class="intro">Gratuite sur themoviedb.org : c'est elle qui remplit les fiches, la recherche et les suggestions. <a href="#aide/tmdb">Comment l'obtenir</a></p>
+              <form class="form" id="reg-tmdb-form">
+                <div><label class="lbl" for="reg-tmdb-cle">Clé API (v3)</label>
+                  <input id="reg-tmdb-cle" class="input" type="password" autocomplete="off" placeholder="Laisse vide pour garder la clé actuelle"></div>
+                <div><label class="lbl" for="reg-region">Pays des plateformes <button type="button" class="q" data-q="region" aria-label="Explication">?</button></label>
+                  <input id="reg-region" class="input" type="text" maxlength="2" autocapitalize="characters" placeholder="FR" style="max-width:120px"></div>
+                <div class="ligne">
+                  <button class="btn pri" type="submit">Enregistrer</button>
+                  <button class="btn" type="button" id="reg-tmdb-test">Tester la clé</button>
+                  <span class="statut" id="reg-tmdb-statut" role="status"></span>
+                </div>
+              </form>
+            </section>
+
+            <section class="carte reg-panneau" data-reg="cloudflare" hidden>
+              <h2><svg class="i s22 acc" aria-hidden="true"><use href="#i-cloud"/></svg>Cloudflare Access</h2>
+              <p class="intro">Derrière Cloudflare Access, tu es connecté sans mot de passe. Par l'adresse IP locale, le mot de passe reste demandé.</p>
+              <div class="reg-l">
+                <div class="tx"><b>Connexion automatique</b><span>Utiliser l'e-mail validé par Cloudflare pour te connecter.</span></div>
+                <input type="checkbox" class="sw" id="reg-cf-sso" aria-label="Connexion automatique Cloudflare">
+              </div>
+              <form class="form reg-sec" id="reg-cf-form">
+                <div><label class="lbl" for="reg-cf-team">Équipe <button type="button" class="q" data-q="cf-team" aria-label="Explication">?</button></label>
+                  <input id="reg-cf-team" class="input" type="text" placeholder="ex. super-nono" autocomplete="off"></div>
+                <div><label class="lbl" for="reg-cf-aud">AUD de l'application Access</label>
+                  <input id="reg-cf-aud" class="input" type="text" autocomplete="off"></div>
+                <div class="reg-l">
+                  <div class="tx"><b>Vérifier le jeton (JWT)</b><span>Recommandé : refuse un jeton qui ne vient pas de ton équipe.</span></div>
+                  <input type="checkbox" class="sw" id="reg-cf-verify" aria-label="Vérifier le JWT">
+                </div>
+                <div class="ligne">
+                  <button class="btn pri" type="submit">Enregistrer</button>
+                  <button class="btn" type="button" id="reg-cf-diag">Diagnostic</button>
+                </div>
+              </form>
+              <pre class="bloc-code" id="reg-cf-sortie" hidden></pre>
+            </section>
+
+            <section class="carte reg-panneau" data-reg="mcp" hidden>
+              <h2><svg class="i s22 acc" aria-hidden="true"><use href="#i-plug"/></svg>Connecteur Claude (MCP)</h2>
+              <p class="intro">Permet à Claude de vérifier et de piloter le site. L'accès passe par une clé dédiée, différente du mot de passe et de la clé TMDB, affichée une seule fois.</p>
+              <p>État : <b id="reg-mcp-statut">…</b></p>
+              <div class="ligne reg-sec">
+                <button class="btn pri" type="button" id="reg-mcp-gen"><svg class="i s18" aria-hidden="true"><use href="#i-key"/></svg>Générer une clé</button>
+                <button class="btn dn" type="button" id="reg-mcp-revoquer">Révoquer</button>
+              </div>
+              <div id="reg-mcp-cle" hidden></div>
+            </section>
+            {% endif %}
+
+            <section class="reg-panneau" data-reg="reinitialiser" hidden>
+              <div class="zone-d">
+                <h3><svg class="i s22" aria-hidden="true"><use href="#i-alert"/></svg>Réinitialiser ma bibliothèque</h3>
+                <p>Efface <b>tous</b> tes titres, épisodes vus, visionnages, listes perso et ton journal. Les autres comptes ne sont pas touchés. Impossible à annuler.</p>
+                {% if is_super_admin %}<p>Une sauvegarde complète est d'abord téléchargée sur ton appareil.</p>{% endif %}
+                <div class="form reg-sec">
+                  <div><label class="lbl" for="reg-reset-mot">Pour confirmer, tape <b>RÉINITIALISER</b></label>
+                    <input id="reg-reset-mot" class="input" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false"></div>
+                  <div class="ligne"><button class="btn dn plein" type="button" id="reg-reset" disabled>Tout effacer</button>
+                    <span class="statut" id="reg-reset-statut" role="status"></span></div>
+                </div>
+              </div>
+            </section>
           </div>
-          <span id="notif-status" class="muted"></span>
         </div>
+      </section>
 
-        <div class="card">
-          <h3 class="sub-title">Sauvegarde</h3>
-          <p class="muted">Exporte toutes tes données dans un fichier de secours,
-            ou restaure une sauvegarde.</p>
-          <div class="row-inline">
-            <a id="btn-export" class="btn small" href="/api/export">↥ Exporter</a>
-            <button id="btn-import" class="btn small">↧ Importer</button>
-            <input id="import-file" type="file" accept="application/json" class="hidden">
-          </div>
-          <span id="import-status" class="muted"></span>
+      {# ============================================================== AIDE #}
+      <section class="page" id="p-aide" data-page="aide" aria-labelledby="t-aide">
+        <div class="page-h">
+          <h1 class="page-t" id="t-aide">Aide</h1>
         </div>
+        <label class="champ aide-cherche">
+          <svg class="i s18" aria-hidden="true"><use href="#i-search"/></svg>
+          <input id="aide-q" type="search" placeholder="Chercher dans l'aide (ex. « saison »)" autocomplete="off" aria-label="Chercher dans l'aide">
+        </label>
+        <div class="faq" id="aide-faq">
+          <p class="muted" id="aide-rien" hidden>Aucune réponse ne correspond. Essaie un autre mot.</p>
 
-        <div class="card">
-          <h3 class="sub-title">Vérifier / réparer</h3>
-          <p class="muted">Corrige les incohérences sans rien supprimer : films
-            marqués « vu » mais absents des statistiques, épisodes au compteur
-            incohérent. À lancer si quelque chose semble mal enregistré.</p>
-          <button id="btn-repair" class="btn small">Vérifier la cohérence</button>
-          <span id="repair-status" class="muted"></span>
+          <div class="faq-g"><svg class="i s16" aria-hidden="true"><use href="#i-sparkle"/></svg>Premiers pas</div>
+          <details id="aide-tmdb"><summary><svg class="i acc" aria-hidden="true"><use href="#i-key"/></svg>Comment obtenir la clé TMDB ?<svg class="i s18 chev" aria-hidden="true"><use href="#i-chev"/></svg></summary>
+            <div class="rep"><p>Elle est gratuite et sans limite de durée. Elle remplit les fiches : affiches, résumés, épisodes, sorties.</p>
+              <ol><li>Crée un compte sur <a href="https://www.themoviedb.org/signup" target="_blank" rel="noopener">themoviedb.org</a>.</li>
+                <li>Va dans <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">Paramètres → API</a> et demande une clé « Developer ».</li>
+                <li>Copie la clé « API Key (v3 auth) ».</li>
+                <li>Colle-la dans <a href="#parametres/tmdb">Paramètres → Clé TMDB</a>.</li></ol></div></details>
+          <details><summary><svg class="i acc" aria-hidden="true"><use href="#i-plus"/></svg>Comment ajouter un film ou une série ?<svg class="i s18 chev" aria-hidden="true"><use href="#i-chev"/></svg></summary>
+            <div class="rep"><p>Touche la loupe (ou <span class="kbd">Ctrl K</span> sur ordinateur), tape le nom, puis choisis le titre. Sur sa fiche : « À voir plus tard » ou « Vu ».</p>
+              <p>Depuis n'importe quelle affiche, le menu rapide fait la même chose sans ouvrir la fiche.</p></div></details>
+          <details><summary><svg class="i acc" aria-hidden="true"><use href="#i-edit"/></svg>Un titre est absent de TMDB : comment l'ajouter ?<svg class="i s18 chev" aria-hidden="true"><use href="#i-chev"/></svg></summary>
+            <div class="rep"><p>Dans la Bibliothèque, le bouton <b>+</b> ouvre l'ajout manuel : titre, film ou série, année, durée et résumé.</p></div></details>
+
+          <div class="faq-g"><svg class="i s16" aria-hidden="true"><use href="#i-tv"/></svg>Suivre tes séries</div>
+          <details><summary><svg class="i acc" aria-hidden="true"><use href="#i-check"/></svg>Comment marquer un épisode vu ?<svg class="i s18 chev" aria-hidden="true"><use href="#i-chev"/></svg></summary>
+            <div class="rep"><p>Le plus rapide : touche l'affiche de la série, puis le gros bouton « Marquer S1 · É5 vu ». Le menu reste ouvert sur l'épisode suivant, pour enchaîner.</p>
+              <p>Dans la fiche, onglet Épisodes : coche le rond à droite de l'épisode. Toucher un épisode déjà vu retire un visionnage.</p></div></details>
+          <details id="aide-saison"><summary><svg class="i acc" aria-hidden="true"><use href="#i-checks"/></svg>Comment marquer une saison entière, ou tout jusqu'à un épisode ?<svg class="i s18 chev" aria-hidden="true"><use href="#i-chev"/></svg></summary>
+            <div class="rep"><p>Ouvre la saison dans la fiche : le bouton « Marquer la saison vue » coche tous ses épisodes déjà diffusés.</p>
+              <p>Pour tout cocher jusqu'à un épisode, <b>appuie longtemps</b> dessus (ou passe par son menu <b>⋯</b>) : « Marquer jusqu'à É8 » annonce le nombre d'épisodes et leur durée avant de valider.</p>
+              <p>Les épisodes pas encore diffusés sont rangés à part et ne comptent pas.</p></div></details>
+          <details><summary><svg class="i acc" aria-hidden="true"><use href="#i-rotate"/></svg>J'ai revu un film, un épisode ou une série<svg class="i s18 chev" aria-hidden="true"><use href="#i-chev"/></svg></summary>
+            <div class="rep"><p>Film : sur sa fiche, « J'ai revu » ajoute un visionnage daté du jour. Épisode : son menu <b>⋯</b> propose « Je l'ai revu ». Saison ou série entière : les boutons « J'ai revu » de l'onglet Épisodes.</p>
+              <p>Chaque revisionnage compte dans le temps total du Profil.</p></div></details>
+          <details><summary><svg class="i acc" aria-hidden="true"><use href="#i-undo"/></svg>Je me suis trompé : comment annuler ?<svg class="i s18 chev" aria-hidden="true"><use href="#i-chev"/></svg></summary>
+            <div class="rep"><p>Après chaque marquage, un message « Annuler » reste 5 secondes en bas de l'écran : touche-le pour tout remettre comme avant.</p>
+              <p>Plus tard : retire le visionnage depuis la fiche (la croix à côté de la date pour un film, le rond de l'épisode pour une série).</p></div></details>
+          <details><summary><svg class="i acc" aria-hidden="true"><use href="#i-info"/></svg>Que veut dire « S1 · É5 · 4 / 30 » sous une affiche ?<svg class="i s18 chev" aria-hidden="true"><use href="#i-chev"/></svg></summary>
+            <div class="rep"><p>« S1 · É5 » est le prochain épisode à voir (saison 1, épisode 5). « 4 / 30 » : 4 épisodes vus sur les 30 déjà diffusés. Les épisodes à venir ne comptent pas.</p>
+              <p>La coche verte veut dire vu, le marque-page « à voir plus tard », la barre violette la progression d'une série.</p></div></details>
+
+          <div class="faq-g"><svg class="i s16" aria-hidden="true"><use href="#i-list"/></svg>Listes et découverte</div>
+          <details><summary><svg class="i acc" aria-hidden="true"><use href="#i-listplus"/></svg>Comment ajouter un titre à une liste ?<svg class="i s18 chev" aria-hidden="true"><use href="#i-chev"/></svg></summary>
+            <div class="rep"><p>Menu rapide ou fiche → « Liste » : coche une ou plusieurs listes. « Nouvelle liste » se crée directement dans la même feuille.</p>
+              <p>Dans la Bibliothèque, un appui long sur une affiche (ou « Choisir ») sélectionne plusieurs titres d'un coup.</p></div></details>
+          <details><summary><svg class="i acc" aria-hidden="true"><use href="#i-hash"/></svg>À quoi servent les listes « dans l'ordre » ?<svg class="i s18 chev" aria-hidden="true"><use href="#i-chev"/></svg></summary>
+            <div class="rep"><p>Pour une saga (Marvel, Star Wars…) : chaque titre porte son numéro et le prochain à voir est mis en avant. Fais glisser la poignée pour changer l'ordre. Les listes prêtes sont déjà dans l'ordre.</p></div></details>
+          <details><summary><svg class="i acc" aria-hidden="true"><use href="#i-tv"/></svg>Comment ne voir que ce qui est sur mes plateformes ?<svg class="i s18 chev" aria-hidden="true"><use href="#i-chev"/></svg></summary>
+            <div class="rep"><p>Indique tes abonnements dans <a href="#parametres/plateformes">Paramètres → Mes plateformes</a>. Ensuite, l'interrupteur « Sur mes plateformes » de Découvrir ne garde que ce qui est inclus, et un petit logo apparaît sur les affiches.</p></div></details>
+          <details><summary><svg class="i acc" aria-hidden="true"><use href="#i-bell"/></svg>Comment être prévenu d'une sortie au cinéma ?<svg class="i s18 chev" aria-hidden="true"><use href="#i-chev"/></svg></summary>
+            <div class="rep"><p>Dans Futur, touche la cloche d'un film : tu seras prévenu sur Discord le jour de sa sortie. Un second toucher retire l'alerte.</p></div></details>
+          <details><summary><svg class="i acc" aria-hidden="true"><use href="#i-dice"/></svg>Je ne sais pas quoi regarder<svg class="i s18 chev" aria-hidden="true"><use href="#i-chev"/></svg></summary>
+            <div class="rep"><p>« Que regarder ? » dans la Bibliothèque pioche au hasard dans ta liste « À voir plus tard ». « Au hasard » dans Découvrir pioche dans tout le catalogue.</p></div></details>
+
+          <div class="faq-g"><svg class="i s16" aria-hidden="true"><use href="#i-type"/></svg>Raccourcis sur ordinateur</div>
+          <details><summary><svg class="i acc" aria-hidden="true"><use href="#i-zap"/></svg>Quels raccourcis clavier existent ?<svg class="i s18 chev" aria-hidden="true"><use href="#i-chev"/></svg></summary>
+            <div class="rep"><ul><li><span class="kbd">Ctrl K</span> ou <span class="kbd">/</span> : rechercher partout.</li>
+              <li>Sur une affiche survolée : <span class="kbd">V</span> vu, <span class="kbd">A</span> à voir, <span class="kbd">L</span> liste, <span class="kbd">Entrée</span> fiche.</li>
+              <li>Clic droit ou <b>⋯</b> sur une affiche : le menu des actions.</li>
+              <li><span class="kbd">Échap</span> : fermer la fiche ou le menu ouvert.</li></ul></div></details>
+
+          <div class="faq-g"><svg class="i s16" aria-hidden="true"><use href="#i-shield"/></svg>Compte et sécurité</div>
+          <details><summary><svg class="i acc" aria-hidden="true"><use href="#i-lock"/></svg>J'ai oublié mon mot de passe<svg class="i s18 chev" aria-hidden="true"><use href="#i-chev"/></svg></summary>
+            <div class="rep"><p>Depuis le serveur (console Proxmox ou SSH), lance cette commande puis choisis un nouveau mot de passe :</p>
+              <pre>sudo bash /opt/cinetheque/scripts/reset-admin-password.sh</pre></div></details>
+          <details><summary><svg class="i acc" aria-hidden="true"><use href="#i-cloud"/></svg>Pourquoi je n'ai pas besoin de mot de passe ?<svg class="i s18 chev" aria-hidden="true"><use href="#i-chev"/></svg></summary>
+            <div class="rep"><p>Derrière Cloudflare Access, ton e-mail est déjà vérifié : tu es connecté automatiquement. Par l'adresse IP locale, le mot de passe reste demandé.{% if is_super_admin %} Réglable dans <a href="#parametres/cloudflare">Paramètres → Cloudflare Access</a>.{% endif %}</p></div></details>
+
+          <div class="faq-g"><svg class="i s16" aria-hidden="true"><use href="#i-download"/></svg>Tes données</div>
+          <details><summary><svg class="i acc" aria-hidden="true"><use href="#i-download"/></svg>Comment sauvegarder mes données ?<svg class="i s18 chev" aria-hidden="true"><use href="#i-chev"/></svg></summary>
+            <div class="rep"><p>{% if is_super_admin %}<a href="#parametres/sauvegarde">Paramètres → Sauvegarde</a> télécharge un fichier avec toute ta bibliothèque. {% endif %}Archive complète, avec les affiches, depuis le serveur :</p>
+              <pre>sudo bash /opt/cinetheque/scripts/backup.sh</pre></div></details>
+          <details><summary><svg class="i acc" aria-hidden="true"><use href="#i-refresh"/></svg>Comment mettre à jour le site ?<svg class="i s18 chev" aria-hidden="true"><use href="#i-chev"/></svg></summary>
+            <div class="rep"><p>{% if can('site_update') %}<a href="#parametres/site">Paramètres → Version et mise à jour</a> : un bouton, sans toucher à tes données. {% endif %}Depuis le serveur :</p>
+              <pre>sudo /opt/cinetheque/scripts/update-panel.sh</pre></div></details>
+          <details><summary><svg class="i acc" aria-hidden="true"><use href="#i-chart"/></svg>Comment est calculé le temps total ?<svg class="i s18 chev" aria-hidden="true"><use href="#i-chev"/></svg></summary>
+            <div class="rep"><pre>films vus × leur durée
++ épisodes vus × leur durée
+(chaque revisionnage compte)</pre>
+              <p>Un épisode sans durée connue compte pour 45 minutes.</p></div></details>
+
+          <div class="faq-g" id="aide-notifications"><svg class="i s16" aria-hidden="true"><use href="#i-bell"/></svg>Notifications Discord (botpanel)</div>
+          <details id="aide-botpanel"><summary><svg class="i acc" aria-hidden="true"><use href="#i-chat"/></svg>Comment configurer les notifications Discord ?<svg class="i s18 chev" aria-hidden="true"><use href="#i-chev"/></svg></summary>
+            <div class="rep">
+              <p>cinéthèque envoie ses notifications par <b>botpanel</b>. À faire une seule fois :</p>
+              <ol><li>Dans botpanel, crée 3 notifications avec les modèles ci-dessous, et note le <b>slug</b> de chacune.</li>
+                <li>Dans {% if is_super_admin %}<a href="#parametres/notifications">Paramètres → Discord</a>{% else %}Paramètres → Discord{% endif %}, active l'envoi, indique l'adresse de botpanel et les 3 slugs, puis « Envoyer un test ».</li></ol>
+              <p>Le slug se choisit dans botpanel à la création de la notification, et se recopie à l'identique dans cinéthèque.</p>
+              <div class="modele-n"><div class="h"><svg class="i s18 acc" aria-hidden="true"><use href="#i-tv"/></svg>Nouvel épisode d'une série</div>
+                <div class="l"><span>Titre</span><code>📺 {var:serie}</code></div>
+                <div class="l"><span>Message</span><code>Nouvel épisode {var:code} — {var:titre|à regarder} 🍿</code></div>
+                <div class="l"><span>Variables</span><code>serie, code, titre, saison, episode</code></div></div>
+              <div class="modele-n"><div class="h"><svg class="i s18 acc" aria-hidden="true"><use href="#i-ticket"/></svg>Film au cinéma</div>
+                <div class="l"><span>Titre</span><code>🎬 {var:titre}</code></div>
+                <div class="l"><span>Message</span><code>C'est sorti — maintenant au {var:canal} ! 🎟️</code></div>
+                <div class="l"><span>Variables</span><code>titre, canal</code></div></div>
+              <div class="modele-n"><div class="h"><svg class="i s18 acc" aria-hidden="true"><use href="#i-film"/></svg>Film disponible en streaming</div>
+                <div class="l"><span>Titre</span><code>📺 {var:titre}</code></div>
+                <div class="l"><span>Message</span><code>Disponible en streaming sur {var:plateformes|une plateforme} 🎬</code></div>
+                <div class="l"><span>Variables</span><code>titre, plateformes</code></div></div>
+              <p><code>{var:nom|défaut}</code> affiche « défaut » quand la variable est vide.</p>
+              <p>Images : mets <code>{var:affiche}</code> dans « Large Image (URL) » pour la grande affiche, et <code>{var:logo}</code> dans « Thumbnail » pour le logo cinéthèque. <code>{var:image}</code> donne la vignette de l'épisode.</p>
+            </div></details>
         </div>
+      </section>
+    </main>
 
-        <div class="card">
-          <h3 class="sub-title">Mise à jour</h3>
-          <p class="muted">Récupère la dernière version depuis GitHub et redémarre
-            le site — sans toucher à tes données.</p>
-          <p class="muted">Version installée : <span id="app-version">…</span></p>
-          <button id="btn-update" class="btn primary small"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2 5.3"/><path d="M20 4v5h-5"/></svg>Mettre à jour le site</button>
-          <span id="update-status" class="muted"></span>
-        </div>
-
-        <div class="card">
-          <h3 class="sub-title">Réinitialiser</h3>
-          <p class="muted">Efface <b>toute</b> ta bibliothèque (films, séries,
-            visionnages, listes perso). Irréversible — pour repartir de zéro.</p>
-          <button id="btn-reset" class="btn danger small"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 4h4a1 1 0 0 1 1 1v2H9V5a1 1 0 0 1 1-1z"/><path d="M6 7l1 13h10l1-13"/><path d="M10 11v6M14 11v6"/></svg>Tout réinitialiser</button>
-          <span id="reset-status" class="muted"></span>
-        </div>
-
-        {% if is_super_admin %}
-        <div class="card">
-          <h3 class="sub-title">Comptes &amp; profils</h3>
-          <p class="muted">Gère les accès, et « mets-toi à la place » d'un membre
-            pour voir/éditer sa bibliothèque.</p>
-          <a class="btn small" href="{{ url_for('accounts.comptes_page') }}">Gérer les comptes</a>
-        </div>
-
-        <div class="card">
-          <h3 class="sub-title">Cloudflare / Accès</h3>
-          <p class="muted">Équipe et AUD de ton application Cloudflare Access
-            (vérification du JWT). Modifiable sans toucher au serveur.</p>
-          <input class="input" id="cf-team" placeholder="équipe (ex. super-nono)">
-          <input class="input" id="cf-aud" placeholder="AUD tag de l'application Access">
-          <label class="switch-row"><input type="checkbox" id="cf-verify">
-            Vérifier le JWT (recommandé en production)</label>
-          <button id="btn-cf-save" class="btn primary small">Enregistrer</button>
-          <button id="btn-diag" class="btn ghost small">Diagnostic</button>
-          <pre id="diag-out" class="aide-cmd" style="display:none;white-space:pre-wrap"></pre>
-        </div>
-
-        <div class="card">
-          <h3 class="sub-title">Connecteur Claude (MCP)</h3>
-          <p class="muted">Permet à Claude de tester et piloter le site en direct.
-            Accès protégé par une <b>clé API dédiée</b> (distincte du mot de passe
-            et de la clé TMDB), envoyée dans l'en-tête <code>Authorization</code>
-            et affichée une seule fois. Mode d'emploi : docs/mcp.md.</p>
-          <p class="muted">État : <span id="mcp-state">…</span></p>
-          <div class="row-inline">
-            <button id="btn-mcp-gen" class="btn primary small">Générer une clé</button>
-            <button id="btn-mcp-revoke" class="btn danger small">Révoquer</button>
-          </div>
-          <pre id="mcp-out" class="aide-cmd" style="display:none;white-space:pre-wrap;word-break:break-all"></pre>
-        </div>
-        {% endif %}
-      </div>
-    </section>
-    <!-- Aide / Support -->
-    <section id="page-aide" class="page">
-      <div class="page-head"><h2>Aide &amp; support</h2></div>
-      <p class="aide-intro">Tout ce qu'il faut pour installer, sécuriser et
-        utiliser cinéthèque. Les liens t'emmènent directement au bon onglet.</p>
-
-      <div class="aide-cat">
-        <h3 class="aide-cat-title"><span>🚀</span> Premiers pas</h3>
-        <div class="aide-cards">
-          <article class="aide-card">
-            <div class="aide-ic">🔑</div>
-            <h4>Clé API TMDB</h4>
-            <p>Gratuite et sans limite, elle remplit automatiquement les fiches
-              (affiches, résumés, épisodes, sorties).</p>
-            <ol class="aide-list">
-              <li>Compte sur <a href="https://www.themoviedb.org/signup" target="_blank" rel="noopener">themoviedb.org</a></li>
-              <li><a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">Paramètres → API</a></li>
-              <li>Copie la clé « API Key (v3 auth) »</li>
-            </ol>
-            <p class="aide-hint">Colle-la dans <a href="#" data-goto="parametres">Paramètres → Clé TMDB</a>.</p>
-          </article>
-        </div>
-      </div>
-
-      <div class="aide-cat">
-        <h3 class="aide-cat-title"><span>🔐</span> Compte &amp; sécurité</h3>
-        <div class="aide-cards">
-          <article class="aide-card">
-            <div class="aide-ic">🔒</div>
-            <h4>Mot de passe</h4>
-            <p>Mot de passe de la connexion locale du <b>super-admin</b>. Change-le dans
-              <a href="#" data-goto="parametres">Paramètres → Mot de passe</a>.</p>
-            <p class="aide-hint">Oublié ? Depuis le serveur (console Proxmox / SSH) :</p>
-            <pre class="aide-cmd">sudo bash /opt/cinetheque/scripts/reset-admin-password.sh</pre>
-          </article>
-          <article class="aide-card">
-            <div class="aide-ic">🌐</div>
-            <h4>Connexion automatique</h4>
-            <p>Derrière <b>Cloudflare Access</b>, tu es connecté automatiquement.
-              En accès par l'<b>IP locale</b>, le mot de passe reste exigé.</p>
-            <p class="aide-hint">Réglable dans
-              <a href="#" data-goto="parametres">Paramètres → Cloudflare / Accès</a>.</p>
-          </article>
-        </div>
-      </div>
-
-      <div class="aide-cat">
-        <h3 class="aide-cat-title"><span>💾</span> Tes données</h3>
-        <div class="aide-cards">
-          <article class="aide-card">
-            <div class="aide-ic">💾</div>
-            <h4>Sauvegarde &amp; export</h4>
-            <p>Exporte ou restaure tes données depuis
-              <a href="#" data-goto="parametres">Paramètres → Sauvegarde</a>.</p>
-            <p class="aide-hint">Archive complète (avec affiches) depuis le serveur :</p>
-            <pre class="aide-cmd">sudo bash /opt/cinetheque/scripts/backup.sh</pre>
-          </article>
-          <article class="aide-card">
-            <div class="aide-ic">⬆️</div>
-            <h4>Mettre à jour le site</h4>
-            <p>Récupère la dernière version depuis GitHub sans toucher à tes données.</p>
-            <pre class="aide-cmd">sudo /opt/cinetheque/scripts/update-panel.sh</pre>
-          </article>
-        </div>
-      </div>
-
-      <div class="aide-cat">
-        <h3 class="aide-cat-title"><span>🎬</span> Bien utiliser cinéthèque</h3>
-        <div class="aide-cards">
-          <article class="aide-card">
-            <div class="aide-ic">➕</div>
-            <h4>Ajouter un titre</h4>
-            <p>Tape un nom dans la recherche en haut, puis clique le résultat.
-              Absent de TMDB ? <a href="#" data-goto="bibliotheque">Ajout manuel</a>.</p>
-          </article>
-          <article class="aide-card">
-            <div class="aide-ic">📺</div>
-            <h4>Suivre une série</h4>
-            <p>Ouvre la fiche, déplie une saison, coche chaque épisode « Vu » —
-              ou « Tout marquer » d'un coup.</p>
-          </article>
-          <article class="aide-card">
-            <div class="aide-ic">📃</div>
-            <h4>Listes &amp; découverte</h4>
-            <p>« À voir plus tard » et « Favoris » par défaut, listes toutes prêtes
-              (Marvel, Star Wars…), et la roulette « Que regarder ? ».</p>
-          </article>
-          <article class="aide-card">
-            <div class="aide-ic">🔔</div>
-            <h4>Notifications</h4>
-            <p>Sois prévenu des nouveaux épisodes et sorties sur Discord via
-              <a href="#" data-goto="parametres">Paramètres → Notifications</a>.</p>
-          </article>
-          <article class="aide-card">
-            <div class="aide-ic">📊</div>
-            <h4>Statistiques</h4>
-            <p>Temps total, compteurs, genres et temps par série dans
-              <a href="#" data-goto="profil">Profil</a>.</p>
-          </article>
-        </div>
-      </div>
-
-      <div class="aide-cat">
-        <h3 class="aide-cat-title"><span>🔔</span> Configurer les notifications Discord (botpanel)</h3>
-        <article class="aide-card aide-wide">
-          <p>cinéthèque envoie ses notifications via <b>botpanel</b> (aucun réglage
-            Discord ici). À faire <b>une seule fois</b> :</p>
-          <ol class="aide-list">
-            <li>Dans <b>botpanel</b>, crée <b>3 notifications</b> avec des
-              emplacements <code>{var:nom}</code> (modèles ci-dessous) et note
-              le <b>slug</b> de chacune.</li>
-            <li>Dans <a href="#" data-goto="parametres">cinéthèque → Paramètres →
-              Notifications</a>, coche <b>Discord</b>, mets l'<b>URL de botpanel</b>
-              et reporte les <b>3 slugs</b>, puis « Tester l'envoi ».</li>
-          </ol>
-          <p class="aide-hint">💡 Le <b>slug se choisit dans botpanel</b> à la
-            création de la notif, et se renseigne (le <b>même</b>) dans les
-            Paramètres de cinéthèque. Modifiable des deux côtés tant qu'il reste
-            identique.</p>
-
-          <div class="notif-model">
-            <div class="notif-head">📺 Nouvel épisode d'une série</div>
-            <div class="notif-line"><span>Titre</span><code>📺 {var:serie}</code></div>
-            <div class="notif-line"><span>Message</span><code>Nouvel épisode {var:code} — {var:titre|à regarder} 🍿</code></div>
-            <div class="notif-vars">Variables : <code>serie</code>, <code>code</code>, <code>titre</code>, <code>saison</code>, <code>episode</code></div>
-          </div>
-
-          <div class="notif-model">
-            <div class="notif-head">🎬 Film au cinéma</div>
-            <div class="notif-line"><span>Titre</span><code>🎬 {var:titre}</code></div>
-            <div class="notif-line"><span>Message</span><code>C'est sorti — maintenant au {var:canal} ! 🎟️</code></div>
-            <div class="notif-vars">Variables : <code>titre</code>, <code>canal</code></div>
-          </div>
-
-          <div class="notif-model">
-            <div class="notif-head">📺 Film disponible en streaming</div>
-            <div class="notif-line"><span>Titre</span><code>📺 {var:titre}</code></div>
-            <div class="notif-line"><span>Message</span><code>Disponible en streaming sur {var:plateformes|une plateforme} 🎬</code></div>
-            <div class="notif-vars">Variables : <code>titre</code>, <code>plateformes</code></div>
-          </div>
-
-          <p class="aide-hint">La syntaxe <code>{var:nom|défaut}</code> affiche
-            « défaut » si la variable est absente.</p>
-          <p class="aide-hint">🖼️ Images sur Discord : dans le template botpanel,
-            mets <code>{var:affiche}</code> dans <b>« Large Image (URL) »</b> pour
-            le grand poster, et <code>{var:logo}</code> dans <b>« Thumbnail »</b>
-            pour le logo cinéthèque en coin. Variable <code>{var:image}</code>
-            aussi dispo (vignette de l'épisode pour les séries).</p>
-        </article>
-      </div>
-
-    </section>
-  </main>
-
-  <!-- Barre de navigation basse (mobile) -->
-  <nav class="bottom-nav" id="bottom-nav">
-    <button class="bnav active" data-tab="suggestions"><span class="bi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.8V20h5v-6h4v6h5V9.8"/></svg></span><span>Accueil</span></button>
-    <button class="bnav" data-tab="bibliotheque"><span class="bi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="15" rx="2"/><path d="M8 4.5v15M16 4.5v15M3 9.5h5M16 9.5h5M3 14.5h5M16 14.5h5"/></svg></span><span>Biblio</span></button>
-    <button class="bnav" data-tab="decouverte"><span class="bi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m14.8 9.2-1.7 4-4 1.7 1.7-4z"/></svg></span><span>Découvrir</span></button>
-    <button class="bnav" data-tab="futur"><span class="bi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 9.5a5.5 5.5 0 0 1 11 0c0 4.5 2 5.5 2 5.5H4.5s2-1 2-5.5z"/><path d="M10 19a2 2 0 0 0 4 0"/></svg></span><span>Futur</span></button>
-    <button class="bnav" id="bnav-more"><span class="bi"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></span><span>Plus</span></button>
-  </nav>
-
-  <!-- Panneau « Plus » (mobile) -->
-  <div class="sheet hidden" id="more-sheet">
-    <div class="sheet-backdrop" data-close-sheet></div>
-    <div class="sheet-card">
-      <div class="sheet-handle"></div>
-      <button class="sheet-item" data-tab="listes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="3.5" cy="18" r="1" fill="currentColor" stroke="none"/></svg>Listes</button>
-      <button class="sheet-item" data-tab="profil"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18"/><path d="M6 20v-6M12 20V4M18 20v-9"/></svg>Profil, stats &amp; historique</button>
-      <button class="sheet-item" data-tab="parametres"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5 5l2.1 2.1M16.9 16.9 19 19M19 5l-2.1 2.1M7.1 16.9 5 19"/></svg>Paramètres</button>
-      <button class="sheet-item" data-tab="aide"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.6 1.2c0 1.7-2.2 2-2.2 3.5"/><circle cx="12" cy="17.3" r="0.7" fill="currentColor" stroke="none"/></svg>Aide &amp; support</button>
-    </div>
+    <footer class="pied">
+      <span>cinéthèque · ta bibliothèque de films et séries</span>
+      <span class="tmdb-attr">This product uses the TMDb API but is not endorsed or certified by TMDb.</span>
+    </footer>
   </div>
+</div>
 
-  <!-- Fond semi-transparent derrière le panneau de filtres (mobile) -->
-  <div class="filter-backdrop hidden" id="filter-backdrop"></div>
+{# ------------------------------------------- barre d'onglets en verre (N1) #}
+<nav class="tabbar" id="tabbar" aria-label="Navigation">
+  <a class="tab" href="#accueil" data-page="accueil"><span class="ti"><svg class="i s22" aria-hidden="true"><use href="#i-home"/></svg></span>Accueil</a>
+  <a class="tab" href="#bibliotheque" data-page="bibliotheque"><span class="ti"><svg class="i s22" aria-hidden="true"><use href="#i-lib"/></svg></span>Biblio</a>
+  <a class="tab" href="#decouvrir" data-page="decouvrir"><span class="ti"><svg class="i s22" aria-hidden="true"><use href="#i-compass"/></svg></span>Découvrir</a>
+  <a class="tab" href="#futur" data-page="futur"><span class="ti"><svg class="i s22" aria-hidden="true"><use href="#i-bell"/></svg></span>Futur</a>
+  <button class="tab" type="button" data-plus aria-haspopup="dialog"><span class="ti"><svg class="i s22" aria-hidden="true"><use href="#i-dots"/></svg></span>Plus</button>
+</nav>
+<div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <footer class="footer">
-    <span>cinéthèque · ma bibliothèque de films &amp; séries</span>
-    <span class="muted tmdb-attr">This product uses the TMDb API but is not
-      endorsed or certified by TMDb.</span>
-  </footer>
-
-  <!-- Fenêtre modale : fiche détaillée -->
-  <div id="modal" class="modal hidden">
-    <div class="modal-backdrop" data-close></div>
-    <div class="modal-card">
-      <button class="modal-close" data-close aria-label="Fermer">✕</button>
-      <div id="modal-content"></div>
-    </div>
-  </div>
-
-  <!-- Menu rapide au clic sur une affiche -->
-  <div id="quick-menu" class="quick-menu hidden">
-    <div class="qm-backdrop" data-qm-close></div>
-    <div class="qm-card">
-      <img id="qm-poster" alt="">
-      <div id="qm-title" class="qm-title"></div>
-      <div id="qm-meta" class="qm-meta hidden"></div>
-      <button class="btn full qm-next hidden" data-qm="next"></button>
-      <button class="btn full" data-qm="a_voir">＋ À voir plus tard</button>
-      <button class="btn full" data-qm="vu">Déjà vu</button>
-      <button class="btn full" data-qm="infos">Plus d'infos ›</button>
-    </div>
-  </div>
-
-  <div id="toast" class="toast hidden"></div>
-
-  <script src="{{ asset('app.js') }}"></script>
-</body>
-</html>
+<script type="application/json" id="ct-config">{{ {
+  "superAdmin": is_super_admin,
+  "tmdb": tmdb_ok,
+  "imp": impersonation is not none,
+  "prefs": prefs,
+  "caps": {"maj": can('site_update'), "mdp": can('admin_password'),
+           "comptes": can('account_management') or can('profiles')},
+  "logout": url_for('pages.logout'),
+  "comptes": url_for('accounts.comptes_page')
+} | tojson }}</script>
+{% endblock %}
+{% block scripts %}
+{%- for js in ["commun", "cartes", "menu", "navigation", "fiche", "accueil", "bibliotheque",
+               "decouvrir", "futur", "listes", "profil", "parametres", "aide", "demarrage"] %}
+<script defer src="{{ asset('js/' ~ js ~ '.js') }}"></script>
+{%- endfor %}
+{% endblock %}

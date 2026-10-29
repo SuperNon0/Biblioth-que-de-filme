@@ -1,0 +1,32 @@
+<!doctype html>
+{#- Gabarit commun : accent, thème, taille des affiches et titres sous les
+    affiches sont posés sur <html> dès le rendu (aucune couleur ne clignote). -#}
+<html lang="fr" data-accent="{{ prefs.accent }}" data-affiche="{{ prefs.affiche }}" data-legendes="{{ 1 if prefs.legendes else 0 }}"
+  {%- if prefs.theme == 'sombre' %} data-theme="dark"{% elif prefs.theme == 'clair' %} data-theme="light"{% endif %}>
+<head>
+  <meta charset="utf-8">
+  {#- Zoom autorisé (V11) : les champs font 16 px, l'iPhone ne zoome plus tout seul. #}
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{% block titre %}cinéthèque{% endblock %}</title>
+  {%- if prefs.theme == 'sombre' %}
+  <meta name="theme-color" content="#0b0f17">
+  {%- elif prefs.theme == 'clair' %}
+  <meta name="theme-color" content="#f5f3ee">
+  {%- else %}
+  <meta name="theme-color" content="#0b0f17" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f5f3ee" media="(prefers-color-scheme: light)">
+  {%- endif %}
+  <meta name="color-scheme" content="dark light">
+  <link rel="icon" href="{{ asset('favicon.svg') }}" type="image/svg+xml">
+  <link rel="preload" href="{{ url_for('static', filename='fonts/archivo-latin.woff2') }}?v=1" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="{{ url_for('static', filename='fonts/dm-serif-display-latin.woff2') }}?v=1" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="{{ asset('fonts.css') }}">
+  <link rel="stylesheet" href="{{ asset('style.css') }}">
+  {% block tete %}{% endblock %}
+</head>
+<body class="{% block classe %}{% endblock %}">
+{% include "_icons.html" %}
+{% block corps %}{% endblock %}
+{% block scripts %}{% endblock %}
+</body>
+</html>

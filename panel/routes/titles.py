@@ -14,8 +14,9 @@ from flask import Blueprint, jsonify, request
 
 import auth
 import db
+import genres as genres_fr
 from context import get_tmdb
-from services import sync
+from services import sync, undo
 from tmdb import TMDBError
 
 bp = Blueprint("titles", __name__, url_prefix="/api")
@@ -39,7 +40,7 @@ def _titre(titre_id):
     t = db.q1("SELECT * FROM titres WHERE id = ? AND compte_id = ?",
               (titre_id, auth.compte_courant_id()))
     if t:
-        t["genres"] = db.jload(t.get("genres"), [])
+        t["genres"] = genres_fr.normaliser(db.jload(t.get("genres"), []))
         t["plateformes"] = db.jload(t.get("plateformes"), [])
         t["casting"] = db.jload(t.get("casting"), [])
         t["equipe"] = db.jload(t.get("equipe"), [])
@@ -85,6 +86,7 @@ def preview():
                   else tmdb.tv(int(tmdb_id)))
     except (TMDBError, ValueError) as exc:
         return jsonify(error=str(exc)), 502
+    detail["genres"] = genres_fr.normaliser(detail.get("genres"))
     return jsonify(detail)
 
 
@@ -162,6 +164,10 @@ def detail(titre_id):
         payload["temps"] = statistics.temps_serie(titre_id)
     payload["alerte"] = db.q1(
         "SELECT canal FROM alertes WHERE titre_id = ?", (titre_id,))
+    # Historique de ce titre (frise de la fiche) : les marquages les plus récents.
+    payload["journal"] = db.q(
+        "SELECT id, type, label, cree FROM journal WHERE titre_id = ? "
+        "ORDER BY cree DESC, id DESC LIMIT 200", (titre_id,))
     return jsonify(payload)
 
 
@@ -216,11 +222,13 @@ def add_watch(titre_id):
         jour = date.fromisoformat(raw[:10]).isoformat() if raw else date.today().isoformat()
     except ValueError:
         return jsonify(error="Date invalide (AAAA-MM-JJ)."), 400
-    db.run("INSERT INTO visionnages (titre_id, date, cree) VALUES (?,?,?)",
-           (titre_id, jour, int(time.time())))
+    lot = undo.Lot()
+    lot.colonnes("titres", titre_id, ["statut"])
+    lot.ajoute("visionnages", db.run("INSERT INTO visionnages (titre_id, date, cree) "
+                                     "VALUES (?,?,?)", (titre_id, jour, int(time.time()))))
     db.run("UPDATE titres SET statut = 'vu' WHERE id = ?", (titre_id,))
-    db.log_event(titre_id, "film")
-    return jsonify(ok=True)
+    lot.ajoute("journal", db.log_event(titre_id, "film"))
+    return jsonify(ok=True, annuler=undo.enregistrer(lot, auth.compte_courant_id()))
 
 
 @bp.delete("/watch/<int:watch_id>")
@@ -229,6 +237,9 @@ def del_watch(watch_id):
     row = db.q1("SELECT titre_id FROM visionnages WHERE id = ?", (watch_id,))
     if not row or not _owns(row["titre_id"]):
         return jsonify(error="Visionnage introuvable."), 404
+    lot = undo.Lot()
+    lot.colonnes("titres", row["titre_id"], ["statut"])
+    lot.supprime("visionnages", db.q("SELECT * FROM visionnages WHERE id = ?", (watch_id,)))
     db.run("DELETE FROM visionnages WHERE id = ?", (watch_id,))
     # S'il n'y a plus aucun visionnage, le film n'est plus « vu » (correction
     # d'un marquage par erreur) : on repasse le statut à « à voir ».
@@ -236,7 +247,7 @@ def del_watch(watch_id):
             "SELECT 1 FROM visionnages WHERE titre_id = ? LIMIT 1", (row["titre_id"],)):
         db.run("UPDATE titres SET statut = 'a_voir' WHERE id = ? AND type = 'film'",
                (row["titre_id"],))
-    return jsonify(ok=True)
+    return jsonify(ok=True, annuler=undo.enregistrer(lot, auth.compte_courant_id()))
 
 
 # --- épisodes de séries ----------------------------------------------------
@@ -300,12 +311,22 @@ def toggle_episode(ep_id):
     action = (request.get_json(silent=True) or {}).get("action", "revu")
     if action not in EP_ACTIONS:
         return jsonify(error="Action inconnue."), 400
+    return _action_episode(ep["titre_id"], ep, action)
+
+
+def _action_episode(titre_id, ep, action):
+    """Applique l'action à un épisode, journalise, et renvoie la progression de
+    la série + un jeton « Annuler »."""
+    lot = undo.Lot()
+    lot.episodes(titre_id, {ep["id"]})
+    lot.colonnes("titres", titre_id, ["statut"])
     # Journal seulement si l'épisode a vraiment changé (un « seen » sur un
     # épisode déjà vu ne crée plus de doublon dans l'historique).
     if _apply_ep(ep, action) and action in ("seen", "revu"):
-        db.log_event(ep["titre_id"], "episode", _ep_label(ep))
-    _refresh_serie_statut(ep["titre_id"])
-    return jsonify(ok=True, serie=_progression(ep["titre_id"]))
+        lot.ajoute("journal", db.log_event(titre_id, "episode", _ep_label(ep)))
+    _refresh_serie_statut(titre_id)
+    return jsonify(ok=True, serie=_progression(titre_id),
+                   annuler=undo.enregistrer(lot, auth.compte_courant_id()))
 
 
 @bp.post("/title/<int:titre_id>/episode/<int:saison>/<int:numero>/toggle")
@@ -325,10 +346,34 @@ def toggle_episode_num(titre_id, saison, numero):
     action = (request.get_json(silent=True) or {}).get("action", "revu")
     if action not in EP_ACTIONS:
         return jsonify(error="Action inconnue."), 400
-    if _apply_ep(ep, action) and action in ("seen", "revu"):
-        db.log_event(titre_id, "episode", _ep_label(ep))
+    return _action_episode(titre_id, ep, action)
+
+
+@bp.post("/title/<int:titre_id>/mark-upto")
+@auth.login_required
+def mark_upto(titre_id):
+    """« Vu jusqu'ici » : marque vus tous les épisodes déjà diffusés jusqu'à
+    (saison, numéro) inclus qui ne l'étaient pas encore."""
+    if not _owns(titre_id):
+        return jsonify(error="Titre introuvable."), 404
+    data = request.get_json(silent=True) or {}
+    try:
+        cible = (int(data["saison"]), int(data["numero"]))
+    except (KeyError, TypeError, ValueError):
+        return jsonify(error="Épisode invalide."), 400
+    eps = [e for e in _episodes_serie(titre_id)
+           if e["diffuse"] and not e["vu"] and (e["saison"], e["numero"]) <= cible]
+    if not eps:
+        return jsonify(error="Rien à marquer : tout est déjà vu jusqu'ici."), 400
+    lot = undo.Lot()
+    lot.episodes(titre_id, {e["id"] for e in eps})
+    lot.colonnes("titres", titre_id, ["statut"])
+    for e in eps:
+        if _apply_ep(e, "seen"):
+            lot.ajoute("journal", db.log_event(titre_id, "episode", _ep_label(e)))
     _refresh_serie_statut(titre_id)
-    return jsonify(ok=True, serie=_progression(titre_id))
+    return jsonify(ok=True, touches=len(eps), serie=_progression(titre_id),
+                   annuler=undo.enregistrer(lot, auth.compte_courant_id()))
 
 
 def _progression(titre_id):
@@ -339,8 +384,9 @@ def _progression(titre_id):
     if not row:
         return None
     annotate_series_progress([row])
-    return {k: row.get(k) for k in ("statut", "vus_ep", "total_ep",
-                                    "next_saison", "next_numero", "revoit", "a_venir")}
+    return {k: row.get(k) for k in ("statut", "vus_ep", "total_ep", "next_saison",
+                                    "next_numero", "next_nom", "next_duree", "revoit",
+                                    "a_venir", "nb_vues")}
 
 
 def _ep_label(ep):
@@ -362,7 +408,7 @@ def _mark_action(body):
 def _episodes_serie(titre_id):
     """Tous les épisodes d'une série, triés, avec le drapeau ``diffuse``."""
     return sync.flag_diffuses(db.q(
-        "SELECT id, saison, numero, vu, nb_vues, date_diff FROM episodes "
+        "SELECT id, saison, numero, nom, vu, nb_vues, date_diff FROM episodes "
         "WHERE titre_id = ? ORDER BY saison, numero", (titre_id,)))
 
 
@@ -384,14 +430,18 @@ def _mark_groupe(titre_id, saison=None):
         eps = [e for e in eps if e["diffuse"]]
         if not eps:
             return jsonify(error="Aucun épisode déjà diffusé à marquer."), 400
+    lot = undo.Lot()
+    lot.episodes(titre_id, {e["id"] for e in eps})
+    lot.colonnes("titres", titre_id, ["statut"])
     touches = sum(1 for e in eps if _apply_ep(e, action))
     _refresh_serie_statut(titre_id)
     if touches and action in ("seen", "revu"):
         if saison is None:
-            db.log_event(titre_id, "serie", "Série entière")
+            lot.ajoute("journal", db.log_event(titre_id, "serie", "Série entière"))
         else:
-            db.log_event(titre_id, "saison", f"Saison {saison}")
-    return jsonify(ok=True, touches=touches, serie=_progression(titre_id))
+            lot.ajoute("journal", db.log_event(titre_id, "saison", f"Saison {saison}"))
+    return jsonify(ok=True, touches=touches, serie=_progression(titre_id),
+                   annuler=undo.enregistrer(lot, auth.compte_courant_id()) if touches else None)
 
 
 @bp.post("/title/<int:titre_id>/season/<int:saison>/mark")

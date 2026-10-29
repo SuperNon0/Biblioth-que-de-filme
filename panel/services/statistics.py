@@ -8,6 +8,7 @@ automatiquement à partir des durées TMDB × ce qui est marqué vu.
 import collections
 
 import db
+import genres as genres_fr
 from services.sync import ep_diffuse_sql
 
 # Durée moyenne de repli quand TMDB ne fournit pas la durée d'un épisode.
@@ -85,12 +86,14 @@ def _compte_genres(compte_id):
     counter = collections.Counter()
     for r in db.q("SELECT genres FROM titres WHERE compte_id = ? AND (statut = 'vu' "
                   "OR id IN (SELECT DISTINCT titre_id FROM visionnages))", (compte_id,)):
-        for g in db.jload(r["genres"], []):
+        # Genres doubles des séries répartis dans leurs deux genres, en français
+        # (« Action & Adventure » compte dans Action et dans Aventure).
+        for g in genres_fr.normaliser(db.jload(r["genres"], [])):
             counter[g] += 1
     return counter.most_common(10)
 
 
-def _top_series_temps(compte_id, limit=3):
+def _top_series_temps(compte_id, limit=8):
     """Séries les plus chronophages (temps vu, revisionnages inclus)."""
     rows = db.q(
         f"""SELECT t.id, t.titre, t.affiche,
@@ -102,8 +105,8 @@ def _top_series_temps(compte_id, limit=3):
     out = []
     for r in rows:
         d = duree_lisible(r["minutes"] or 0)
-        out.append({"titre": r["titre"], "affiche": r["affiche"], "texte": d["texte"],
-                    "converti": d["converti"]})
+        out.append({"id": r["id"], "titre": r["titre"], "affiche": r["affiche"],
+                    "minutes": d["minutes"], "texte": d["texte"], "converti": d["converti"]})
     return out
 
 

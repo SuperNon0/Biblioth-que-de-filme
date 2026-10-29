@@ -12,6 +12,7 @@ défaut et une base locale dans ./.data/.
 """
 import base64
 import json
+import mimetypes
 import os
 import time
 
@@ -38,6 +39,10 @@ def _legacy_admin_hash(cfg):
     except (OSError, ValueError):
         pass
     return cfg.get("panel_password_hash") or None
+
+
+# Polices servies en fichiers : type correct même sans /etc/mime.types complet.
+mimetypes.add_type("font/woff2", ".woff2")
 
 
 def create_app():
@@ -133,10 +138,17 @@ def create_app():
         if session.get("impersonator_id"):
             c = auth.current_compte()
             imp = {"email": (c["email"] if c and c["email"] else "ce membre")}
+        from routes import prefs
+        # Compte réel (l'impersonateur pendant un « voir en tant que ») : son
+        # e-mail s'affiche au pied du menu de gauche.
+        reel = auth.get_compte(session.get("impersonator_id") or session.get("compte_id"))
         return {"tmdb_ok": bool(settings_store.get("tmdb_api_key")),
                 "impersonation": imp,
                 "can": permissions.has_capability,
-                "is_super_admin": auth.is_super_admin()}
+                "is_super_admin": auth.is_super_admin(),
+                "moi": (reel["email"] or "") if reel else "",
+                # Accent et thème posés sur <html> dès le rendu (pas de flash).
+                "prefs": prefs.lire(auth.compte_courant_id())}
 
     _register_blueprints(app)
     # Pas de cache sur les réponses d'API (états temps réel). Les fichiers
@@ -161,9 +173,9 @@ def create_app():
 
 def _register_blueprints(app):
     from routes import (accounts_routes, alerts, auth_routes, discover, library,
-                        lists, mcp, pages, people, settings, stats, titles)
+                        lists, mcp, pages, people, prefs, settings, stats, titles)
     for module in (pages, auth_routes, accounts_routes, library, titles,
-                   discover, lists, alerts, people, stats, settings, mcp):
+                   discover, lists, alerts, people, stats, settings, prefs, mcp):
         app.register_blueprint(module.bp)
 
 
