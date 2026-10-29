@@ -43,6 +43,10 @@ def login():
         return redirect(url_for("auth.gateway"))
     if not cfg().get("allow_local_login", True):
         return render_template("login.html", error="Connexion locale désactivée."), 403
+    attente = auth.attente_login()
+    if attente:  # après un échec, le mot de passe suivant attend (anti-force brute)
+        return render_template("login.html",
+                               error=f"Trop d'essais : réessaie dans {attente} s."), 429
     if auth.do_login(request.form.get("password", "")):
         return redirect(url_for("pages.index"))
     return render_template("login.html", error="Mot de passe incorrect.")
@@ -73,4 +77,11 @@ def service_worker():
 def media(name):
     """Sert une affiche/image mise en cache localement."""
     posters_dir = Path(cfg()["posters_dir"]).resolve()
-    return send_from_directory(posters_dir, name)
+    resp = send_from_directory(posters_dir, name)
+    # Le nom du fichier dérive de l'URL d'origine : son contenu ne change jamais.
+    # Sans cela (no-cache par défaut), chaque affiche était revalidée auprès du
+    # serveur à chaque ouverture de la bibliothèque (le service worker ne met
+    # pas /media/ en cache). « private » : pas de cache côté Cloudflare.
+    if resp.status_code in (200, 304):
+        resp.headers["Cache-Control"] = "private, max-age=31536000, immutable"
+    return resp

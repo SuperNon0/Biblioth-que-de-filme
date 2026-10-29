@@ -56,6 +56,12 @@ Proxmox, mise à jour auto-remplaçante.
 - Langue : français partout (UI, docs, commits).
 - Couleurs uniquement via les variables `:root` de `style.css`.
 - Endpoints dynamiques : JSON sous `/api/*`, `Cache-Control: no-store`.
+- Écritures `/api/*` : en-tête `X-Cinetheque: 1` exigé quand le navigateur
+  n'envoie pas `Sec-Fetch-Site` (anti-CSRF, `app.py`) — passer par `api()`
+  dans `app.js`, et le poser dans tout `fetch` écrit à la main.
+- Épisode « diffusé » : date ≤ aujourd'hui (fuseau `timezone`), ou sans date
+  mais suivi d'un épisode diffusé — `sync.flag_diffuses()` / `sync.ep_diffuse_sql()`.
+  Les marquages groupés et la progression ne comptent que ceux-là.
 - Secrets (config.json, users.json, settings.json, base) jamais committés.
 
 ## Vérifications avant commit
@@ -69,7 +75,12 @@ bash -n install.sh scripts/*.sh proxmox/*.sh
 ## Déploiement
 
 - `install.sh` idempotent (utilisateur dédié, config, systemd, sudoers).
-- `scripts/update-panel.sh` : mise à jour GitHub (auto-remplaçante, détachée).
+- `scripts/update-panel.sh` : mise à jour GitHub (auto-remplaçante, détachée),
+  refusée si un `.py` ne compile pas ; `scripts/restart-check.sh` redémarre et
+  remet la version précédente si le site ne répond plus (`journalctl -t cinetheque-update`).
+- Code et scripts appartiennent à root (lecture seule pour le service) ; seul
+  `data/` est au compte `cinetheque`. Serveur : waitress si installé
+  (`python3-waitress`), sinon serveur Flask.
 - `scripts/reset-admin-password.sh` : reset du mot de passe depuis le terminal.
 - `proxmox/cinetheque-lxc.sh` : déploiement LXC en une commande.
 

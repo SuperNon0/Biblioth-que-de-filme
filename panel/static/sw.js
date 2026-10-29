@@ -1,7 +1,7 @@
 /* Service worker de cinéthèque (PWA).
    Met en cache la coquille de l'app pour un démarrage rapide et un affichage
    même hors ligne. Les appels /api/ et /media/ ne sont jamais mis en cache. */
-const CACHE = "cinetheque-v53";
+const CACHE = "cinetheque-v54";
 
 self.addEventListener("install", () => self.skipWaiting());
 
@@ -53,7 +53,10 @@ self.addEventListener("fetch", (e) => {
       fetch(e.request).then((resp) => {
         // Jamais d'erreur ni de redirection (page de connexion Cloudflare) en cache.
         if (resp && resp.ok && resp.type === "basic") {
-          caches.open(CACHE).then((c) => c.put(e.request, resp.clone())).catch(() => {});
+          // Copie prise tout de suite : une fois la réponse rendue à la page,
+          // son corps est consommé et clone() échouait (rien n'était mis en cache).
+          const copy = resp.clone();
+          caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
         }
         return resp;
       }))

@@ -4,6 +4,8 @@
 - Série : saisons/épisodes (nom, image, résumé, durée), marquage Vu/Revu,
   « marquer la saison » et « marquer la série », prochain épisode.
 """
+import json
+import logging
 import threading
 import time
 from datetime import date
@@ -17,6 +19,14 @@ from services import sync
 from tmdb import TMDBError
 
 bp = Blueprint("titles", __name__, url_prefix="/api")
+log = logging.getLogger("cinetheque.titles")
+
+# Resynchro automatique d'une série à l'ouverture de sa fiche : au plus une
+# tentative par heure et par série. Sans ce garde-fou, une saison annoncée sans
+# épisode (ou une série sans saison) relançait une synchro à CHAQUE ouverture,
+# et la fiche se rechargeait toute seule toutes les 1,5 s, indéfiniment.
+_RESYNC_DELAI = 3600
+_derniere_resync = {}
 
 
 def _owns(titre_id):
@@ -38,19 +48,19 @@ def _titre(titre_id):
 
 
 def _saisons(titre_id):
-    """Épisodes groupés par saison, avec compteur vus/total par saison."""
-    eps = db.q(
+    """Épisodes groupés par saison, avec compteurs vus / diffusés / total."""
+    eps = sync.flag_diffuses(db.q(
         "SELECT * FROM episodes WHERE titre_id = ? ORDER BY saison, numero",
         (titre_id,),
-    )
+    ))
     saisons = {}
     for e in eps:
         e["vu"] = bool(e["vu"])
         s = saisons.setdefault(e["saison"], {"numero": e["saison"],
-                                             "episodes": [], "vus": 0})
+                                             "episodes": [], "vus": 0, "diffuses": 0})
         s["episodes"].append(e)
-        if e["vu"]:
-            s["vus"] += 1
+        s["vus"] += e["vu"]
+        s["diffuses"] += e["diffuse"]
     for s in saisons.values():
         s["total"] = len(s["episodes"])
     return [saisons[k] for k in sorted(saisons)]
@@ -106,11 +116,14 @@ def detail(titre_id):
     # pour que « où regarder » soit complet sur les titres déjà en base.
     plats = t.get("plateformes") or []
     plats_sans_mode = bool(plats) and not any("mode" in p for p in plats)
-    if t["tmdb_id"] and (not t.get("casting") or plats_sans_mode):
+    # Casting jamais récupéré = NULL. Un casting vide (« [] », TMDB n'en a pas)
+    # ne relance plus un appel TMDB bloquant à chaque ouverture de la fiche.
+    sans_casting = db.q1("SELECT casting IS NULL AS n FROM titres WHERE id = ?",
+                         (titre_id,))["n"]
+    if t["tmdb_id"] and (sans_casting or plats_sans_mode):
         try:
             tmdb = get_tmdb()
             d = tmdb.movie(t["tmdb_id"]) if t["type"] == "film" else tmdb.tv(t["tmdb_id"])
-            import json
             db.run("UPDATE titres SET casting=?, equipe=?, plateformes=? WHERE id=?", (
                 json.dumps(d.get("casting", []), ensure_ascii=False),
                 json.dumps(d.get("equipe", []), ensure_ascii=False),
@@ -139,7 +152,8 @@ def detail(titre_id):
         if t["tmdb_id"] and incomplete:
             if sync.is_syncing(titre_id):
                 payload["sync_pending"] = True
-            else:
+            elif time.time() - _derniere_resync.get(titre_id, 0) > _RESYNC_DELAI:
+                _derniere_resync[titre_id] = time.time()
                 _resync_episodes_bg(get_tmdb(), titre_id, t["tmdb_id"])
                 payload["sync_pending"] = True
         payload["saisons"] = _saisons(titre_id)
@@ -166,6 +180,8 @@ def _resync_episodes_bg(tmdb, titre_id, tmdb_id):
             sync.sync_episodes(titre_id, tmdb, tmdb_id, detail_tv.get("saisons", []))
         except TMDBError:
             pass
+        except Exception as exc:  # noqa: BLE001 - ex. série supprimée entre-temps
+            log.warning("Resynchro de la série %s échouée : %s", titre_id, exc)
         finally:
             sync.done_syncing(titre_id)
 
@@ -186,8 +202,14 @@ def _prochain_episode(titre_id):
 @auth.login_required
 def add_watch(titre_id):
     """Enregistre un visionnage (« vu » / « revu ») à la date du jour par défaut."""
-    if not _owns(titre_id):
+    row = db.q1("SELECT type FROM titres WHERE id = ? AND compte_id = ?",
+                (titre_id, auth.compte_courant_id()))
+    if not row:
         return jsonify(error="Titre introuvable."), 404
+    if row["type"] != "film":
+        # Une série se suit par épisode : un « visionnage » global fausserait
+        # les statistiques (il comptait comme un film revu).
+        return jsonify(error="Pour une série, marque les épisodes vus."), 400
     data = request.get_json(silent=True) or {}
     raw = str(data.get("date") or "").strip()
     try:
@@ -230,16 +252,23 @@ def _set_episode(ep_id, vu):
                "WHERE id = ?", (ep_id,))
 
 
-EP_ACTIONS = ("seen", "revu", "remove")
+EP_ACTIONS = ("seen", "revu", "remove", "unmark")
 
 
 def _apply_ep(ep, action):
-    """Applique une action à un épisode :
+    """Applique une action à un épisode, renvoie True s'il a changé :
     - ``seen`` : le marque vu (×1) SANS incrémenter s'il l'était déjà ;
     - ``revu`` : le marque vu (×1), ou ajoute un visionnage s'il l'était déjà (×N+1) ;
-    - ``remove`` : retire un visionnage (×N-1) ; à 0 l'épisode redevient non vu."""
+    - ``remove`` : retire un visionnage (×N-1) ; à 0 l'épisode redevient non vu ;
+    - ``unmark`` : le décoche entièrement (×0)."""
     today = date.today().isoformat()
-    if action == "remove":
+    if action == "unmark":
+        if not ep["vu"] and not ep["nb_vues"]:
+            return False
+        _set_episode(ep["id"], False)
+    elif action == "remove":
+        if not ep["vu"] and not ep["nb_vues"]:
+            return False
         nb = (ep["nb_vues"] or 0) - 1
         if nb <= 0:
             db.run("UPDATE episodes SET vu = 0, nb_vues = 0, derniere_vue = NULL "
@@ -248,14 +277,16 @@ def _apply_ep(ep, action):
             db.run("UPDATE episodes SET nb_vues = ? WHERE id = ?", (nb, ep["id"]))
     elif action == "seen":
         # Marquage simple : garantit ×1, sans gonfler le compteur si déjà vu.
-        if not ep["vu"]:
-            db.run("UPDATE episodes SET vu = 1, "
-                   "nb_vues = CASE WHEN nb_vues < 1 THEN 1 ELSE nb_vues END, "
-                   "derniere_vue = ? WHERE id = ?", (today, ep["id"]))
+        if ep["vu"]:
+            return False
+        db.run("UPDATE episodes SET vu = 1, "
+               "nb_vues = CASE WHEN nb_vues < 1 THEN 1 ELSE nb_vues END, "
+               "derniere_vue = ? WHERE id = ?", (today, ep["id"]))
     else:  # revu (marque ou +1)
         nb = (ep["nb_vues"] or 0) + 1 if ep["vu"] else 1
         db.run("UPDATE episodes SET vu = 1, nb_vues = ?, derniere_vue = ? WHERE id = ?",
                (nb, today, ep["id"]))
+    return True
 
 
 @bp.post("/episode/<int:ep_id>/toggle")
@@ -269,11 +300,12 @@ def toggle_episode(ep_id):
     action = (request.get_json(silent=True) or {}).get("action", "revu")
     if action not in EP_ACTIONS:
         return jsonify(error="Action inconnue."), 400
-    _apply_ep(ep, action)
-    _refresh_serie_statut(ep["titre_id"])
-    if action in ("seen", "revu"):
+    # Journal seulement si l'épisode a vraiment changé (un « seen » sur un
+    # épisode déjà vu ne crée plus de doublon dans l'historique).
+    if _apply_ep(ep, action) and action in ("seen", "revu"):
         db.log_event(ep["titre_id"], "episode", _ep_label(ep))
-    return jsonify(ok=True)
+    _refresh_serie_statut(ep["titre_id"])
+    return jsonify(ok=True, serie=_progression(ep["titre_id"]))
 
 
 @bp.post("/title/<int:titre_id>/episode/<int:saison>/<int:numero>/toggle")
@@ -293,11 +325,22 @@ def toggle_episode_num(titre_id, saison, numero):
     action = (request.get_json(silent=True) or {}).get("action", "revu")
     if action not in EP_ACTIONS:
         return jsonify(error="Action inconnue."), 400
-    _apply_ep(ep, action)
-    _refresh_serie_statut(titre_id)
-    if action in ("seen", "revu"):
+    if _apply_ep(ep, action) and action in ("seen", "revu"):
         db.log_event(titre_id, "episode", _ep_label(ep))
-    return jsonify(ok=True)
+    _refresh_serie_statut(titre_id)
+    return jsonify(ok=True, serie=_progression(titre_id))
+
+
+def _progression(titre_id):
+    """Progression à jour d'une série (statut, épisodes vus/total, prochain
+    épisode) : le front rafraîchit une carte sans recharger toute la fiche."""
+    from routes.library import annotate_series_progress
+    row = db.q1("SELECT id, type, statut FROM titres WHERE id = ?", (titre_id,))
+    if not row:
+        return None
+    annotate_series_progress([row])
+    return {k: row.get(k) for k in ("statut", "vus_ep", "total_ep",
+                                    "next_saison", "next_numero", "revoit", "a_venir")}
 
 
 def _ep_label(ep):
@@ -316,60 +359,66 @@ def _mark_action(body):
     return "seen" if body.get("vu", True) else "unmark"
 
 
-def _mark_episodes(episodes, action):
-    for e in episodes:
-        if action == "unmark":
-            _set_episode(e["id"], False)
+def _episodes_serie(titre_id):
+    """Tous les épisodes d'une série, triés, avec le drapeau ``diffuse``."""
+    return sync.flag_diffuses(db.q(
+        "SELECT id, saison, numero, vu, nb_vues, date_diff FROM episodes "
+        "WHERE titre_id = ? ORDER BY saison, numero", (titre_id,)))
+
+
+def _mark_groupe(titre_id, saison=None):
+    """Marquage groupé d'une saison (``saison``) ou de toute la série."""
+    serie = db.q1("SELECT type FROM titres WHERE id = ? AND compte_id = ?",
+                  (titre_id, auth.compte_courant_id()))
+    if not serie:
+        return jsonify(error="Titre introuvable."), 404
+    if serie["type"] != "serie":
+        return jsonify(error="Ce titre est un film : enregistre plutôt un visionnage."), 400
+    action = _mark_action(request.get_json(silent=True))
+    if action not in EP_ACTIONS:
+        return jsonify(error="Action inconnue."), 400
+    eps = [e for e in _episodes_serie(titre_id) if saison is None or e["saison"] == saison]
+    if action in ("seen", "revu"):
+        # On ne coche que ce qui est déjà sorti : les épisodes à venir restent
+        # à voir et reviendront dans « Reprendre » à leur sortie.
+        eps = [e for e in eps if e["diffuse"]]
+        if not eps:
+            return jsonify(error="Aucun épisode déjà diffusé à marquer."), 400
+    touches = sum(1 for e in eps if _apply_ep(e, action))
+    _refresh_serie_statut(titre_id)
+    if touches and action in ("seen", "revu"):
+        if saison is None:
+            db.log_event(titre_id, "serie", "Série entière")
         else:
-            _apply_ep(e, action)  # seen | revu | remove
+            db.log_event(titre_id, "saison", f"Saison {saison}")
+    return jsonify(ok=True, touches=touches, serie=_progression(titre_id))
 
 
 @bp.post("/title/<int:titre_id>/season/<int:saison>/mark")
 @auth.login_required
 def mark_season(titre_id, saison):
     """Marque une saison entière : seen (×1), revu (+1), remove (-1) ou unmark."""
-    if not _owns(titre_id):
-        return jsonify(error="Titre introuvable."), 404
-    action = _mark_action(request.get_json(silent=True))
-    if action not in EP_ACTIONS + ("unmark",):
-        return jsonify(error="Action inconnue."), 400
-    eps = db.q("SELECT id, vu, nb_vues FROM episodes WHERE titre_id = ? AND saison = ?",
-               (titre_id, saison))
-    _mark_episodes(eps, action)
-    _refresh_serie_statut(titre_id)
-    if action in ("seen", "revu"):
-        db.log_event(titre_id, "saison", f"Saison {saison}")
-    return jsonify(ok=True)
+    return _mark_groupe(titre_id, saison)
 
 
 @bp.post("/title/<int:titre_id>/mark")
 @auth.login_required
 def mark_series(titre_id):
     """Marque la série entière : seen (×1), revu (+1), remove (-1) ou unmark."""
-    if not _owns(titre_id):
-        return jsonify(error="Titre introuvable."), 404
-    action = _mark_action(request.get_json(silent=True))
-    if action not in EP_ACTIONS + ("unmark",):
-        return jsonify(error="Action inconnue."), 400
-    eps = db.q("SELECT id, vu, nb_vues FROM episodes WHERE titre_id = ?", (titre_id,))
-    _mark_episodes(eps, action)
-    _refresh_serie_statut(titre_id)
-    if action in ("seen", "revu"):
-        db.log_event(titre_id, "serie", "Série entière")
-    return jsonify(ok=True)
+    return _mark_groupe(titre_id)
 
 
 def _refresh_serie_statut(titre_id):
-    """Ajuste le statut de la série selon la progression des épisodes."""
-    stats = db.q1(
-        "SELECT COUNT(*) AS total, SUM(vu) AS vus FROM episodes WHERE titre_id = ?",
-        (titre_id,),
-    )
-    total, vus = stats["total"] or 0, stats["vus"] or 0
-    if total and vus >= total:
+    """Ajuste le statut de la série selon la progression des épisodes DÉJÀ
+    DIFFUSÉS : vue quand tout ce qui est sorti est vu (une saison annoncée ne la
+    garde pas « en cours »). Sans effet sur un film."""
+    eps = _episodes_serie(titre_id)
+    diffuses = [e for e in eps if e["diffuse"]]
+    if diffuses and all(e["vu"] for e in diffuses):
         statut = "vu"
-    elif vus:
+    elif any(e["vu"] for e in eps):
         statut = "en_cours"
     else:
         statut = "a_voir"
-    db.run("UPDATE titres SET statut = ? WHERE id = ?", (statut, titre_id))
+    db.run("UPDATE titres SET statut = ? WHERE id = ? AND type = 'serie'",
+           (statut, titre_id))

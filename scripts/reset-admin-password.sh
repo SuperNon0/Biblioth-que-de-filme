@@ -32,11 +32,14 @@ if [ "${#PASSWORD}" -lt 8 ]; then
     echo "Erreur : le mot de passe doit faire au moins 8 caractères." >&2; exit 1
 fi
 
-python3 - "$DB_FILE" "$PASSWORD" <<'PY'
-import sqlite3, sys
+# Mot de passe transmis par l'environnement (invisible dans la liste des
+# processus, contrairement à un argument) ; pbkdf2 : hash lisible par toutes
+# les versions de Werkzeug (le scrypt de Werkzeug 3 ne l'est pas par la 2).
+CINE_MDP="$PASSWORD" python3 - "$DB_FILE" <<'PY'
+import os, sqlite3, sys
 from werkzeug.security import generate_password_hash
-path, password = sys.argv[1], sys.argv[2]
-h = generate_password_hash(password)
+path, password = sys.argv[1], os.environ["CINE_MDP"]
+h = generate_password_hash(password, method="pbkdf2:sha256")
 db = sqlite3.connect(path)
 # Cible en priorité le super-admin « de base » (login local), sinon le 1er
 # super-admin. À défaut d'aucun super-admin, on en crée un (compte racine).

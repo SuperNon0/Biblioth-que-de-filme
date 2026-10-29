@@ -6,6 +6,7 @@ tris/filtres, changer le statut ou le favori, supprimer.
 import json
 import threading
 import time
+from datetime import date
 
 from flask import Blueprint, jsonify, request
 
@@ -26,12 +27,45 @@ TRIS = {
 }
 
 
+# Colonnes d'une CARTE (grilles bibliothèque/listes, MCP). La fiche complète
+# (casting, équipe, résumé, plateformes…) se charge à l'ouverture via
+# /api/title/<id> : renvoyer `SELECT *` faisait ~6 Ko par titre, soit ~3 Mo
+# pour une bibliothèque de 500 titres à chaque affichage sur téléphone.
+CARTE_COLS = ("id", "tmdb_id", "type", "titre", "annee", "affiche", "note_tmdb",
+              "genres", "statut", "favori", "date_ajout", "nb_saisons")
+
+
+def carte_cols(alias=""):
+    """Liste SQL des colonnes de carte (préfixées par l'alias de table)."""
+    return ", ".join(f"{alias}{c}" for c in CARTE_COLS)
+
+
 def _row(t):
     """Sérialise une ligne de titre pour le front."""
     t["genres"] = db.jload(t.get("genres"), [])
-    t["plateformes"] = db.jload(t.get("plateformes"), [])
+    if "plateformes" in t:
+        t["plateformes"] = db.jload(t.get("plateformes"), [])
     t["favori"] = bool(t.get("favori"))
     return t
+
+
+def annotate_cards(rows):
+    """Prépare des lignes de titres pour les cartes : genres décodés, « vu ×N »
+    des films (nombre de visionnages) et progression des séries."""
+    out = [_row(r) for r in rows]
+    film_ids = [r["id"] for r in out if r["type"] == "film"]
+    vues = {}
+    if film_ids:
+        marks = ",".join("?" * len(film_ids))
+        for v in db.q(f"""SELECT titre_id, COUNT(*) AS n FROM visionnages
+                          WHERE titre_id IN ({marks}) GROUP BY titre_id""", film_ids):
+            vues[v["titre_id"]] = v["n"]
+    # Progression + prochain épisode des séries (barre + « où j'en suis »).
+    annotate_series_progress(out)
+    for row in out:
+        if row["type"] == "film":
+            row["nb_vues"] = vues.get(row["id"], 0)
+    return out
 
 
 def _mark_seen(titre_id, typ):
@@ -47,9 +81,11 @@ def _mark_seen(titre_id, typ):
                    (titre_id, time.strftime("%Y-%m-%d"), int(time.time())))
             db.log_event(titre_id, "film")
     else:
-        db.run("""UPDATE episodes SET vu = 1,
-                  nb_vues = CASE WHEN nb_vues < 1 THEN 1 ELSE nb_vues END
-                  WHERE titre_id = ?""", (titre_id,))
+        # Épisodes déjà diffusés seulement : une saison à venir cochée d'avance
+        # ne reviendrait jamais dans « Reprendre » à sa sortie.
+        db.run(f"""UPDATE episodes SET vu = 1,
+                   nb_vues = CASE WHEN nb_vues < 1 THEN 1 ELSE nb_vues END
+                   WHERE titre_id = ? AND {sync.ep_diffuse_sql()}""", (titre_id,))
 
 
 def annotate_series_progress(rows):
@@ -64,14 +100,22 @@ def annotate_series_progress(rows):
         return rows
     marks = ",".join("?" * len(ids))
     eps_by = {}
-    for e in db.q(f"""SELECT titre_id, saison, numero, vu, nb_vues FROM episodes
+    for e in db.q(f"""SELECT titre_id, saison, numero, vu, nb_vues, date_diff FROM episodes
                       WHERE titre_id IN ({marks})
                       ORDER BY titre_id, saison, numero""", ids):
         eps_by.setdefault(e["titre_id"], []).append(e)
+    today = date.today().isoformat()
     for r in rows:
         if r.get("type") != "serie":
             continue
-        eps = eps_by.get(r["id"])
+        tous = eps_by.get(r["id"])
+        if not tous:
+            continue
+        # Progression sur les épisodes DÉJÀ DIFFUSÉS : une saison annoncée ne
+        # fait pas d'une série terminée une série « en cours ».
+        eps = [e for e in sync.flag_diffuses(tous, today) if e["diffuse"]]
+        if len(eps) < len(tous):
+            r["a_venir"] = len(tous) - len(eps)
         if not eps:
             continue
         total = len(eps)
@@ -169,24 +213,10 @@ def library():
         params.append(f"%{recherche}%")
     order = TRIS.get(request.args.get("tri", "ajout"), TRIS["ajout"])
     rows = db.q(
-        f"SELECT * FROM titres WHERE {' AND '.join(where)} ORDER BY {order}",
+        f"SELECT {carte_cols()} FROM titres WHERE {' AND '.join(where)} ORDER BY {order}",
         params,
     )
-    # Nombre de visionnages des films (pour afficher « vu ×N »).
-    film_ids = [r["id"] for r in rows if r["type"] == "film"]
-    vues = {}
-    if film_ids:
-        marks = ",".join("?" * len(film_ids))
-        for v in db.q(f"""SELECT titre_id, COUNT(*) AS n FROM visionnages
-                          WHERE titre_id IN ({marks}) GROUP BY titre_id""", film_ids):
-            vues[v["titre_id"]] = v["n"]
-    out = [_row(r) for r in rows]
-    # Progression + prochain épisode des séries (barre + « où j'en suis »).
-    annotate_series_progress(out)
-    for row in out:
-        if row["type"] == "film":
-            row["nb_vues"] = vues.get(row["id"], 0)
-    return jsonify(titres=out)
+    return jsonify(titres=annotate_cards(rows))
 
 
 @bp.post("/library")
@@ -199,7 +229,7 @@ def add():
     if typ not in ("film", "serie") or not tmdb_id:
         return jsonify(error="Titre invalide."), 400
     if statut not in STATUTS:
-        statut = "a_voir"
+        return jsonify(error="Statut invalide (a_voir, en_cours ou vu)."), 400
     tmdb = get_tmdb()
     try:
         detail = tmdb.movie(tmdb_id) if typ == "film" else tmdb.tv(tmdb_id)
@@ -207,8 +237,11 @@ def add():
         return jsonify(error=str(exc)), 502
     titre_id = sync.upsert_titre(detail, statut, auth.compte_courant_id())
     # Applique le statut choisi même si le titre existait déjà (upsert ne le
-    # change pas à la mise à jour) — utile depuis le menu rapide.
-    db.run("UPDATE titres SET statut = ? WHERE id = ?", (statut, titre_id))
+    # change pas à la mise à jour) — utile depuis le menu rapide. Sans statut
+    # explicite, un titre déjà présent garde le sien : « ajoute Inception »
+    # ne doit pas remettre « à voir » un film déjà vu.
+    if "statut" in data:
+        db.run("UPDATE titres SET statut = ? WHERE id = ?", (statut, titre_id))
     if typ == "serie":
         # Les épisodes (un appel TMDB par saison) se remplissent en arrière-plan
         # pour que l'ajout réponde instantanément, même pour les longues séries.
@@ -271,6 +304,10 @@ def add_manual():
         (auth.compte_courant_id(), typ, titre, annee, data.get("resume"),
          duree, statut, now, now),
     )
+    if typ == "film" and statut == "vu":
+        # Sans visionnage, un film « vu » ne compte pas dans les statistiques.
+        db.run("INSERT INTO visionnages (titre_id, date, cree) VALUES (?,?,?)",
+               (titre_id, None, now))
     return jsonify(ok=True, id=titre_id)
 
 
@@ -283,7 +320,9 @@ def update(titre_id):
     row = db.q1("SELECT id, type FROM titres WHERE id = ? AND compte_id = ?", (titre_id, cid))
     if not row:
         return jsonify(error="Titre introuvable."), 404
-    if "statut" in data and data["statut"] in STATUTS:
+    if "statut" in data and data["statut"] not in STATUTS:
+        return jsonify(error="Statut invalide (a_voir, en_cours ou vu)."), 400
+    if "statut" in data:
         db.run("UPDATE titres SET statut = ? WHERE id = ? AND compte_id = ?",
                (data["statut"], titre_id, cid))
         if data["statut"] == "vu":
@@ -291,14 +330,25 @@ def update(titre_id):
     if "favori" in data:
         db.run("UPDATE titres SET favori = ? WHERE id = ? AND compte_id = ?",
                (1 if data["favori"] else 0, titre_id, cid))
+        if not data["favori"]:
+            # Ancien ajout manuel dans « Favoris » : le titre y restait affiché
+            # alors que le cœur était décoché.
+            db.run("DELETE FROM liste_items WHERE titre_id = ? AND liste_id IN "
+                   "(SELECT id FROM listes WHERE compte_id = ? AND systeme = 'favoris')",
+                   (titre_id, cid))
     return jsonify(ok=True)
 
 
 @bp.delete("/library/<int:titre_id>")
 @auth.login_required
 def delete(titre_id):
+    row = db.q1("SELECT titre FROM titres WHERE id = ? AND compte_id = ?",
+                (titre_id, auth.compte_courant_id()))
+    if not row:
+        return jsonify(error="Titre introuvable."), 404
     db.run("DELETE FROM titres WHERE id = ? AND compte_id = ?",
            (titre_id, auth.compte_courant_id()))
+    db.audit("supprimer_titre", acteur=auth.acteur(), cible=row["titre"])
     return jsonify(ok=True)
 
 
@@ -309,13 +359,16 @@ def to_add():
 
     Renvoie des populaires/mieux notés en excluant ce qui est déjà en base.
     """
+    from routes.discover import POOL  # import local : discover importe ce module
+    tmdb = get_tmdb()
+    top, pop = POOL.submit(tmdb.top_rated, "movie"), POOL.submit(tmdb.popular, "movie")
     try:
-        pool = get_tmdb().top_rated("movie") + get_tmdb().popular("movie")
+        pool = top.result() + pop.result()
     except TMDBError as exc:
         return jsonify(error=str(exc)), 502
     connus = {r["tmdb_id"] for r in
-              db.q("SELECT tmdb_id FROM titres WHERE tmdb_id IS NOT NULL AND compte_id = ?",
-                   (auth.compte_courant_id(),))}
+              db.q("SELECT tmdb_id FROM titres WHERE tmdb_id IS NOT NULL AND type = 'film' "
+                   "AND compte_id = ?", (auth.compte_courant_id(),))}
     seen, out = set(), []
     for r in pool:
         if r["tmdb_id"] in connus or r["tmdb_id"] in seen:

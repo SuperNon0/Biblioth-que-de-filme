@@ -66,8 +66,12 @@ ouvre chaque écran et renvoie son statut et son temps de réponse.
   sensibles de `appel_api` (reset, import, comptes, mot de passe, tout `DELETE`)
   ne s'appliquent **que** si Claude passe `confirm="OUI"` ; sinon il reçoit un
   simple aperçu. Claude doit te demander ton accord avant.
-- Générations / révocations de clé et mises à jour lancées par le MCP sont
-  inscrites dans le journal d'audit.
+- Chaque outil qui écrit (et ce que les routes journalisent elles-mêmes :
+  suppression, réglages, mise à jour…) est inscrit au journal d'audit avec
+  l'auteur « mcp ».
+- Chaque outil porte des **annotations MCP** (lecture seule, destructif,
+  idempotent, monde ouvert) : le client peut laisser passer les lectures et
+  te demander l'accord pour le reste.
 - Accès réseau : le connecteur est appelé par les serveurs de Claude. Il passe
   par le même chemin que tes connecteurs RecipeLog et BotPanel. Si Claude
   reçoit une page de connexion au lieu d'une réponse, c'est que l'accès devant
@@ -84,22 +88,22 @@ serveur. La clé dans l'URL (`/mcp/<clé>`) n'est qu'un dernier recours.
 | Outil | Rôle |
 |---|---|
 | `etat_du_site` | Version, dernier changement, heure de démarrage, TMDB configurée, taille de la bibliothèque. |
-| `verifier_site` | Test en direct de ~20 écrans/API (statut + temps de réponse). Lecture seule. |
+| `verifier_site` | Test en direct de ~25 écrans/API, en parallèle (statut + temps de réponse, 20 s au plus). Teste TMDB d'abord : s'il est en panne, ses routes sont « non testées ». Lecture seule. |
 | `chercher` | Recherche TMDB (donne le `tmdb_id`). |
 | `apercu_tmdb` | Fiche TMDB sans ajouter. |
-| `lister_bibliotheque` | Bibliothèque filtrée (statut, type, genre, favori, titre, tri). |
+| `lister_bibliotheque` | Bibliothèque filtrée (statut, type, genre, favori, titre, tri), paginée (`limite`, `decalage`). |
 | `voir_titre` | Fiche d'un titre (progression par saison ; `episodes=true` pour le détail). |
-| `ajouter_titre` | Ajout depuis TMDB, ou manuel. |
+| `ajouter_titre` | Ajout depuis TMDB, ou manuel. Un titre déjà présent n'est pas modifié (sauf statut donné). |
 | `modifier_titre` | Statut et/ou favori. |
 | `supprimer_titre` | Suppression (**confirm="OUI"**). |
 | `enregistrer_visionnage` | Vu / revu d'un film, à une date. |
-| `marquer_episodes` | Un épisode, une saison ou toute la série. |
+| `marquer_episodes` | Un épisode, une saison ou toute la série (saison/série : seuls les épisodes déjà diffusés). |
 | `creer_alerte` | Alerte de sortie ciné / streaming. |
 | `lister_listes`, `voir_liste`, `creer_liste`, `ajouter_a_liste`, `retirer_de_liste` | Listes. |
 | `statistiques`, `journal` | Stats et historique de visionnage. |
 | `suggestions`, `decouvrir`, `sorties_a_venir` | Découverte. |
 | `reparer_donnees` | Réparation des incohérences (sans rien supprimer). |
-| `appel_api` | Accès avancé à n'importe quelle route `/api/*` pour tester une fonction précise. |
+| `appel_api` | Accès avancé à n'importe quelle route `/api/*` pour tester une fonction précise (réponse tronquée au-delà de 50 000 caractères). |
 | `mettre_a_jour_site` | Mise à jour GitHub + redémarrage (**confirm="OUI"**). |
 
 Claude agit au nom du **super-admin de base** (ton compte) : il voit ta
