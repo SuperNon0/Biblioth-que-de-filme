@@ -8,6 +8,8 @@ stockés à part dans ``<data_dir>/settings.json``, inscriptible par le service.
 À la lecture, ces réglages priment sur les valeurs de la config de base.
 """
 import json
+import os
+import tempfile
 import threading
 from pathlib import Path
 
@@ -47,12 +49,23 @@ def _path():
     return Path(current_app.config["APP_CONFIG"]["data_dir"]) / "settings.json"
 
 
+# Dernier contenu lu, gardé tant que le fichier ne change pas : get() est
+# appelé des dizaines de fois par page (chaque réglage, chaque client TMDB) et
+# relisait puis réanalysait le fichier à chaque fois.
+_cache = {"cle": None, "data": {}}
+
+
 def _read_file():
+    path = _path()
     try:
-        with open(_path(), encoding="utf-8") as handle:
-            return json.load(handle)
+        st = path.stat()
+        cle = (str(path), st.st_mtime_ns, st.st_size, st.st_ino)
+        if cle != _cache["cle"]:
+            with open(path, encoding="utf-8") as handle:
+                _cache.update(data=json.load(handle), cle=cle)
     except (OSError, ValueError):
         return {}
+    return dict(_cache["data"])
 
 
 def get(key):
@@ -79,5 +92,14 @@ def update(values):
                 data[key] = value
         path = _path()
         path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w", encoding="utf-8") as handle:
-            json.dump(data, handle, indent=2)
+        # Fichier temporaire puis renommage : un lecteur ne voit jamais un
+        # fichier à moitié écrit (il retombait sur les valeurs par défaut, clé
+        # TMDB comprise). mkstemp le crée en 600 : la clé n'est lisible que du service.
+        fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".settings-")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                json.dump(data, handle, indent=2)
+            os.replace(tmp, path)
+        except BaseException:
+            os.unlink(tmp)
+            raise

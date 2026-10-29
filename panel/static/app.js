@@ -28,7 +28,8 @@ function reloadForLogin() {
 }
 
 async function api(path, { method = "GET", body } = {}) {
-  const opts = { method, headers: {} };
+  // X-Cinetheque : preuve que l'appel vient de notre propre page (anti-CSRF).
+  const opts = { method, headers: { "X-Cinetheque": "1" } };
   if (body !== undefined) {
     opts.headers["Content-Type"] = "application/json";
     opts.body = JSON.stringify(body);
@@ -93,7 +94,11 @@ function confirmDialog(message, okLabel = "Confirmer") {
 }
 
 const STATUTS = { vu: "Vu", a_voir: "À voir plus tard", en_cours: "En cours" };
-const posterSrc = (u) => u || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E";
+// URL d'image prête pour un attribut HTML (échappée), ou une image vide.
+const posterSrc = (u) => u ? esc(u) : "data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27/%3E";
+// Valeur sûre pour url('…') dans un attribut style (guillemets, parenthèses…).
+const cssUrl = (u) => esc(String(u || "").replace(/[\x00-\x20'"()\\]/g,
+  (c) => "%" + c.charCodeAt(0).toString(16).padStart(2, "0")));
 
 /* Rejoue l'animation d'entrée en cascade des enfants d'un conteneur
    (retrait de la classe + reflow forcé + remise, pour repartir de zéro). */
@@ -159,7 +164,7 @@ function providerChip(p) {
   const mode = p.mode ? `<span class="prov-mode">${esc(p.mode)}</span>` : "";
   return `<div class="prov${owned ? " owned" : " grise"}" title="${esc(p.nom)}${
     p.mode ? " · " + esc(p.mode) : ""}">
-    <img src="${p.logo}" alt="${esc(p.nom)}" loading="lazy">
+    <img src="${posterSrc(p.logo)}" alt="${esc(p.nom)}" loading="lazy">
     <span class="prov-nom">${esc(p.nom)}</span>${mode}</div>`;
 }
 
@@ -316,51 +321,53 @@ function fmtAjout(ts) {
   return `${d.getDate()} ${MOISL[d.getMonth()]} ${d.getFullYear()}`;
 }
 
-/* Progression d'une série + prochain épisode (1er non-vu, sinon 1er moins revu
-   que le max = re-visionnage en cours). Même logique que le back-end. */
-function seriesProgress(saisons) {
-  let total = 0, vus = 0, maxnb = 0; const eps = [];
-  for (const s of (saisons || [])) for (const ep of (s.episodes || [])) {
-    total++; if (ep.vu) vus++; maxnb = Math.max(maxnb, ep.nb_vues || 0); eps.push(ep);
-  }
-  let nx = eps.find((e) => !e.vu) || null, revoit = false;
-  if (!nx && maxnb > 0) { nx = eps.find((e) => (e.nb_vues || 0) < maxnb) || null; revoit = !!nx; }
-  return { total, vus, revoit, next: nx ? { s: nx.saison, e: nx.numero } : null };
-}
-
+// Une action à la fois : un double appui envoyait deux requêtes (épisode
+// compté « revu ×2 » et doublon dans l'historique).
+let qmBusy = false;
 quickMenu.addEventListener("click", async (e) => {
   if (e.target.closest("[data-qm-close]")) return closeQuickMenu();
   const btn = e.target.closest("[data-qm]");
   if (!btn || !qmContext) return;
-  const { el, tmdb, type, localid } = qmContext;
   const act = btn.dataset.qm;
   if (act === "infos") {
+    const { tmdb, type, localid } = qmContext;
     closeQuickMenu(); pushHistoryIfOpen();  // mémorise la page en cours (retour)
     return localid ? openDetail(localid) : openPreview(tmdb, type);
   }
+  if (qmBusy) return;
+  qmBusy = true;
+  try { await quickMenuAction(act); } finally { qmBusy = false; }
+});
+
+async function quickMenuAction(act) {
+  const { el, tmdb, type, localid } = qmContext;
   // Série en cours : marque le prochain épisode vu directement (continuer).
   // On NE recharge PAS la page : on met à jour juste la carte, et on rouvre le
   // petit menu sur l'épisode d'après (pour enchaîner).
   if (act === "next") {
     if (!localid || !qmContext.nextS) return closeQuickMenu();
     try {
-      await api(`/api/title/${localid}/episode/${qmContext.nextS}/${qmContext.nextE}/toggle`,
-        { method: "POST" });
+      // 1er visionnage : « seen » (sans effet si déjà vu) ; série déjà vue
+      // qu'on revoit : « revu » (+1). Même règle que le libellé du bouton.
+      const revoit = qmContext.statut === "vu" || qmContext.nbvues > 0;
+      const r = await api(`/api/title/${localid}/episode/${qmContext.nextS}/${qmContext.nextE}/toggle`,
+        { method: "POST", body: { action: revoit ? "revu" : "seen" } });
       toast(`S${qmContext.nextS}E${qmContext.nextE} marqué vu ✓`);
-      // Recalcule progression + prochain épisode (re-visionnage inclus).
-      const data = await api(`/api/title/${localid}`);
-      const prog = seriesProgress(data.saisons);
-      const statut = (data.titre && data.titre.statut) || "";
+      // Progression + prochain épisode renvoyés par le serveur (re-visionnage
+      // inclus) : plus besoin de recharger toute la fiche de la série.
+      const p = r.serie || {};
+      const vus = p.vus_ep || 0, total = p.total_ep || 0, statut = p.statut || "";
+      const next = p.next_saison ? { s: p.next_saison, e: p.next_numero } : null;
       if (el) {  // maj de la carte source, sur place (pas de rechargement)
         el.dataset.statut = statut;
-        el.dataset.vus = prog.vus; el.dataset.total = prog.total;
-        el.dataset.nexts = prog.next ? prog.next.s : ""; el.dataset.nexte = prog.next ? prog.next.e : "";
-        updateCardProgress(el, prog.vus, prog.total, prog.next);
+        el.dataset.vus = vus; el.dataset.total = total;
+        el.dataset.nexts = next ? next.s : ""; el.dataset.nexte = next ? next.e : "";
+        updateCardProgress(el, vus, total, next);
         if (statut === "vu") updateCardBadge(el, "vu");
       }
-      if (prog.next) {  // reste un épisode (1er visionnage OU re-visionnage) → on enchaîne
-        Object.assign(qmContext, { vus: prog.vus, total: prog.total, statut,
-          nextS: String(prog.next.s), nextE: String(prog.next.e) });
+      if (next) {  // reste un épisode (1er visionnage OU re-visionnage) → on enchaîne
+        Object.assign(qmContext, { vus, total, statut,
+          nextS: String(next.s), nextE: String(next.e) });
         openQuickMenu(qmContext);
       } else {
         closeQuickMenu();
@@ -396,7 +403,7 @@ quickMenu.addEventListener("click", async (e) => {
     closeQuickMenu();
     refreshAll();  // biblio uniquement, en silence (défilement conservé)
   } catch (err) { toast(err.message); }
-});
+}
 
 /* Met à jour (ou crée) le badge de statut visible sur une carte, sur place. */
 function updateCardBadge(el, statut) {
@@ -484,13 +491,16 @@ filterBackdrop.addEventListener("click", closeToolbars);
 
 /* --------------------------------------------------------------- recherche */
 let searchTimer;
+// Numéro de la dernière recherche lancée : une réponse plus ancienne (réseau
+// lent) est ignorée, sinon elle écrasait les résultats de la frappe suivante.
+let searchSeq = 0;
 const searchInput = $("#search-input");
 const searchBox = $("#search-results");
 
 searchInput.addEventListener("input", () => {
   clearTimeout(searchTimer);
   const q = searchInput.value.trim();
-  if (q.length < 2) { searchBox.classList.add("hidden"); return; }
+  if (q.length < 2) { searchSeq++; searchBox.classList.add("hidden"); return; }
   searchTimer = setTimeout(() => runSearch(q), 350);
 });
 document.addEventListener("click", (e) => {
@@ -498,8 +508,10 @@ document.addEventListener("click", (e) => {
 });
 
 async function runSearch(q) {
+  const seq = ++searchSeq;
   try {
     const { results } = await api(`/api/search?q=${encodeURIComponent(q)}`);
+    if (seq !== searchSeq || searchInput.value.trim() !== q) return;  // dépassée
     if (!results.length) {
       searchBox.innerHTML = `<div class="sr-item muted">Aucun résultat.</div>`;
     } else {
@@ -525,6 +537,7 @@ async function runSearch(q) {
 searchBox.addEventListener("click", (e) => {
   const item = e.target.closest(".sr-item");
   if (!item || !item.dataset.tmdb) return;
+  searchSeq++;
   searchBox.classList.add("hidden");
   searchInput.value = "";
   openItem(item);
@@ -592,17 +605,23 @@ $("#suggestions-rows").addEventListener("click", (e) => {
   const dx = scroll.clientWidth * 0.85;
   scroll.scrollBy({ left: arrow.classList.contains("left") ? -dx : dx, behavior: "smooth" });
 });
-$("#suggestions-rows").addEventListener("wheel", (e) => {
-  const scroll = e.target.closest(".row-scroll");
-  if (!scroll) return;
-  if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-    scroll.scrollLeft += e.deltaY;
-    e.preventDefault();
-  }
-}, { passive: false });
+/* Molette verticale → défilement horizontal d'un carrousel, tant qu'il peut
+   encore avancer dans ce sens. En butée, la page défile normalement (avant,
+   la page Suggestions, faite de carrousels, ne défilait plus à la souris). */
+function wheelRow(e) {
+  const sc = e.target.closest(".row-scroll");
+  if (!sc || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+  const max = sc.scrollWidth - sc.clientWidth;
+  if ((e.deltaY > 0 && sc.scrollLeft >= max - 1) || (e.deltaY < 0 && sc.scrollLeft <= 0)) return;
+  sc.scrollLeft += e.deltaY;
+  e.preventDefault();
+}
+$("#suggestions-rows").addEventListener("wheel", wheelRow, { passive: false });
 
 /* ============================ BIBLIOTHÈQUE ============================= */
+let libSeq = 0;  // filtres changés vite : seule la dernière réponse s'affiche
 async function loadLibrary(silent = false) {
+  const seq = ++libSeq;
   const grid = $("#lib-grid");
   const params = new URLSearchParams({
     statut: $("#lib-statut").value, type: $("#lib-type").value,
@@ -613,6 +632,7 @@ async function loadLibrary(silent = false) {
   if (!silent) grid.innerHTML = skelGrid(12);
   try {
     const { titres } = await api(`/api/library?${params}`);
+    if (seq !== libSeq) return;
     grid.innerHTML = titres.length
       ? titres.map(posterCard).join("")
       : `<p class="muted">Bibliothèque vide — cherche un film ou une série en haut,
@@ -713,7 +733,9 @@ $("#btn-manuel").addEventListener("click", openManualModal);
 
 /* ============================ DÉCOUVERTE ============================== */
 const dec = { type: "film", page: 1 };
+let decSeq = 0;
 async function loadDiscover() {
+  const seq = ++decSeq;
   const grid = $("#dec-grid");
   const params = new URLSearchParams({
     type: dec.type, page: dec.page, tri: $("#dec-tri").value,
@@ -723,6 +745,7 @@ async function loadDiscover() {
   grid.innerHTML = skelGrid(12);
   try {
     const data = await api(`/api/discover?${params}`);
+    if (seq !== decSeq) return;
     grid.innerHTML = data.results.length
       ? data.results.map(posterCard).join("")
       : `<p class="muted">Aucun résultat.</p>`;
@@ -1032,7 +1055,7 @@ async function openPlatformsModal() {
         t === "sub" ? "Abonnement" : "Achat · Location"}</span>` : "";
       return `<label class="plat-opt${on ? " on" : ""}" data-nom="${esc(p.nom)}">
         <input type="checkbox"${on ? " checked" : ""}>
-        <img src="${p.logo}" alt="" loading="lazy">
+        <img src="${posterSrc(p.logo)}" alt="" loading="lazy">
         <span class="plat-name">${esc(p.nom)}</span>${tag}</label>`;
     }).join("") : `<span class="muted">Aucune plateforme (clé TMDB non configurée ?)</span>`;
   } catch (e) { list.innerHTML = `<span class="muted">${esc(e.message)}</span>`; }
@@ -1143,16 +1166,19 @@ $("#btn-reset").addEventListener("click", async () => {
     await api("/api/reset", { method: "POST" });
     $("#reset-status").textContent = "✅ Bibliothèque réinitialisée.";
     toast("Tout a été réinitialisé");
+    _tabLoaded.clear();  // les autres onglets se rechargeront à la prochaine visite
   } catch (e) { $("#reset-status").textContent = "❌ " + e.message; }
 });
 $("#btn-import").addEventListener("click", () => $("#import-file").click());
 $("#import-file").addEventListener("change", async (e) => {
   const file = e.target.files[0]; if (!file) return;
+  e.target.value = "";  // le même fichier pourra être choisi de nouveau
   try {
     const dump = JSON.parse(await file.text());
     await api("/api/import", { method: "POST", body: dump });
     $("#import-status").textContent = "✅ Import réussi.";
     toast("Données importées");
+    _tabLoaded.clear();
   } catch (err) { $("#import-status").textContent = "❌ " + err.message; }
 });
 
@@ -1160,12 +1186,7 @@ $("#import-file").addEventListener("change", async (e) => {
 const modal = $("#modal");
 const modalContent = $("#modal-content");
 /* Molette → défilement horizontal des carrousels de la fiche. */
-modalContent.addEventListener("wheel", (e) => {
-  const sc = e.target.closest(".row-scroll");
-  if (sc && Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-    sc.scrollLeft += e.deltaY; e.preventDefault();
-  }
-}, { passive: false });
+modalContent.addEventListener("wheel", wheelRow, { passive: false });
 /* Historique de navigation dans la modale (fiche → acteur → fiche…) :
    le bouton retour « ← » revient à la page précédente, jusqu'à 5 en arrière. */
 let viewStack = [];
@@ -1189,6 +1210,7 @@ function navBack() {
 function closeModal() {
   modal.classList.add("hidden"); modal.classList.remove("full"); modal.classList.remove("wide");
   modalContent.innerHTML = ""; viewStack = [];
+  if (libDirty) { libDirty = false; refreshAll(); }
 }
 modal.addEventListener("click", (e) => {
   if (e.target.closest("[data-back]")) return navBack();
@@ -1255,7 +1277,8 @@ async function refreshSeasons(id) {
 }
 
 /* Rafraîchit le bloc des saisons quand les épisodes finissent de se remplir. */
-function pollSeasons(id) {
+function pollSeasons(id, essai = 0) {
+  if (essai >= 40) return;  // ~1 min au plus : jamais de rafraîchissement sans fin
   setTimeout(async () => {
     const box = document.querySelector(`.dv-seasons[data-localid="${id}"]`);
     if (!box || modal.classList.contains("hidden")) return;  // fiche fermée/changée
@@ -1263,7 +1286,7 @@ function pollSeasons(id) {
       const n = normLocal(await api(`/api/title/${id}`));
       const fresh = document.querySelector(`.dv-seasons[data-localid="${id}"]`);
       if (fresh) fresh.outerHTML = seasonsBlock(n);
-      if (n.syncPending) pollSeasons(id);
+      if (n.syncPending) pollSeasons(id, essai + 1);
     } catch (_) { /* on réessaiera à la prochaine ouverture */ }
   }, 1500);
 }
@@ -1334,7 +1357,7 @@ const MOIS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août"
 function fmtDate(s) {
   if (!s) return "";
   const p = s.split("-");
-  return p.length < 3 ? s : `${+p[2]} ${MOIS[+p[1] - 1] || ""} ${p[0]}`;
+  return esc(p.length < 3 ? s : `${+p[2]} ${MOIS[+p[1] - 1] || ""} ${p[0]}`);
 }
 
 /* Page plein écran d'un titre (fiche si en biblio, aperçu sinon). */
@@ -1343,7 +1366,7 @@ function renderTitlePage(n) {
   const genres = (n.genres || []).map(genreTag).join("");
   const meta = [fmtRuntime(n.duree), n.type === "serie" ? "Série" : "Film"].filter(Boolean).join(" · ");
   const trailer = n.bande_annonce ? `<a class="dv-trailer" target="_blank" rel="noopener"
-       href="https://www.youtube.com/watch?v=${n.bande_annonce}">▶ Bande-annonce</a>` : "";
+       href="https://www.youtube.com/watch?v=${encodeURIComponent(n.bande_annonce)}">▶ Bande-annonce</a>` : "";
   const note = n.note_tmdb ? `<div class="dv-note">
        <span class="dv-note-val">★ ${n.note_tmdb}</span><span class="muted">/ 10 · TMDB</span></div>` : "";
   // Regroupe les variantes (Netflix / Netflix with Ads…) → une seule puce par plateforme.
@@ -1378,7 +1401,7 @@ function renderTitlePage(n) {
     <button class="dv-act" data-act="liste">
       <span class="dv-ic">≣</span><span>Ajouter à la liste…</span></button>
   </div>`;
-  return `<div class="dv-hero" style="background-image:url('${n.fond || n.affiche || ""}')">
+  return `<div class="dv-hero" style="background-image:url('${cssUrl(n.fond || n.affiche)}')">
       <button class="dv-back" data-back aria-label="Retour">←</button>
       ${n.inLib ? `<button class="dv-fav ${n.favori ? "on" : ""}" data-fav data-localid="${n.localId}">♥</button>` : ""}
     </div>
@@ -1438,14 +1461,16 @@ function seasonsBlock(n) {
   const seasons = sais.map((s) => {
     // En biblio : chaque saison a ses épisodes (total/vus). En aperçu : seul
     // le nombre d'épisodes est connu, les épisodes se chargent au dépliage.
-    const total = n.inLib ? (s.total || 0) : (s.nb_episodes || 0);
+    // En biblio, la saison est « vue » quand tout ce qui est DÉJÀ SORTI est vu.
+    const total = n.inLib ? (s.diffuses ?? s.total ?? 0) : (s.nb_episodes || 0);
     const vus = n.inLib ? (s.vus || 0) : 0;
     const seen = n.inLib && total > 0 && vus >= total;
+    const aVenir = n.inLib && s.total > 0 && total === 0;  // saison pas encore sortie
     // Nombre de fois où la saison entière a été vue = min des revisionnages.
     const svu = seen && s.episodes && s.episodes.length
       ? Math.min(...s.episodes.map((e) => e.nb_vues || 0)) : 0;
     // Vue : « ↻ Revue ×N » (ajoute) + croix (retire). Non vue : « Déjà vu ».
-    const controls = seen
+    const controls = aVenir ? `<span class="muted">À venir</span>` : seen
       ? `<button class="ep-del" data-markseason="${s.numero}" data-act="remove"
             title="Retirer un visionnage de la saison" aria-label="Retirer un visionnage">✕</button>
          <button class="ep-btn season-vu vu" data-markseason="${s.numero}" data-act="revu">↻ Revue${svu > 1 ? " ×" + svu : ""}</button>`
@@ -1463,8 +1488,9 @@ function seasonsBlock(n) {
       <div class="season-body">${body}</div>
     </div>`;
   }).join("");
-  const allSeen = n.inLib && sais.length > 0
-    && sais.every((s) => s.total > 0 && s.vus >= s.total);
+  const sorties = sais.filter((s) => (s.diffuses ?? s.total) > 0);
+  const allSeen = n.inLib && sorties.length > 0
+    && sorties.every((s) => s.vus >= (s.diffuses ?? s.total));
   return `<div class="dv-seasons" data-localid="${n.localId || ""}"
        data-tmdb="${n.tmdb || ""}" data-type="${n.type}">
     ${n.temps && n.temps.minutes > 0 ? `<div class="dv-timespent">
@@ -1526,16 +1552,24 @@ function episodeRow(e) {
     ? `<button class="ep-del" data-ep-act="remove" ${ref}
          aria-label="Retirer un visionnage" title="Retirer un visionnage">✕</button>
        <button class="ep-btn vu" data-ep-act="revu" ${ref}>↻ Revu${e.nb_vues > 1 ? " ×" + e.nb_vues : ""}</button>`
-    : `<button class="ep-btn" data-ep-act="revu" ${ref}>Vu</button>`;
+    : `<button class="ep-btn" data-ep-act="seen" ${ref}>Vu</button>`;
   return `<div class="episode">
     <img loading="lazy" src="${posterSrc(e.image)}" alt="">
     <div class="ep-info">
       <div class="ep-title">${e.numero}. ${esc(e.nom || "Épisode " + e.numero)}</div>
-      <div class="ep-meta">${e.date_diff || ""}${e.duree ? " · " + e.duree + " min" : ""}
+      <div class="ep-meta">${esc(e.date_diff || "")}${e.diffuse === false ? " · à venir" : ""}${e.duree ? " · " + e.duree + " min" : ""}
         ${e.nb_vues > 1 ? " · vu ×" + e.nb_vues : ""}</div>
       <div class="ep-resume">${esc(e.resume)}</div>
     </div>
     <div class="ep-check">${controls}</div></div>`;
+}
+
+/* Un appui à la fois par bouton : un double appui sur réseau lent envoyait
+   deux requêtes (épisode « revu ×2 », visionnage en double…). */
+async function once(el, fn) {
+  if (!el || el.dataset.busy) return;
+  el.dataset.busy = "1";
+  try { await fn(); } finally { delete el.dataset.busy; }
 }
 
 /* Actions dans la fiche (délégation d'événements sur la modale). */
@@ -1583,49 +1617,70 @@ modalContent.addEventListener("click", async (e) => {
     const delEl = e.target.closest("[data-del]");
     if (favEl) {
       // Bascule le cœur sur place (pas de re-rendu → pas de saut vers le haut).
-      const id = Number(favEl.dataset.localid);
-      const on = !favEl.classList.contains("on");
-      await api(`/api/library/${id}`, { method: "PATCH", body: { favori: on } });
-      favEl.classList.toggle("on", on);
+      await once(favEl, async () => {
+        const id = Number(favEl.dataset.localid);
+        const on = !favEl.classList.contains("on");
+        await api(`/api/library/${id}`, { method: "PATCH", body: { favori: on } });
+        favEl.classList.toggle("on", on);
+      });
     } else if (delEl) {
-      if (await confirmDialog("Retirer ce titre de ta bibliothèque ?", "Retirer")) {
-        await api(`/api/library/${delEl.dataset.localid}`, { method: "DELETE" });
-        closeModal(); refreshAll(); toast("Titre retiré");
-      }
+      await once(delEl, async () => {
+        if (await confirmDialog("Retirer ce titre de ta bibliothèque ?", "Retirer")) {
+          await api(`/api/library/${delEl.dataset.localid}`, { method: "DELETE" });
+          closeModal(); refreshAll(); toast("Titre retiré");
+        }
+      });
     } else if (e.target.closest("[data-delwatch]")) {
       const w = e.target.closest("[data-delwatch]"), id = idFrom();
-      await api(`/api/watch/${w.dataset.delwatch}`, { method: "DELETE" });
-      if (id) openDetail(id, { keepScroll: true }); refreshAll();
+      await once(w, async () => {
+        await api(`/api/watch/${w.dataset.delwatch}`, { method: "DELETE" });
+        if (id) await openDetail(id, { keepScroll: true });
+      });
+      refreshAll();
     } else if (e.target.closest("[data-ep]")) {
-      // Épisode déjà en biblio : « ↻ Revu » (+1) ou « ✕ » (-1), sur place.
+      // Épisode déjà en biblio : « Vu », « ↻ Revu » (+1) ou « ✕ » (-1), sur place.
+      // On attend le re-rendu avant de libérer le bouton (sinon un 2e appui
+      // pouvait encore viser l'ancien bouton).
       const b = e.target.closest("[data-ep]"), id = idFrom();
-      await api(`/api/episode/${b.dataset.ep}/toggle`,
-        { method: "POST", body: { action: b.dataset.epAct || "revu" } });
-      if (id) refreshSeasons(id); refreshAll();
+      await once(b, async () => {
+        await api(`/api/episode/${b.dataset.ep}/toggle`,
+          { method: "POST", body: { action: b.dataset.epAct || "revu" } });
+        if (id) await refreshSeasons(id);
+      });
+      refreshAll();
     } else if (e.target.closest("[data-epnum]")) {
       // Épisode d'un aperçu : on ajoute d'abord la série, puis on marque.
       const b = e.target.closest("[data-epnum]"), ctx = seasonCtx(b), wasIn = !!ctx.localid;
-      const id = await ensureInLib(ctx);
-      await api(`/api/title/${id}/episode/${b.dataset.season}/${b.dataset.epnum}/toggle`,
-        { method: "POST", body: { action: b.dataset.epAct || "revu" } });
-      wasIn ? refreshSeasons(id) : openDetail(id, { seasons: true }); refreshAll();
+      await once(b, async () => {
+        const id = await ensureInLib(ctx);
+        await api(`/api/title/${id}/episode/${b.dataset.season}/${b.dataset.epnum}/toggle`,
+          { method: "POST", body: { action: b.dataset.epAct || "revu" } });
+        await (wasIn ? refreshSeasons(id) : openDetail(id, { seasons: true }));
+      });
+      refreshAll();
     } else if (e.target.closest("[data-markseason]")) {
       const b = e.target.closest("[data-markseason]"), ctx = seasonCtx(b), wasIn = !!ctx.localid;
       const action = b.dataset.act || "seen";
-      const id = await ensureInLib(ctx);
-      await api(`/api/title/${id}/season/${b.dataset.markseason}/mark`,
-        { method: "POST", body: { action } });
-      wasIn ? refreshSeasons(id) : openDetail(id, { seasons: true }); refreshAll();
-      toast({ seen: "Saison marquée vue ✓", revu: "Revisionnage de la saison ✓",
-              remove: "Visionnage retiré" }[action] || "");
+      await once(b, async () => {
+        const id = await ensureInLib(ctx);
+        await api(`/api/title/${id}/season/${b.dataset.markseason}/mark`,
+          { method: "POST", body: { action } });
+        await (wasIn ? refreshSeasons(id) : openDetail(id, { seasons: true }));
+        toast({ seen: "Saison marquée vue ✓", revu: "Revisionnage de la saison ✓",
+                remove: "Visionnage retiré" }[action] || "");
+      });
+      refreshAll();
     } else if (e.target.closest("[data-markseries]")) {
       const b = e.target.closest("[data-markseries]"), ctx = seasonCtx(b), wasIn = !!ctx.localid;
       const action = b.dataset.act || "seen";
-      const id = await ensureInLib(ctx);
-      await api(`/api/title/${id}/mark`, { method: "POST", body: { action } });
-      wasIn ? refreshSeasons(id) : openDetail(id, { seasons: true }); refreshAll();
-      toast({ seen: "Toute la série marquée vue ✓", revu: "Revisionnage de la série ✓",
-              remove: "Un visionnage retiré de la série" }[action] || "");
+      await once(b, async () => {
+        const id = await ensureInLib(ctx);
+        await api(`/api/title/${id}/mark`, { method: "POST", body: { action } });
+        await (wasIn ? refreshSeasons(id) : openDetail(id, { seasons: true }));
+        toast({ seen: "Toute la série marquée vue ✓", revu: "Revisionnage de la série ✓",
+                remove: "Un visionnage retiré de la série" }[action] || "");
+      });
+      refreshAll();
     } else {
       const head = e.target.closest(".season-head");
       if (head) {
@@ -1671,7 +1726,10 @@ async function loadSeasonEpisodes(season) {
 }
 
 /* Actions principales de la page titre (Vu / Revu / Liste de suivi / Liste). */
-async function handleTitleAct(actEl) {
+function handleTitleAct(actEl) {
+  return once(actEl, () => titleAct(actEl));
+}
+async function titleAct(actEl) {
   const box = actEl.closest("[data-tmdb]") || actEl.closest("[data-localid]");
   const localid = box && box.dataset.localid ? Number(box.dataset.localid) : null;
   const tmdb = box && box.dataset.tmdb ? Number(box.dataset.tmdb) : null;
@@ -1686,8 +1744,8 @@ async function handleTitleAct(actEl) {
     }
     if (act === "revu") {
       if (localid) { await api(`/api/title/${localid}/watch`, { method: "POST", body: {} });
-        openDetail(localid, { keepScroll: true }); refreshAll();
-        toast("Revisionnage enregistré ✓"); }
+        toast("Revisionnage enregistré ✓");
+        await openDetail(localid, { keepScroll: true }); refreshAll(); }
       return;
     }
     const statut = act === "vu" ? "vu" : "a_voir";
@@ -1696,12 +1754,12 @@ async function handleTitleAct(actEl) {
     if (localid) {
       await api(`/api/library/${localid}`, { method: "PATCH", body: { statut } });
       toast(statut === "vu" ? "Marqué comme vu ✓" : "Ajouté à « À voir plus tard »");
-      openDetail(localid, { keepScroll: true });
+      await openDetail(localid, { keepScroll: true });
     } else {
       const r = await api("/api/library", { method: "POST",
         body: { tmdb_id: tmdb, type, statut } });
       toast(statut === "vu" ? "Marqué comme vu ✓" : "Ajouté à « À voir plus tard »");
-      openDetail(r.id, { keepScroll: true });
+      await openDetail(r.id, { keepScroll: true });
     }
     refreshAll();
   } catch (err) { toast(err.message); }
@@ -1778,15 +1836,22 @@ const LOADERS = {
   futur: loadFutur,
   listes: loadListes,
   profil: () => { loadStats(); loadJournal(); },  // stats + historique intégré
-  parametres: loadSettings,
+  // Cloudflare et connecteur MCP : chargés à l'ouverture des Paramètres
+  // seulement, plus à chaque lancement de l'app.
+  parametres: () => { loadSettings(); loadCloudflare(); loadMcp(); },
 };
 
 /* Rafraîchit les vues impactées par une modif — en silence (pas d'indicateur
    « Chargement… », position de défilement conservée). On NE recharge PAS les
    Suggestions : elles sont aléatoires et se re-mélangeraient à chaque clic
-   (agaçant). Les cartes concernées sont mises à jour sur place. */
+   (agaçant). Les cartes concernées sont mises à jour sur place. Fiche
+   ouverte : la bibliothèque attend sa fermeture (sinon 520 cartes redessinées
+   en fond à chaque épisode coché). */
+let libDirty = false;
 function refreshAll() {
-  if ($("#page-bibliotheque").classList.contains("active")) loadLibrary(true);
+  if (!$("#page-bibliotheque").classList.contains("active")) return;
+  if (!modal.classList.contains("hidden")) { libDirty = true; return; }
+  loadLibrary(true);
 }
 
 /* Service worker (PWA : app installable + démarrage rapide). */
@@ -1801,10 +1866,28 @@ loadSuggestions();
 loadMesPlateformes();   // « mes plateformes » pour l'affichage « où regarder »
 
 /* ============ Auth v2 : impersonation, Cloudflare, diagnostic ============ */
+// Le service worker garde la coquille « / » (bandeau « voir en tant que »,
+// réglages super-admin) : elle est retirée du cache quand le compte change,
+// sinon l'ancienne pouvait réapparaître au prochain lancement.
+async function purgeShell() {
+  if (!window.caches) return;
+  try {
+    await Promise.all((await caches.keys()).map(async (k) => (await caches.open(k)).delete("/")));
+  } catch (_) { /* Cache API indisponible */ }
+}
+
 // Revenir à son compte depuis le bandeau « voir en tant que ».
 document.getElementById("imp-stop")?.addEventListener("click", async () => {
-  try { await api("/api/impersonate/stop", { method: "POST" }); location.reload(); }
-  catch (e) { toast(e.message); }
+  try {
+    await api("/api/impersonate/stop", { method: "POST" });
+    await purgeShell();
+    location.reload();
+  } catch (e) { toast(e.message); }
+});
+document.querySelector("form.logout-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  await purgeShell();
+  e.target.submit();
 });
 
 // Charge la config Cloudflare dans le formulaire (à l'ouverture des Paramètres).
@@ -1841,7 +1924,6 @@ document.getElementById("btn-diag")?.addEventListener("click", async () => {
       (d.jwt_error ? `\nDétail : ${d.jwt_error}` : "");
   } catch (e) { out.textContent = e.message; }
 });
-loadCloudflare();  // remplit le formulaire Cloudflare si super-admin
 
 // ── Connecteur Claude (MCP) : clé API dédiée (super-admin) ──────────────────
 async function loadMcp() {
@@ -1875,4 +1957,3 @@ document.getElementById("btn-mcp-revoke")?.addEventListener("click", async () =>
     toast("Clé MCP révoquée"); loadMcp();
   } catch (e) { toast(e.message); }
 });
-loadMcp();

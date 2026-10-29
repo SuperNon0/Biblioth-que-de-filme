@@ -13,8 +13,9 @@ défaut et une base locale dans ./.data/.
 import base64
 import json
 import os
+import time
 
-from flask import Flask, session, url_for
+from flask import Flask, jsonify, request, session, url_for
 
 import auth
 import config as config_module
@@ -41,6 +42,11 @@ def _legacy_admin_hash(cfg):
 
 def create_app():
     cfg = config_module.load()
+    # Fuseau du site (« aujourd'hui » des épisodes diffusés, des alertes…) :
+    # un LXC tourne souvent en UTC, soit la veille entre minuit et 2 h à Paris.
+    if cfg.get("timezone") and not os.environ.get("TZ"):
+        os.environ["TZ"] = cfg["timezone"]
+        time.tzset()
     app = Flask(__name__)
     app.secret_key = cfg["secret_key"]
     app.config.update(
@@ -48,6 +54,8 @@ def create_app():
         SESSION_COOKIE_SAMESITE="Lax",
         SESSION_COOKIE_HTTPONLY=True,
         JSON_AS_ASCII=False,
+        # Garde-fou sur la taille des envois (import d'une sauvegarde JSON).
+        MAX_CONTENT_LENGTH=64 * 1024 * 1024,
     )
 
     db.init(cfg["db_file"])
@@ -88,10 +96,34 @@ def create_app():
                 _apple_icon["uri"] = ""
         return _apple_icon["uri"]
 
+    # Anti-CSRF, AVANT l'auto-login : un formulaire posté depuis un autre site
+    # arrive sans le cookie de session (SameSite=Lax), mais cloudflare_sso()
+    # reconnecterait aussitôt grâce au jeton Cloudflare. Les navigateurs
+    # signalent l'origine d'une requête (Sec-Fetch-Site) ; ceux qui ne le font
+    # pas doivent poser un en-tête que seul notre propre JS envoie (un
+    # formulaire ne le peut pas, un autre site pas sans autorisation CORS).
+    @app.before_request
+    def _anti_csrf():
+        if request.method in ("GET", "HEAD", "OPTIONS") or request.path.startswith("/mcp"):
+            return None
+        site = request.headers.get("Sec-Fetch-Site")
+        if site in ("cross-site", "same-site"):
+            return jsonify(error="Requête venue d'un autre site refusée."), 403
+        if site is None and request.path.startswith("/api/") \
+                and request.headers.get("X-Cinetheque") != "1":
+            return jsonify(error="Requête refusée (en-tête X-Cinetheque manquant)."), 403
+        return None
+
     # Auto-login Cloudflare Access (sinon mot de passe requis).
     @app.before_request
     def _sso():
         auth.cloudflare_sso()
+
+    # Filet de sécurité : jamais de transaction (donc de verrou d'écriture)
+    # laissée ouverte par une requête en erreur sur la connexion du thread.
+    @app.teardown_request
+    def _db_cleanup(_exc):
+        db.rollback_open()
 
     # Contexte partagé des templates : état TMDB, bandeau d'impersonation,
     # helper de permissions `can(...)`, rôle courant.
@@ -107,11 +139,17 @@ def create_app():
                 "is_super_admin": auth.is_super_admin()}
 
     _register_blueprints(app)
-    # Pas de cache sur les réponses d'API (états temps réel).
+    # Pas de cache sur les réponses d'API (états temps réel). Les fichiers
+    # statiques versionnés (?v=… change à chaque modification, voir asset())
+    # peuvent, eux, rester en cache sans revalidation à chaque lancement.
     @app.after_request
-    def _no_store(resp):
+    def _headers(resp):
         if resp.mimetype == "application/json":
             resp.headers["Cache-Control"] = "no-store"
+        elif request.path.startswith("/static/") and request.args.get("v") \
+                and resp.status_code == 200:
+            resp.headers["Cache-Control"] = "private, max-age=31536000, immutable"
+        resp.headers.setdefault("X-Content-Type-Options", "nosniff")
         return resp
 
     # Planificateur de notifications (nouveaux épisodes, sorties) en arrière-plan.
@@ -133,5 +171,12 @@ app = create_app()
 
 if __name__ == "__main__":
     cfg = app.config["APP_CONFIG"]
-    app.run(host=cfg.get("bind", "0.0.0.0"),
-            port=int(cfg.get("panel_port", 8080)), threaded=True)
+    host, port = cfg.get("bind", "0.0.0.0"), int(cfg.get("panel_port", 8080))
+    try:
+        # Serveur de production (paquet apt python3-waitress) quand il est là ;
+        # sinon serveur de développement de Flask, comme avant.
+        from waitress import serve
+    except ImportError:
+        app.run(host=host, port=port, threaded=True)
+    else:
+        serve(app, host=host, port=port, threads=16, ident="cinetheque")

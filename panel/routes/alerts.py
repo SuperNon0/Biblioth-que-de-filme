@@ -31,6 +31,11 @@ def create():
         except TMDBError as exc:
             return jsonify(error=str(exc)), 502
         titre_id = sync.upsert_titre(detail, "a_voir", auth.compte_courant_id())
+        if typ == "serie" and not db.q1(
+                "SELECT 1 FROM episodes WHERE titre_id = ? LIMIT 1", (titre_id,)):
+            from routes.library import _sync_episodes_bg
+            _sync_episodes_bg(get_tmdb(), titre_id, data["tmdb_id"],
+                              detail.get("saisons", []), "a_voir")
     if not db.q1("SELECT id FROM titres WHERE id = ? AND compte_id = ?",
                  (titre_id, auth.compte_courant_id())):
         return jsonify(error="Titre introuvable."), 404
@@ -43,7 +48,8 @@ def create():
 @bp.delete("/alerts/<int:titre_id>")
 @auth.login_required
 def delete(titre_id):
-    db.run("DELETE FROM alertes WHERE titre_id = ? AND titre_id IN "
-           "(SELECT id FROM titres WHERE compte_id = ?)",
-           (titre_id, auth.compte_courant_id()))
+    if not db.run_n("DELETE FROM alertes WHERE titre_id = ? AND titre_id IN "
+                    "(SELECT id FROM titres WHERE compte_id = ?)",
+                    (titre_id, auth.compte_courant_id())):
+        return jsonify(error="Alerte introuvable."), 404
     return jsonify(ok=True)

@@ -17,27 +17,43 @@ from tmdb import TMDBError
 bp = Blueprint("lists", __name__, url_prefix="/api")
 
 
+# Une entrée = un appel TMDB : plafond par import (quota de la clé commune).
+IMPORT_MAX = 200
+
+
+def _fiche(tmdb, entree):
+    typ = entree.get("type", "film")
+    return tmdb.movie(entree["tmdb_id"]) if typ == "film" else tmdb.tv(entree["tmdb_id"])
+
+
 def _import_items(nom, entrees):
     """Crée une liste et y range des entrées {tmdb_id, type} dans l'ordre.
 
     Chaque titre est récupéré depuis TMDB (validé) puis ajouté à la biblio en
-    « à voir ». Renvoie (liste_id, nombre ajouté).
+    « à voir ». Les fiches sont demandées en parallèle (une liste Marvel prenait
+    ~12 s), et les épisodes des séries se remplissent en arrière-plan.
+    Renvoie (liste_id, nombre ajouté).
     """
+    from routes.discover import POOL
+    from routes.library import _sync_episodes_bg
     cid = auth.compte_courant_id()
     liste_id = db.run("INSERT INTO listes (compte_id, nom, cree) VALUES (?, ?, ?)",
                       (cid, nom, int(time.time())))
     tmdb = get_tmdb()
+    futures = [POOL.submit(_fiche, tmdb, e) for e in entrees]
     ajoutes = 0
-    for rang, e in enumerate(entrees):
-        typ = e.get("type", "film")
+    for rang, fut in enumerate(futures):
         try:
-            detail = (tmdb.movie(e["tmdb_id"]) if typ == "film"
-                      else tmdb.tv(e["tmdb_id"]))
-        except (TMDBError, KeyError):
+            detail = fut.result()
+        except (TMDBError, KeyError, TypeError, ValueError):
             continue
         titre_id = sync.upsert_titre(detail, "a_voir", cid)
         db.run("INSERT OR IGNORE INTO liste_items (liste_id, titre_id, rang, ajoute) "
                "VALUES (?,?,?,?)", (liste_id, titre_id, rang, int(time.time())))
+        if detail["type"] == "serie" and not db.q1(
+                "SELECT 1 FROM episodes WHERE titre_id = ? LIMIT 1", (titre_id,)):
+            _sync_episodes_bg(tmdb, titre_id, detail["tmdb_id"],
+                              detail.get("saisons", []), "a_voir")
         ajoutes += 1
     return liste_id, ajoutes
 
@@ -106,11 +122,11 @@ def items(liste_id):
                   (liste_id, auth.compte_courant_id()))
     if not liste:
         return jsonify(error="Liste introuvable."), 404
+    from routes.library import annotate_cards, carte_cols
     sql, params = _titres_sql(liste)
-    rows = db.q("SELECT t.*" + sql +
+    rows = db.q(f"SELECT {carte_cols('t.')}" + sql +
                 " ORDER BY li.rang IS NULL, li.rang, li.ajoute, t.date_ajout DESC", params)
-    from routes.library import _row
-    return jsonify(liste=liste, titres=[_row(r) for r in rows])
+    return jsonify(liste=liste, titres=annotate_cards(rows))
 
 
 @bp.post("/lists/<int:liste_id>/items")
@@ -125,8 +141,11 @@ def add_item(liste_id):
     if not db.q1("SELECT id FROM titres WHERE id = ? AND compte_id = ?", (titre_id, cid)):
         return jsonify(error="Titre introuvable."), 404
     if liste["systeme"] == "favoris":
+        # « Favoris » suit la seule règle du cœur : pas de ligne en plus, qui
+        # gardait le titre dans la liste une fois le cœur décoché.
         db.run("UPDATE titres SET favori = 1 WHERE id = ? AND compte_id = ?",
                (titre_id, cid))
+        return jsonify(ok=True)
     rang = db.q1("SELECT COALESCE(MAX(rang),0)+1 AS r FROM liste_items "
                  "WHERE liste_id = ?", (liste_id,))["r"]
     db.run("INSERT OR IGNORE INTO liste_items (liste_id, titre_id, rang, ajoute) "
@@ -142,11 +161,20 @@ def remove_item(liste_id, titre_id):
                   (liste_id, cid))
     if not liste:
         return jsonify(error="Liste introuvable."), 404
-    db.run("DELETE FROM liste_items WHERE liste_id = ? AND titre_id = ?",
-           (liste_id, titre_id))
+    retires = db.run_n("DELETE FROM liste_items WHERE liste_id = ? AND titre_id = ?",
+                       (liste_id, titre_id))
     if liste["systeme"] == "favoris":
-        db.run("UPDATE titres SET favori = 0 WHERE id = ? AND compte_id = ?",
-               (titre_id, cid))
+        retires += db.run_n("UPDATE titres SET favori = 0 WHERE id = ? AND compte_id = ? "
+                            "AND favori = 1", (titre_id, cid))
+    elif liste["systeme"] == "a_voir" and db.q1(
+            "SELECT 1 FROM titres WHERE id = ? AND compte_id = ? AND statut = 'a_voir'",
+            (titre_id, cid)):
+        # Ce titre est dans « À voir plus tard » par son statut : le retirer de
+        # la liste sans changer ce statut ne ferait rien.
+        return jsonify(error="Ce titre est « à voir » : change son statut pour le "
+                             "retirer de cette liste."), 400
+    if not retires:
+        return jsonify(error="Ce titre n'est pas dans cette liste."), 404
     return jsonify(ok=True)
 
 
@@ -157,8 +185,11 @@ def import_list():
     data = request.get_json(silent=True) or {}
     nom = (data.get("nom") or "Liste importée").strip()
     entrees = data.get("items") or []
-    if not entrees:
+    if not isinstance(entrees, list) or not entrees:
         return jsonify(error="Aucun élément à importer."), 400
+    if len(entrees) > IMPORT_MAX:
+        return jsonify(error=f"{IMPORT_MAX} titres maximum par import."), 400
+    entrees = [e for e in entrees if isinstance(e, dict)]
     liste_id, ajoutes = _import_items(nom, entrees)
     return jsonify(ok=True, id=liste_id, ajoutes=ajoutes)
 

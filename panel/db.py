@@ -8,6 +8,7 @@ Le schéma est créé/complété au démarrage (idempotent) et versionné via
 Aucune dépendance externe : le module ``sqlite3`` est fourni avec Python.
 """
 import json
+import logging
 import sqlite3
 import threading
 import time
@@ -239,18 +240,28 @@ def _reconcile_superadmin_email(conn, base_id, email):
     """
     if not email:
         return
-    other = conn.execute(
-        "SELECT id FROM comptes WHERE email = ? AND id <> ?", (email, base_id)
-    ).fetchone()
-    if other is not None:
-        oid = other["id"]
-        # Récupère le contenu du compte parasite (OR IGNORE = on saute les
-        # éventuels doublons, effacés ensuite par la cascade de suppression).
-        conn.execute("UPDATE OR IGNORE titres SET compte_id = ? WHERE compte_id = ?", (base_id, oid))
-        conn.execute("UPDATE OR IGNORE listes SET compte_id = ? WHERE compte_id = ?", (base_id, oid))
-        conn.execute("DELETE FROM comptes WHERE id = ?", (oid,))
-    conn.execute("UPDATE comptes SET email = ?, etat = 'actif' WHERE id = ?", (email, base_id))
-    conn.commit()
+    try:
+        other = conn.execute(
+            "SELECT id FROM comptes WHERE email = ? AND id <> ?", (email, base_id)
+        ).fetchone()
+        if other is not None:
+            oid = other["id"]
+            # Récupère le contenu du compte parasite (OR IGNORE = on saute les
+            # éventuels doublons, effacés juste après).
+            conn.execute("UPDATE OR IGNORE titres SET compte_id = ? WHERE compte_id = ?", (base_id, oid))
+            conn.execute("UPDATE OR IGNORE listes SET compte_id = ? WHERE compte_id = ?", (base_id, oid))
+            # Suppression explicite : une base migrée depuis la v1 n'a pas de
+            # ON DELETE CASCADE sur compte_id (le DELETE du compte échouerait).
+            conn.execute("DELETE FROM titres WHERE compte_id = ?", (oid,))
+            conn.execute("DELETE FROM listes WHERE compte_id = ?", (oid,))
+            conn.execute("DELETE FROM comptes WHERE id = ?", (oid,))
+        conn.execute("UPDATE comptes SET email = ?, etat = 'actif' WHERE id = ?", (email, base_id))
+        conn.commit()
+    except sqlite3.Error as exc:
+        # Ne jamais empêcher le site de démarrer pour une fusion de comptes.
+        conn.rollback()
+        logging.getLogger("cinetheque.db").warning(
+            "Rattachement de l'e-mail super-admin impossible : %s", exc)
 
 
 def _cloisonner_existant(conn, base_id):
@@ -382,12 +393,36 @@ def q1(sql, params=()):
     return dict(row) if row else None
 
 
+def _ecrire(sql, params):
+    """Exécute une écriture et la valide. En cas d'erreur, la transaction est
+    annulée : sinon la connexion (propre au thread) garde le verrou d'écriture
+    et bloque toute la base — des heures pour le thread du planificateur."""
+    conn = connect()
+    try:
+        cur = conn.execute(sql, params)
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    return cur
+
+
 def run(sql, params=()):
     """Écriture → identifiant de la ligne insérée (lastrowid)."""
-    conn = connect()
-    cur = conn.execute(sql, params)
-    conn.commit()
-    return cur.lastrowid
+    return _ecrire(sql, params).lastrowid
+
+
+def run_n(sql, params=()):
+    """Écriture → nombre de lignes touchées (0 = rien trouvé, pour un 404)."""
+    return _ecrire(sql, params).rowcount
+
+
+def rollback_open():
+    """Annule une transaction restée ouverte sur la connexion du thread (filet
+    de sécurité en fin de requête et entre deux cycles du planificateur)."""
+    conn = getattr(_local, "conn", None)
+    if conn is not None and conn.in_transaction:
+        conn.rollback()
 
 
 def log_event(titre_id, type_, label=""):

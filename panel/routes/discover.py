@@ -6,6 +6,8 @@
 - /api/upcoming : films à venir + gestion des alertes de sortie.
 """
 import random
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 
 import db
 from flask import Blueprint, jsonify, request
@@ -16,6 +18,10 @@ from routes.library import annotate_library, annotate_series_progress
 from tmdb import TMDBError
 
 bp = Blueprint("discover", __name__, url_prefix="/api")
+
+# Appels TMDB lancés en parallèle (on attend le réseau, pas le processeur) :
+# l'accueil enchaînait ~18 requêtes l'une après l'autre (~1,2 s en prod).
+POOL = ThreadPoolExecutor(max_workers=8, thread_name_prefix="tmdb")
 
 SORTS_FILM = {
     "populaire": "popularity.desc",
@@ -75,74 +81,85 @@ def suggestions():
     def add(cle, titre, items):
         uniq = []
         for it in items or []:
-            tid = it.get("tmdb_id")
-            if not tid or tid in seen:
+            # (id, type) : un film et une série peuvent avoir le même id TMDB.
+            key = (it.get("tmdb_id"), it.get("type"))
+            if not key[0] or key in seen:
                 continue
-            seen.add(tid)
+            seen.add(key)
             uniq.append(it)
         if len(uniq) >= 4:  # on n'affiche pas les rangées trop maigres
-            blocs.append({"cle": cle, "titre": titre,
-                          "items": annotate_library(uniq[:20])})
+            blocs.append({"cle": cle, "titre": titre, "items": uniq[:20]})
 
     # Reprendre (local) — marqués vus pour ne pas les reproposer ailleurs.
     reprendre = _reprendre()
     for r in reprendre:
         if r.get("tmdb_id"):
-            seen.add(r["tmdb_id"])
+            seen.add((r["tmdb_id"], r["type"]))
     if reprendre:
         blocs.append({"cle": "reprendre", "titre": "Reprendre",
                       "local": True, "items": reprendre})
-
-    # Personnalisé EN PREMIER : « Parce que tu as aimé … » (titres vus/favoris,
-    # tirés au hasard → propositions renouvelées à chaque rafraîchissement).
-    for base in _bases_perso(media, limit=4):
-        bmedia = "movie" if base["type"] == "film" else "tv"
-        try:
-            recos = tmdb.recommendations(bmedia, base["tmdb_id"],
-                                         page=random.randint(1, 2))
-        except TMDBError:
-            continue
-        quoi = "regardé la série" if base["type"] == "serie" else "aimé"
-        add(f"perso_{base['tmdb_id']}",
-            f"Parce que tu as {quoi} « {base['titre']} »", recos)
 
     def label(mk, txt):
         return (("Séries" if mk == "tv" else "Films") + " · " + txt
                 if media == "all" else txt)
 
-    try:
-        add("tendances", "Tendances cette semaine", tmdb.trending(media, "week"))
-        if "movie" in mkeys:
-            add("cinema", "Au cinéma en ce moment",
-                tmdb.now_playing(random.randint(1, 3)))
-        if "tv" in mkeys and media == "all":
-            add("tv_tendances", "Séries tendances", tmdb.trending("tv", "week"))
-        # Par genre (tes goûts, mélangés) — pour chaque média demandé.
-        for mk in mkeys:
-            genres = _top_genres(tmdb, mk, limit=4)
-            random.shuffle(genres)
-            for gid, gname in genres[:(1 if media == "all" else 3)]:
-                add(f"genre_{mk}_{gid}", label(mk, gname),
-                    tmdb.discover(media=mk, genre=gid, sort_by="popularity.desc",
-                                  page=random.randint(1, 3))["results"])
-        # Pépites, populaires et mieux notés — films ET séries.
-        for mk in mkeys:
-            add(f"pepites_{mk}", label(mk, "Pépites à découvrir"),
-                tmdb.discover(media=mk, sort_by="vote_average.desc",
-                              vote_count_gte=600,
-                              page=random.randint(1, 4))["results"])
-            add(f"top_{mk}", label(mk, "Les mieux notés"),
-                tmdb.top_rated(mk, page=random.randint(1, 3)))
-            add(f"pop_{mk}", label(mk, "Populaires"),
-                tmdb.popular(mk, page=random.randint(1, 4)))
-        # Cultes d'une décennie (sur le premier média).
-        add("annees90", label(mkeys[0], "Cultes des années 90"),
-            tmdb.discover(media=mkeys[0], sort_by="vote_average.desc",
-                          vote_count_gte=1200, year_gte=1990,
-                          year_lte=1999)["results"])
-    except TMDBError as exc:
-        if not blocs:
-            return jsonify(error=str(exc)), 502
+    def results(fn, **kw):
+        return lambda: fn(**kw)["results"]
+
+    # Rangées dans l'ordre d'affichage : (clé, titre, appel TMDB). Les tirages
+    # au hasard (pages, genres) se font ici ; les appels partent en parallèle.
+    # Personnalisé EN PREMIER : « Parce que tu as aimé … » (titres vus/favoris,
+    # tirés au hasard → propositions renouvelées à chaque rafraîchissement).
+    rangees = []
+    for base in _bases_perso(media, limit=4):
+        bmedia = "movie" if base["type"] == "film" else "tv"
+        quoi = "regardé la série" if base["type"] == "serie" else "aimé"
+        rangees.append((f"perso_{base['tmdb_id']}",
+                        f"Parce que tu as {quoi} « {base['titre']} »",
+                        partial(tmdb.recommendations, bmedia, base["tmdb_id"],
+                                page=random.randint(1, 2))))
+    rangees.append(("tendances", "Tendances cette semaine",
+                    partial(tmdb.trending, media, "week")))
+    if "movie" in mkeys:
+        rangees.append(("cinema", "Au cinéma en ce moment",
+                        partial(tmdb.now_playing, random.randint(1, 3))))
+    if "tv" in mkeys and media == "all":
+        rangees.append(("tv_tendances", "Séries tendances",
+                        partial(tmdb.trending, "tv", "week")))
+    # Par genre (tes goûts, mélangés) — pour chaque média demandé.
+    for mk in mkeys:
+        genres = _top_genres(tmdb, mk, limit=4)
+        random.shuffle(genres)
+        for gid, gname in genres[:(1 if media == "all" else 3)]:
+            rangees.append((f"genre_{mk}_{gid}", label(mk, gname),
+                            results(tmdb.discover, media=mk, genre=gid,
+                                    sort_by="popularity.desc",
+                                    page=random.randint(1, 3))))
+    # Pépites, populaires et mieux notés — films ET séries.
+    for mk in mkeys:
+        rangees.append((f"pepites_{mk}", label(mk, "Pépites à découvrir"),
+                        results(tmdb.discover, media=mk, sort_by="vote_average.desc",
+                                vote_count_gte=600, page=random.randint(1, 4))))
+        rangees.append((f"top_{mk}", label(mk, "Les mieux notés"),
+                        partial(tmdb.top_rated, mk, page=random.randint(1, 3))))
+        rangees.append((f"pop_{mk}", label(mk, "Populaires"),
+                        partial(tmdb.popular, mk, page=random.randint(1, 4))))
+    # Cultes d'une décennie (sur le premier média).
+    rangees.append(("annees90", label(mkeys[0], "Cultes des années 90"),
+                    results(tmdb.discover, media=mkeys[0], sort_by="vote_average.desc",
+                            vote_count_gte=1200, year_gte=1990, year_lte=1999)))
+
+    taches = [(cle, titre, POOL.submit(appel)) for cle, titre, appel in rangees]
+    erreur = None
+    for cle, titre, tache in taches:  # résultats repris DANS L'ORDRE (dédoublonnage)
+        try:
+            add(cle, titre, tache.result())
+        except TMDBError as exc:  # une rangée en échec n'empêche pas les autres
+            erreur = erreur or exc
+    if not blocs and erreur:
+        return jsonify(error=str(erreur)), 502
+    # Statut/progression locale : une seule annotation pour toutes les rangées.
+    annotate_library([it for b in blocs if not b.get("local") for it in b["items"]])
     return jsonify(blocs=blocs)
 
 
@@ -354,7 +371,7 @@ def upcoming():
         return jsonify(error=str(exc)), 502
     alertes = {a["titre_id"] for a in db.q(
         "SELECT t.tmdb_id AS titre_id FROM alertes a "
-        "JOIN titres t ON t.id = a.titre_id WHERE t.compte_id = ?",
+        "JOIN titres t ON t.id = a.titre_id WHERE t.compte_id = ? AND t.type = 'film'",
         (auth.compte_courant_id(),))}
     for it in items:
         it["alerte"] = it["tmdb_id"] in alertes
