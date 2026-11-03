@@ -390,6 +390,19 @@ def add_manual():
     return jsonify(ok=True, id=titre_id)
 
 
+@bp.get("/library/<int:titre_id>")
+@auth.login_required
+def card(titre_id):
+    """Carte à jour d'un seul titre (statut, progression, prochain épisode) :
+    l'affiche se redessine sur place après un marquage ou un « Annuler ». Avec
+    ses plateformes, pour la ligne « Où regarder » du menu rapide."""
+    row = db.q1(f"SELECT {carte_cols()}, plateformes FROM titres WHERE id = ? AND compte_id = ?",
+                (titre_id, auth.compte_courant_id()))
+    if not row:
+        return jsonify(error="Titre introuvable."), 404
+    return jsonify(titre=annotate_cards([row])[0])
+
+
 @bp.patch("/library/<int:titre_id>")
 @auth.login_required
 def update(titre_id):

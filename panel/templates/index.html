@@ -621,7 +621,7 @@
             <div class="rep"><pre>films vus × leur durée
 + épisodes vus × leur durée
 (chaque revisionnage compte)</pre>
-              <p>Un épisode sans durée connue compte pour 45 minutes.</p></div></details>
+              <p>Un épisode sans durée connue compte pour 42 minutes, un film pour 1 h 40.</p></div></details>
 
           <div class="faq-g" id="aide-notifications"><svg class="i s16" aria-hidden="true"><use href="#i-bell"/></svg>Notifications Discord (botpanel)</div>
           <details id="aide-botpanel"><summary><svg class="i acc" aria-hidden="true"><use href="#i-chat"/></svg>Comment configurer les notifications Discord ?<svg class="i s18 chev" aria-hidden="true"><use href="#i-chev"/></svg></summary>
@@ -674,7 +674,8 @@
   "caps": {"maj": can('site_update'), "mdp": can('admin_password'),
            "comptes": can('account_management') or can('profiles')},
   "logout": url_for('pages.logout'),
-  "comptes": url_for('accounts.comptes_page')
+  "comptes": url_for('accounts.comptes_page'),
+  "moi": moi
 } | tojson }}</script>
 {% endblock %}
 {% block scripts %}

@@ -177,7 +177,12 @@ function toast(message, { annuler = null, erreur = false, apres = null, duree = 
     b.addEventListener("click", async () => {
       b.disabled = true;
       try {
-        await api("/api/undo", { method: "POST", body: { jeton: annuler } });
+        // Une fonction : annulation faite sur place. Plusieurs jetons (action
+        // groupée) : annulés du plus récent au plus ancien.
+        if (typeof annuler === "function") await annuler();
+        else for (const jeton of (Array.isArray(annuler) ? [...annuler].reverse() : [annuler])) {
+          await api("/api/undo", { method: "POST", body: { jeton } });
+        }
         fermer();
         toast("Annulé");
         if (apres) apres();
@@ -230,8 +235,10 @@ const Couches = {
   get ouvertes() { return this.pile.length; },
   _niveau() { return (history.state && history.state.n) || 0; },
 
-  ouvrir(fermer, { url = null } = {}) {
-    const c = { n: null, fermer, url, annule: false };
+  /* vue : sous-page (détail d'une liste, d'un réglage) qui ne bloque pas le
+     défilement et ne cache pas la barre d'onglets. */
+  ouvrir(fermer, { url = null, el = null, vue = false } = {}) {
+    const c = { n: null, fermer, url, el, vue, annule: false };
     this.pile.push(c);
     const pousser = () => {
       if (c.annule) return;
@@ -280,7 +287,7 @@ const Couches = {
     if (this.apresPop) this.apresPop(e);
   },
   _maj() {
-    const ouvert = this.pile.length > 0;
+    const ouvert = this.pile.some((c) => !c.vue);
     document.body.classList.toggle("overlay-ouvert", ouvert);
     document.body.classList.toggle("verrou", ouvert);
   },
@@ -313,7 +320,7 @@ function feuille({ titre = "", html = "", large = false, classe = "", surFermer 
     if (avant && avant.focus && document.contains(avant)) avant.focus({ preventScroll: true });
     if (surFermer) surFermer();
   };
-  const couche = Couches.ouvrir(retirer);
+  const couche = Couches.ouvrir(retirer, { el });
   const f = {
     el, corps: el.querySelector(".feuille-c"),
     fermer: () => (ferme ? Promise.resolve() : Couches.fermer(couche)),
@@ -590,7 +597,8 @@ function appuiLong(racine, selecteur, surAppui, { delai = 480 } = {}) {
   let t = null, x0 = 0, y0 = 0, declenche = false;
   const annuler = () => { clearTimeout(t); t = null; };
   racine.addEventListener("pointerdown", (e) => {
-    if (e.button !== 0) return;
+    // Doigt ou stylet seulement : à la souris, il y a le clic droit et « ⋯ ».
+    if (e.button !== 0 || e.pointerType === "mouse") return;
     const el = e.target.closest(selecteur);
     if (!el || !racine.contains(el) || e.target.closest(".po-more, .po-cloche, .ck, .plus, button.ib")) return;
     x0 = e.clientX; y0 = e.clientY; declenche = false;
