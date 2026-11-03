@@ -17,7 +17,7 @@
   <meta name="theme-color" content="#f5f3ee" media="(prefers-color-scheme: light)">
   {%- endif %}
   <meta name="color-scheme" content="dark light">
-  <link rel="icon" href="{{ asset('favicon.svg') }}" type="image/svg+xml">
+  <link rel="icon" id="lien-favicon" href="{{ asset('icones/' ~ prefs.accent ~ '.svg') }}" type="image/svg+xml">
   <link rel="preload" href="{{ url_for('static', filename='fonts/archivo-latin.woff2') }}?v=1" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="{{ url_for('static', filename='fonts/dm-serif-display-latin.woff2') }}?v=1" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="{{ asset('fonts.css') }}">

@@ -1,11 +1,11 @@
 {% extends "_base.html" %}
 {% block tete %}
-  <link rel="manifest" href="{{ asset('manifest.webmanifest') }}">
+  <link rel="manifest" id="lien-manifeste" crossorigin="use-credentials" href="/manifest.webmanifest?a={{ prefs.accent }}">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="cinéthèque">
-  <link rel="apple-touch-icon" sizes="180x180" type="image/png" href="{{ apple_touch_icon() }}">
+  <link rel="apple-touch-icon" sizes="180x180" type="image/png" id="lien-icone-app" href="{{ apple_touch_icon(prefs.accent) }}">
   {#- Connexion anticipée au CDN d'images TMDB : moins d'attente au premier affichage. #}
   <link rel="preconnect" href="https://image.tmdb.org" crossorigin>
   <link rel="dns-prefetch" href="https://image.tmdb.org">
@@ -209,7 +209,7 @@
             <div class="reg-bloc">
               <div class="reg-g">Mon compte</div>
               <div class="liste-r">
-                <a class="li" href="#parametres/apparence" data-reg="apparence" data-mots="apparence couleur accent thème clair sombre affiches taille titres légendes vue grille liste rangées police">
+                <a class="li" href="#parametres/apparence" data-reg="apparence" data-mots="apparence couleur accent thème clair sombre affiches taille titres légendes vue grille liste rangées police icône logo écran d'accueil installer app raccourci">
                   <span class="li-ic acc"><svg class="i" aria-hidden="true"><use href="#i-palette"/></svg></span>
                   <span class="tx">Apparence<small>Couleur, thème clair ou sombre, affiches</small></span>
                   <svg class="i s18 muted" aria-hidden="true"><use href="#i-chev"/></svg></a>
@@ -333,6 +333,33 @@
                   <button type="button" class="past" data-v="menthe" role="radio"><i></i>Menthe</button>
                   <button type="button" class="past" data-v="lavande" role="radio"><i></i>Lavande</button>
                 </div>
+              </div>
+              <div class="reg-sec">
+                <div class="lbl-mono">Icône sur l'écran d'accueil</div>
+                <div class="icone-app">
+                  <img id="reg-icone-apercu" src="/static/icones/{{ prefs.accent }}-180.png" width="64" height="64" alt="Aperçu de l'icône">
+                  <p>L'icône reprend ta couleur d'accent. Ajoute cinéthèque à ton écran d'accueil pour l'ouvrir comme une vraie app, en plein écran.</p>
+                </div>
+                <p class="icone-deja" id="reg-icone-deja" hidden>Tu utilises déjà cinéthèque depuis ton écran d'accueil. Pour changer la couleur de l'icône, suis les étapes ci-dessous après avoir supprimé l'ancienne.</p>
+                <div class="icone-etapes">
+                  <div>
+                    <b>iPhone / iPad (Safari)</b>
+                    <ol>
+                      <li>Ouvre le site dans <b>Safari</b>.</li>
+                      <li>Touche le bouton <b>Partager</b> (le carré avec une flèche vers le haut).</li>
+                      <li>Choisis <b>Sur l'écran d'accueil</b>, laisse « Ouvrir comme app web » activé, puis <b>Ajouter</b>.</li>
+                    </ol>
+                  </div>
+                  <div>
+                    <b>Android (Chrome)</b>
+                    <ol>
+                      <li>Touche le menu <b>⋮</b> en haut à droite.</li>
+                      <li>Choisis <b>Ajouter à l'écran d'accueil</b> (ou <b>Installer l'application</b>).</li>
+                      <li>Confirme avec <b>Ajouter</b>.</li>
+                    </ol>
+                  </div>
+                </div>
+                <p class="icone-note">Tu as changé de couleur ? Le téléphone garde l'icône du jour où tu l'as ajoutée : appuie longuement sur l'ancienne, supprime-la, puis ajoute-la de nouveau.</p>
               </div>
               <div class="reg-sec">
                 <div class="lbl-mono">Thème <button type="button" class="q" data-q="theme" aria-label="Explication">?</button></div>

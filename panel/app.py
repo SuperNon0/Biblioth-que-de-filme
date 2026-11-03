@@ -87,19 +87,23 @@ def create_app():
     # l'iPhone qui télécharge l'icône dans une requête à part peut recevoir la
     # page de connexion Cloudflare au lieu de l'image. En l'intégrant, iOS n'a
     # rien à télécharger → le logo s'affiche sans ouvrir de règle Cloudflare.
-    # Source : panel/static/apple-touch-icon.png (PNG carré plein, opaque, 180px).
+    # Une icône par couleur d'accent : panel/static/icones/<accent>-180.png
+    # (PNG carré plein, opaque ; voir scripts/generer-icones.py).
     _apple_icon = {}
 
     @app.template_global()
-    def apple_touch_icon():
-        if "uri" not in _apple_icon:
+    def apple_touch_icon(accent="or"):
+        from routes.prefs import ACCENTS
+        if accent not in ACCENTS:
+            accent = "or"
+        if accent not in _apple_icon:
             try:
-                with open(os.path.join(app.static_folder, "apple-touch-icon.png"), "rb") as fh:
-                    _apple_icon["uri"] = "data:image/png;base64," + \
+                with open(os.path.join(app.static_folder, "icones", f"{accent}-180.png"), "rb") as fh:
+                    _apple_icon[accent] = "data:image/png;base64," + \
                         base64.b64encode(fh.read()).decode("ascii")
             except OSError:
-                _apple_icon["uri"] = ""
-        return _apple_icon["uri"]
+                _apple_icon[accent] = ""
+        return _apple_icon[accent]
 
     # Anti-CSRF, AVANT l'auto-login : un formulaire posté depuis un autre site
     # arrive sans le cookie de session (SameSite=Lax), mais cloudflare_sso()

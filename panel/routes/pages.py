@@ -3,10 +3,11 @@
 Regroupe les routes qui renvoient des pages (index, login, mot de passe
 oublié) et la route qui sert les affiches mises en cache localement.
 """
+import json
 from pathlib import Path
 
-from flask import (Blueprint, current_app, redirect, render_template, request,
-                   send_from_directory, session, url_for)
+from flask import (Blueprint, current_app, jsonify, redirect, render_template,
+                   request, send_from_directory, session, url_for)
 
 import auth
 import settings_store
@@ -78,6 +79,45 @@ def service_worker():
     resp.headers["Cache-Control"] = "no-cache"
     resp.headers["Service-Worker-Allowed"] = "/"
     return resp
+
+
+@bp.get("/manifest.webmanifest")
+def manifest():
+    """Manifeste de l'app (Android, ordinateur) aux couleurs de l'accent.
+
+    L'accent arrive dans l'adresse (``?a=lavande``), posée par la page : pas
+    besoin de session, la requête du manifeste part souvent sans cookie."""
+    from routes.prefs import ACCENTS
+    a = request.args.get("a", "")
+    if a not in ACCENTS:
+        a = "lavande"
+    v = int((Path(current_app.static_folder) / "icones" / f"{a}-512.png").stat().st_mtime)
+    icone = lambda t, but: {"src": f"/static/icones/{a}-{t}.png?v={v}",  # noqa: E731
+                            "sizes": f"{t}x{t}", "type": "image/png", "purpose": but}
+    corps = {
+        "name": "cinéthèque", "short_name": "cinéthèque",
+        "description": "Ma bibliothèque de films et séries",
+        "start_url": "/", "scope": "/", "display": "standalone",
+        "orientation": "portrait",
+        "background_color": "#0b0f17", "theme_color": "#0b0f17",
+        "icons": [icone(192, "any"), icone(512, "any"), icone(512, "maskable"),
+                  {"src": f"/static/icones/{a}.svg?v={v}", "sizes": "any",
+                   "type": "image/svg+xml", "purpose": "any"}],
+    }
+    resp = current_app.response_class(json.dumps(corps, ensure_ascii=False),
+                                      mimetype="application/manifest+json")
+    resp.headers["Cache-Control"] = "no-cache"
+    return resp
+
+
+@bp.get("/api/icone-app")
+@auth.login_required
+def icone_app():
+    """Icône d'accueil iPhone de l'accent courant (data URI), pour mettre à
+    jour la page sans la recharger quand on change de couleur."""
+    from routes import prefs
+    a = prefs.lire(auth.compte_courant_id())["accent"]
+    return jsonify(accent=a, apple=current_app.jinja_env.globals["apple_touch_icon"](a))
 
 
 @bp.get("/media/<path:name>")
