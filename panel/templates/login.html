@@ -1,7 +1,7 @@
 {% extends "_base.html" %}
 {% block titre %}Connexion · cinéthèque{% endblock %}
 {% block tete %}
-  <link rel="apple-touch-icon" sizes="180x180" type="image/png" href="{{ apple_touch_icon() }}">
+  <link rel="apple-touch-icon" sizes="180x180" type="image/png" id="lien-icone-app" href="{{ apple_touch_icon(prefs.accent) }}">
 {% endblock %}
 {% block classe %}login-page{% endblock %}
 {% block corps %}

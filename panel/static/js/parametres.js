@@ -434,6 +434,10 @@ const INIT_REG = {
 
 /* --------------------------------------------- mises à jour des panneaux */
 MAJ_REG.apparence = () => {
+  const ap = $("#reg-icone-apercu");
+  if (ap) ap.src = `/static/icones/${PREFS.accent}-180.png`;
+  const deja = $("#reg-icone-deja");
+  if (deja) deja.hidden = !(navigator.standalone || matchMedia("(display-mode: standalone)").matches);
   $$("#reg-accents [data-v]").forEach((b) => {
     const on = b.dataset.v === PREFS.accent;
     b.classList.toggle("on", on);

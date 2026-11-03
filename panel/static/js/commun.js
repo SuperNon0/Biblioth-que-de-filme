@@ -494,6 +494,7 @@ async function enregistrerPrefs(patch, { message = "Enregistré" } = {}) {
     Object.assign(PREFS, r.prefs || {});
     appliquerPrefs();
     purgeShell();  // la page en cache porte l'ancien accent : on l'oublie
+    if ("accent" in patch) majIconesApp();
     if (message) toast(message);
     signaler("prefs", patch);
   } catch (e) {
@@ -502,6 +503,21 @@ async function enregistrerPrefs(patch, { message = "Enregistré" } = {}) {
     toastErr(e);
     throw e;
   }
+}
+
+/* Icônes d'app à la couleur de l'accent : onglet, manifeste (Android) et
+   icône d'écran d'accueil iPhone (intégrée à la page, voir app.py). */
+async function majIconesApp() {
+  const a = PREFS.accent;
+  const fav = $("#lien-favicon");
+  if (fav) fav.href = `/static/icones/${a}.svg`;
+  const man = $("#lien-manifeste");
+  if (man) man.href = `/manifest.webmanifest?a=${a}`;
+  try {
+    const r = await api("/api/icone-app");
+    const ln = $("#lien-icone-app");
+    if (ln && r.apple) ln.href = r.apple;
+  } catch { /* l'icône se mettra à jour au prochain chargement */ }
 }
 
 /* Le service worker garde la page « / » pour démarrer vite : elle est retirée
