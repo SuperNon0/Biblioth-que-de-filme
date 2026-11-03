@@ -5,7 +5,9 @@ que tu as vu, ce que tu veux voir, suis tes séries épisode par épisode, mesur
 le temps passé et découvre de nouveaux films.
 
 **Multi-comptes à données cloisonnées** (chaque compte a SA bibliothèque)
-derrière **Cloudflare Zero Trust**, thème sombre doré, installable en **PWA**
+derrière **Cloudflare Zero Trust**, thème « encre » sombre ou clair avec une
+couleur d'accent au choix, pensé pour le téléphone comme pour l'ordinateur,
+installable en **PWA**
 (iPhone/Android). Construit avec **Python + Flask** et **SQLite**, alimenté par
 l'**API TMDB**. Aucune dépendance front (HTML/CSS/JS vanilla), aucun build ;
 côté serveur, seule la vérification du JWT Cloudflare ajoute **PyJWT +
@@ -28,15 +30,24 @@ cryptography** (installés via `apt`).
   - Films : dates de visionnage multiples + revisionnages (« ↻ ×N »).
   - Séries : saisons dépliables, épisodes (nom, image, résumé, durée), marquage
     Vu/Revu par épisode / saison / série entière, prochain épisode.
-- **Suggestions** (accueil) : carrousels Tendances, Au cinéma, Populaires, Mieux
-  notés, « Parce que tu as aimé », sagas/chronologies, et **« Reprendre »**
-  (séries en cours, triées par dernier épisode vu).
-- **Découverte** : catalogue filtrable (genre, année, note, pays, plateforme) et
-  paginé.
-- **Futur** : films à venir + alertes de sortie (cinéma / streaming).
-- **Listes** : « À voir plus tard » et « Favoris » par défaut, listes perso.
-- **Profil** : temps total regardé, statistiques, genres les plus vus, et
-  **historique** (journal des visionnages en grille d'affiches).
+- **Interface** (v29) : barre d'onglets en verre sur téléphone, menu latéral
+  et recherche partout (**Ctrl K**) sur ordinateur ; menu rapide sur chaque
+  affiche (appui, clic droit ou « ⋯ »), **« Annuler »** pendant 5 s après chaque
+  action, bulle **« ? »** à côté des réglages ; le bouton retour du téléphone
+  referme fiche, menus et feuilles. **Paramètres → Apparence** : couleur
+  d'accent (or, ambre, corail, menthe, lavande), thème, taille des affiches.
+- **Suggestions** (accueil) : grande carte **« Reprendre »** (la série en cours,
+  bouton « Marquer vu » en un geste), puis les rangées Tendances, Au cinéma,
+  Populaires, Mieux notés, « Parce que tu as aimé », sagas/chronologies, et
+  « Bientôt au cinéma » avec la cloche d'alerte.
+- **Découverte** : catalogue par genre et tri, filtres rangés dans un petit
+  menu (période, durée, note, plateforme, pays) et « Sur mes plateformes ».
+- **Futur** : agenda des sorties groupé par semaine + alertes de sortie.
+- **Listes** : « À voir plus tard » et « Favoris » par défaut, listes perso,
+  listes « dans l'ordre » (sagas) réordonnables au doigt, listes prêtes à importer.
+- **Profil** : temps total regardé (avec son calcul), titres vus par année de
+  sortie, temps par série, genres, records, et **journal** des visionnages
+  regroupés en séances (doublons signalés).
 - **Notifications** : Discord via *botpanel* (comptes super-admin uniquement ;
   voir plus bas).
 - **PWA & rapidité** : installable sur l'écran d'accueil (icône dédiée),
@@ -80,8 +91,8 @@ Tout le code applicatif est dans **`panel/`** :
 | `tmdb.py` | Client de l'API TMDB (urllib, sans dépendance) + cache mémoire des réponses. |
 | `routes/` | Blueprints : `pages` (dont l'icône iOS servie à la racine `/apple-touch-icon.png`), `auth_routes` (passerelle), `accounts_routes` (comptes + impersonation + Cloudflare/diagnostic), `library`, `titles`, `discover`, `lists`, `alerts`, `people`, `stats`, `settings`, `mcp` (serveur MCP pour Claude, voir `docs/mcp.md`). |
 | `services/` | `posters` (cache local), `sync` (TMDB→base, par compte), `statistics` (par compte), `notifications`, `scheduler`, `mcp_tools` (outils du connecteur Claude). |
-| `static/` | `style.css`, `app.js`, `fonts.css`, `logo.svg`, `favicon.svg`, `logo.png`, icônes PWA (`apple-touch-icon.png` 180, `icon-192.png`, `icon-512.png`, `icon-maskable-512.png`), `manifest.webmanifest`, `sw.js`. |
-| `templates/` | `index.html`, `login.html`, `forgot.html`, `comptes.html`, écrans d'accès (`demande`, `attente`, `refus`, `bloque`), `bienvenue.html`. |
+| `static/` | `style.css` (jetons `:root`, thème encre, accents `data-accent`), `js/` (scripts sans compilation chargés dans l'ordre : `commun`, `cartes`, `menu`, `navigation`, `fiche`, `accueil`, `bibliotheque`, `decouvrir`, `futur`, `listes`, `profil`, `parametres`, `aide`, `demarrage` ; `comptes` pour la page Comptes), `fonts.css`, `logo.svg`, `favicon.svg`, `logo.png`, icônes PWA (`apple-touch-icon.png` 180, `icon-192.png`, `icon-512.png`, `icon-maskable-512.png`), `manifest.webmanifest`, `sw.js`. |
+| `templates/` | `_base.html` (gabarit commun : accent et thème posés sur `<html>`), `_icons.html` (icônes `#i-…`), `_logo.html`, `index.html`, `login.html`, `forgot.html`, `comptes.html`, écrans d'accès (`demande`, `attente`, `refus`, `bloque`), `bienvenue.html`. |
 
 **Conventions**
 
@@ -91,8 +102,10 @@ Tout le code applicatif est dans **`panel/`** :
 - Requêtes métier : toujours **cloisonner par `auth.compte_courant_id()`** et
   garder les écritures par `_owns()`.
 - Secrets (`config.json`, `users.json`, `settings.json`, base) **jamais** commités.
-- PWA : `static/sw.js` — penser à **incrémenter la version du cache**
-  (`cinetheque-vNN`) à chaque changement de front.
+- PWA : `static/sw.js` — le nom du cache suit le fichier `VERSION` (posé par
+  le serveur) : **incrémenter `VERSION`** à chaque changement de front.
+- Jamais de `confirm()` / `alert()` / `prompt()` : `confirmer()` et `demander()`
+  de `js/commun.js` (feuille intégrée).
 - Version affichée (Paramètres → « Version installée ») : le **commit git court**
   par défaut ; un fichier `VERSION` optionnel à la racine le remplace par un
   numéro lisible s'il est présent.
@@ -101,7 +114,7 @@ Tout le code applicatif est dans **`panel/`** :
 
 ```bash
 python3 -m py_compile panel/*.py panel/routes/*.py panel/services/*.py
-node --check panel/static/app.js panel/static/sw.js
+for f in panel/static/js/*.js panel/static/sw.js; do node --check "$f"; done
 bash -n install.sh scripts/*.sh proxmox/*.sh
 ```
 

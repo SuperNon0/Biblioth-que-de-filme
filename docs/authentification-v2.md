@@ -71,7 +71,7 @@ Avant même l'auto-connexion Cloudflare, toute requête qui écrit (POST, PATCH,
 DELETE) est refusée si le navigateur la signale comme venue d'un autre site
 (`Sec-Fetch-Site: cross-site` ou `same-site`). Si le navigateur n'envoie pas
 cet en-tête, les appels `/api/*` doivent porter `X-Cinetheque: 1`, que seul le
-JavaScript du site pose (`api()` dans `app.js`). Le serveur MCP (`/mcp`) a sa
+JavaScript du site pose (`api()` dans `js/commun.js`). Le serveur MCP (`/mcp`) a sa
 propre clé et n'est pas concerné.
 
 ## §9 Sécurité de l'en-tête Cloudflare

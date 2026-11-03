@@ -145,8 +145,10 @@ def etat_du_site(_args):
 # testées que si TMDB répond : sinon elles sont « non testées », pas en échec.
 _PARCOURS = [
     ("GET", "/", None, False), ("GET", "/sw.js", None, False),
-    ("GET", "/static/app.js", None, False), ("GET", "/static/style.css", None, False),
+    ("GET", "/static/js/commun.js", None, False), ("GET", "/static/js/fiche.js", None, False),
+    ("GET", "/static/style.css", None, False), ("GET", "/static/fonts.css", None, False),
     ("GET", "/api/version", None, False), ("GET", "/api/settings", None, False),
+    ("GET", "/api/prefs", None, False), ("GET", "/api/library/genres", None, False),
     ("GET", "/api/library", None, False), ("GET", "/api/library", {"type": "serie"}, False),
     ("GET", "/api/lists", None, False), ("GET", "/api/lists/presets", None, False),
     ("GET", "/api/stats", None, False), ("GET", "/api/journal", None, False),
@@ -382,7 +384,8 @@ def decouvrir(args):
 
 
 def sorties_a_venir(args):
-    return _ok("GET", "/api/upcoming", _sans_vide({"page": args.get("page")}))
+    # 20 sorties par page, de la plus proche à la plus lointaine.
+    return _ok("GET", "/api/upcoming", {"page": args.get("page") or 1})
 
 
 # ── Outils : maintenance ─────────────────────────────────────────────────────
@@ -558,7 +561,8 @@ TOOLS = {
                  "note_min": {"type": "number"}, "page": _INT,
                  "tri": {"type": "string", "enum": ["populaire", "note", "recent"]}}),
         decouvrir),
-    "sorties_a_venir": ("Prochaines sorties de films.", _schema({"page": _INT}),
+    "sorties_a_venir": ("Prochaines sorties de films au cinéma, de la plus proche à la "
+                        "plus lointaine (20 par page).", _schema({"page": _INT}),
                         sorties_a_venir),
     "reparer_donnees": (
         "Vérifie les incohérences de la base (films « vu » sans visionnage, "

@@ -2,7 +2,7 @@
 
 Bibliothèque personnelle de films et séries, auto-hébergée. **v2 : multi-comptes
 à données cloisonnées** (chaque compte a SA bibliothèque) derrière Cloudflare
-Zero Trust — fondation « site-base ». Flask, thème sombre doré, déploiement
+Zero Trust — fondation « site-base ». Flask, thème « encre » (accent au choix, lavande par défaut), déploiement
 Proxmox, mise à jour auto-remplaçante.
 
 ## Stack
@@ -47,9 +47,16 @@ Proxmox, mise à jour auto-remplaçante.
 - `services/` — `posters`, `sync` (upsert par compte), `statistics` (par compte),
   `notifications`, `scheduler`, `mcp_tools` (outils MCP = routes /api/*
   rejouées en interne).
-- `static/` — `style.css`, `app.js`, `fonts.css`, `logo.svg`, `favicon.svg`, `sw.js`.
-- `templates/` — `index.html`, `login.html`, `forgot.html`, écrans d'auth
-  (`demande`, `attente`, `refus`, `bloque`), `comptes.html`.
+- `static/` — `style.css` (jetons `:root`, accents `data-accent`, clair/sombre),
+  `js/` (scripts classiques sans compilation, portée globale partagée, chargés
+  dans l'ordre : `commun`, `cartes`, `menu`, `navigation`, `fiche`, `accueil`,
+  `bibliotheque`, `decouvrir`, `futur`, `listes`, `profil`, `parametres`,
+  `aide`, `demarrage` — tout démarrage dans `demarrage.js` ; `comptes.js` pour
+  la page Comptes), `fonts.css`, `logo.svg`, `favicon.svg`, `sw.js`.
+- `templates/` — `_base.html` (gabarit : préférences posées sur `<html>`),
+  `_icons.html` (icônes `#i-…`, `ic()` en JS), `_logo.html`, `index.html`,
+  `login.html`, `forgot.html`, `bienvenue.html`, écrans d'auth (`demande`,
+  `attente`, `refus`, `bloque`), `comptes.html`.
 
 ## Conventions
 
@@ -58,7 +65,15 @@ Proxmox, mise à jour auto-remplaçante.
 - Endpoints dynamiques : JSON sous `/api/*`, `Cache-Control: no-store`.
 - Écritures `/api/*` : en-tête `X-Cinetheque: 1` exigé quand le navigateur
   n'envoie pas `Sec-Fetch-Site` (anti-CSRF, `app.py`) — passer par `api()`
-  dans `app.js`, et le poser dans tout `fetch` écrit à la main.
+  dans `js/commun.js`, et le poser dans tout `fetch` écrit à la main.
+- Front (refonte v29) : préférences d'affichage par compte (`/api/prefs`) ;
+  fiche, feuilles et menus passent par `Couches` (le bouton retour du
+  téléphone les referme) ; un titre changé est signalé par l'évènement
+  `ct:titre` et redessiné partout par `majCartes()` ; jamais de `confirm()`,
+  `alert()` ni `prompt()` : `confirmer()` / `demander()` ; chaque action
+  réversible propose « Annuler » (`toast(…, {annuler})`).
+- Service worker : le nom du cache suit `VERSION` — l'incrémenter à chaque
+  changement de front.
 - Épisode « diffusé » : date ≤ aujourd'hui (fuseau `timezone`), ou sans date
   mais suivi d'un épisode diffusé — `sync.flag_diffuses()` / `sync.ep_diffuse_sql()`.
   Les marquages groupés et la progression ne comptent que ceux-là.
@@ -68,7 +83,7 @@ Proxmox, mise à jour auto-remplaçante.
 
 ```bash
 python3 -m py_compile panel/*.py panel/routes/*.py panel/services/*.py
-node --check panel/static/app.js
+for f in panel/static/js/*.js panel/static/sw.js; do node --check "$f"; done
 bash -n install.sh scripts/*.sh proxmox/*.sh
 ```
 

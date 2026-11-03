@@ -105,6 +105,7 @@ CREATE TABLE IF NOT EXISTS listes (
     nom       TEXT NOT NULL,
     systeme   TEXT,                              -- 'a_voir'|'favoris' si liste système
     cree      INTEGER,
+    ordonnee  INTEGER DEFAULT 0,                 -- 1 = « dans l'ordre » (titres numérotés)
     UNIQUE(compte_id, systeme)
 );
 
@@ -338,6 +339,14 @@ def _migrate(conn):
     ep_cols = {r[1] for r in conn.execute("PRAGMA table_info(episodes)")}
     if "notifie" not in ep_cols:
         conn.execute("ALTER TABLE episodes ADD COLUMN notifie INTEGER DEFAULT 0")
+    # Listes « dans l'ordre » (sagas) : titres numérotés, prochain à voir en avant.
+    li_cols = {r[1] for r in conn.execute("PRAGMA table_info(listes)")}
+    if "ordonnee" not in li_cols:
+        conn.execute("ALTER TABLE listes ADD COLUMN ordonnee INTEGER DEFAULT 0")
+        # Sagas déjà importées (« … ordre de sortie », « Terre du Milieu »…) :
+        # elles se regardent dans l'ordre, on les numérote d'office.
+        conn.execute("UPDATE listes SET ordonnee = 1 WHERE systeme IS NULL AND "
+                     "(nom LIKE '%ordre%' OR nom LIKE 'Terre du Milieu%')")
     # Supprime l'ancienne contrainte UNIQUE(titre_id, date) sur visionnages,
     # pour autoriser plusieurs visionnages le même jour.
     row = conn.execute(
@@ -426,9 +435,10 @@ def rollback_open():
 
 
 def log_event(titre_id, type_, label=""):
-    """Ajoute une entrée au journal de visionnage (date + heure = maintenant)."""
-    run("INSERT INTO journal (titre_id, type, label, cree) VALUES (?,?,?,?)",
-        (titre_id, type_, label, int(time.time())))
+    """Ajoute une entrée au journal de visionnage (date + heure = maintenant) et
+    renvoie son id (pour pouvoir l'annuler)."""
+    return run("INSERT INTO journal (titre_id, type, label, cree) VALUES (?,?,?,?)",
+               (titre_id, type_, label, int(time.time())))
 
 
 def get_setting(cle, default=None):

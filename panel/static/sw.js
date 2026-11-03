@@ -1,7 +1,9 @@
 /* Service worker de cinéthèque (PWA).
    Met en cache la coquille de l'app pour un démarrage rapide et un affichage
-   même hors ligne. Les appels /api/ et /media/ ne sont jamais mis en cache. */
-const CACHE = "cinetheque-v54";
+   même hors ligne. Les appels /api/ et /media/ ne sont jamais mis en cache.
+   Le nom de la copie suit la version du site (posé par le serveur) : chaque
+   mise à jour efface l'ancienne copie toute seule. */
+const CACHE = "cinetheque-__VERSION__";
 
 self.addEventListener("install", () => self.skipWaiting());
 

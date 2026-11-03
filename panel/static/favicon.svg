@@ -5,11 +5,11 @@
     </linearGradient>
   </defs>
   <rect x="0" y="0" width="64" height="64" rx="15" fill="url(#g)"/>
-  <path d="M0 20 L64 9 L64 23 L0 34 Z" fill="#0e0f11" opacity="0.92"/>
+  <path d="M0 20 L64 9 L64 23 L0 34 Z" fill="#0b0f17" opacity="0.92"/>
   <g fill="#e8c547">
     <path d="M8 18 l7 -1 l-4 10 l-7 1 Z"/>
     <path d="M24 15.5 l7 -1 l-4 10 l-7 1 Z"/>
     <path d="M40 13 l7 -1 l-4 10 l-7 1 Z"/>
   </g>
-  <path d="M25 39 L46 50 L25 61 Z" fill="#0e0f11"/>
+  <path d="M25 39 L46 50 L25 61 Z" fill="#0b0f17"/>
 </svg>

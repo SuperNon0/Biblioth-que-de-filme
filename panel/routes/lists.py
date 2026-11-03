@@ -26,7 +26,7 @@ def _fiche(tmdb, entree):
     return tmdb.movie(entree["tmdb_id"]) if typ == "film" else tmdb.tv(entree["tmdb_id"])
 
 
-def _import_items(nom, entrees):
+def _import_items(nom, entrees, ordonnee=False):
     """Crée une liste et y range des entrées {tmdb_id, type} dans l'ordre.
 
     Chaque titre est récupéré depuis TMDB (validé) puis ajouté à la biblio en
@@ -37,8 +37,8 @@ def _import_items(nom, entrees):
     from routes.discover import POOL
     from routes.library import _sync_episodes_bg
     cid = auth.compte_courant_id()
-    liste_id = db.run("INSERT INTO listes (compte_id, nom, cree) VALUES (?, ?, ?)",
-                      (cid, nom, int(time.time())))
+    liste_id = db.run("INSERT INTO listes (compte_id, nom, cree, ordonnee) VALUES (?, ?, ?, ?)",
+                      (cid, nom, int(time.time()), 1 if ordonnee else 0))
     tmdb = get_tmdb()
     futures = [POOL.submit(_fiche, tmdb, e) for e in entrees]
     ajoutes = 0
@@ -73,10 +73,19 @@ def _titres_sql(liste):
             (liste["id"], liste["compte_id"]))
 
 
+_ORDRE = " ORDER BY li.rang IS NULL, li.rang, li.ajoute, t.date_ajout DESC"
+
+
 def _liste(row):
+    """Résumé d'une liste pour sa carte : nombre de titres, combien sont vus
+    (barre « 12 / 31 vus ») et ses quatre premières affiches (mosaïque)."""
     row["systeme_flag"] = bool(row.get("systeme"))
+    row["ordonnee"] = bool(row.get("ordonnee"))
     sql, params = _titres_sql(row)
-    row["nb"] = db.q1("SELECT COUNT(*) AS n" + sql, params)["n"]
+    titres = db.q("SELECT t.statut, t.affiche" + sql + _ORDRE, params)
+    row["nb"] = len(titres)
+    row["vus"] = sum(1 for t in titres if t["statut"] == "vu")
+    row["affiches"] = [t["affiche"] for t in titres if t["affiche"]][:4]
     return row
 
 
@@ -87,7 +96,57 @@ def lists():
     rows = db.q("SELECT * FROM listes WHERE compte_id = ? "
                 "ORDER BY systeme IS NULL, nom COLLATE NOCASE",
                 (auth.compte_courant_id(),))
-    return jsonify(listes=[_liste(r) for r in rows])
+    listes = [_liste(r) for r in rows]
+    # ?titre_id=… : dans quelles listes est déjà ce titre (feuille « Ajouter à
+    # une liste », cases cochées d'avance).
+    titre_id = request.args.get("titre_id", type=int)
+    if titre_id:
+        for liste in listes:
+            sql, params = _titres_sql(liste)
+            liste["contient"] = bool(db.q1("SELECT 1" + sql + " AND t.id = ?",
+                                           (*params, titre_id)))
+    return jsonify(listes=listes)
+
+
+@bp.patch("/lists/<int:liste_id>")
+@auth.login_required
+def update(liste_id):
+    """Renomme une liste perso, ou la passe « dans l'ordre » (titres numérotés)."""
+    cid = auth.compte_courant_id()
+    row = db.q1("SELECT systeme FROM listes WHERE id = ? AND compte_id = ?", (liste_id, cid))
+    if not row:
+        return jsonify(error="Liste introuvable."), 404
+    data = request.get_json(silent=True) or {}
+    if "nom" in data:
+        nom = str(data["nom"] or "").strip()
+        if not nom:
+            return jsonify(error="Nom de liste requis."), 400
+        if row["systeme"]:
+            return jsonify(error="Les listes système ne se renomment pas."), 400
+        db.run("UPDATE listes SET nom = ? WHERE id = ?", (nom, liste_id))
+    if "ordonnee" in data:
+        db.run("UPDATE listes SET ordonnee = ? WHERE id = ?",
+               (1 if data["ordonnee"] else 0, liste_id))
+    return jsonify(ok=True)
+
+
+@bp.put("/lists/<int:liste_id>/ordre")
+@auth.login_required
+def reorder(liste_id):
+    """Range les titres d'une liste perso dans l'ordre donné (glisser-déposer)."""
+    cid = auth.compte_courant_id()
+    row = db.q1("SELECT systeme FROM listes WHERE id = ? AND compte_id = ?", (liste_id, cid))
+    if not row:
+        return jsonify(error="Liste introuvable."), 404
+    if row["systeme"]:
+        return jsonify(error="L'ordre des listes système suit tes titres."), 400
+    ids = (request.get_json(silent=True) or {}).get("titres")
+    if not isinstance(ids, list):
+        return jsonify(error="Ordre invalide."), 400
+    for rang, titre_id in enumerate(ids):
+        db.run("UPDATE liste_items SET rang = ? WHERE liste_id = ? AND titre_id = ?",
+               (rang, liste_id, int(titre_id)))
+    return jsonify(ok=True)
 
 
 @bp.post("/lists")
@@ -124,8 +183,9 @@ def items(liste_id):
         return jsonify(error="Liste introuvable."), 404
     from routes.library import annotate_cards, carte_cols
     sql, params = _titres_sql(liste)
-    rows = db.q(f"SELECT {carte_cols('t.')}" + sql +
-                " ORDER BY li.rang IS NULL, li.rang, li.ajoute, t.date_ajout DESC", params)
+    rows = db.q(f"SELECT {carte_cols('t.')}" + sql + _ORDRE, params)
+    liste["systeme_flag"] = bool(liste.get("systeme"))
+    liste["ordonnee"] = bool(liste.get("ordonnee"))
     return jsonify(liste=liste, titres=annotate_cards(rows))
 
 
@@ -209,5 +269,6 @@ def import_preset():
     preset = presets.PRESETS.get(cle)
     if not preset:
         return jsonify(error="Liste prête inconnue."), 404
-    liste_id, ajoutes = _import_items(preset["nom"], preset["items"])
+    # Les listes prêtes sont des sagas : elles se regardent dans l'ordre.
+    liste_id, ajoutes = _import_items(preset["nom"], preset["items"], ordonnee=True)
     return jsonify(ok=True, id=liste_id, ajoutes=ajoutes)

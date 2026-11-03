@@ -1,120 +1,80 @@
-<!doctype html>
-<html lang="fr">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-  <title>{{ 'Comptes' if gere else 'Profils' }} — cinéthèque</title>
-  <meta name="theme-color" content="#0e0f11">
-  <link rel="icon" href="{{ asset('favicon.svg') }}" type="image/svg+xml">
-  <link rel="stylesheet" href="{{ asset('fonts.css') }}">
-  <link rel="stylesheet" href="{{ asset('style.css') }}">
-</head>
-<body>
-  <header class="topbar">
-    <div class="brand">
-      <img class="logo-mark" src="{{ asset('logo.svg') }}" alt="" width="30" height="30">
-      <span class="logo"><span class="g">ciné</span><span class="i">thèque</span></span>
+{% extends "_base.html" %}
+{% block titre %}{{ 'Comptes' if gere else 'Profils' }} · cinéthèque{% endblock %}
+{% block classe %}page-simple{% endblock %}
+{% block corps %}
+<header class="top ombre">
+  <a class="brand" href="{{ url_for('pages.index') }}" aria-label="cinéthèque, accueil">{% include "_logo.html" %}</a>
+  <span class="esp"></span>
+  <a class="btn sm" href="{{ url_for('pages.index') }}#parametres"><svg class="i s18" aria-hidden="true"><use href="#i-chevl"/></svg>Paramètres</a>
+</header>
+
+<main class="acct-wrap">
+  <h1 class="page-t">{{ 'Comptes' if gere else 'Profils' }}</h1>
+  <p class="intro-p">
+    {%- if gere %}Les personnes qui ont accès au site, chacune avec sa propre bibliothèque. Valide les demandes, bloque ou supprime un compte.
+    {%- else %}Chaque personne autorisée par Cloudflare a sa propre bibliothèque. « Voir en tant que » affiche le site comme elle le voit.{% endif %}</p>
+
+  {% if gere and pending %}
+  <section class="acct-section" aria-labelledby="t-attente">
+    <h2 class="sec-t" id="t-attente">Demandes en attente <span class="acct-count">{{ pending|length }}</span></h2>
+    <div class="acct-list">
+      {% for c in pending %}
+      <div class="acct-row" data-id="{{ c.id }}" data-mail="{{ c.email }}">
+        <div class="acct-av" aria-hidden="true">{{ (c.email or '?')[0]|upper }}</div>
+        <div class="acct-main">
+          <span class="acct-mail">{{ c.email }}</span>
+          <span class="acct-sub">demandé le {{ c.cree }}</span>
+        </div>
+        <div class="acct-actions">
+          <button type="button" class="btn sm pri" data-act="valider"><svg class="i s16" aria-hidden="true"><use href="#i-check"/></svg>Accepter</button>
+          <button type="button" class="btn sm dn" data-act="refuser"><svg class="i s16" aria-hidden="true"><use href="#i-x"/></svg>Refuser</button>
+        </div>
+      </div>
+      {% endfor %}
     </div>
-    <span class="badge">paramètres · {{ 'comptes' if gere else 'profils' }}</span>
-    <a class="btn ghost small" href="{{ url_for('pages.index') }}" style="margin-left:auto">← Retour</a>
-  </header>
+  </section>
+  {% endif %}
 
-  <div class="acct-wrap" style="max-width:720px;margin:0 auto;padding:24px 20px 60px">
-    {% if gere and pending %}
-    <section class="acct-section">
-      <h3>Demandes en attente <span class="acct-count">· {{ pending|length }}</span></h3>
-      <div class="acct-list">
-        {% for c in pending %}
-        <div class="acct-row" data-id="{{ c.id }}">
-          <div class="acct-av">{{ (c.email or '?')[0]|upper }}</div>
-          <div class="acct-main">
-            <span class="acct-mail">{{ c.email }}</span>
-            <span class="acct-sub">demandé le {{ c.cree }}</span>
-          </div>
-          <div class="acct-actions">
-            <button class="btn primary small" data-act="valider">✓ Accepter</button>
-            <button class="btn danger small" data-act="refuser">✕ Refuser</button>
-          </div>
+  <section class="acct-section" aria-labelledby="t-membres">
+    <h2 class="sec-t" id="t-membres">Membres <span class="acct-count">{{ membres|length }}</span></h2>
+    <div class="acct-list">
+      {% for c in membres %}
+      <div class="acct-row" data-id="{{ c.id }}" data-mail="{{ c.email or 'administrateur (local)' }}">
+        <div class="acct-av" aria-hidden="true">{{ (c.email or 'A')[0]|upper }}</div>
+        <div class="acct-main">
+          <span class="acct-mail">{{ c.email or 'administrateur (local)' }}</span>
+          <span class="acct-sub">
+            {%- if c.local %}connexion locale · {% endif -%}
+            {%- if c.derniere_cnx %}dernière connexion le {{ c.derniere_cnx }}{% else %}créé le {{ c.cree }}{% endif -%}
+          </span>
         </div>
-        {% endfor %}
-      </div>
-    </section>
-    {% endif %}
+        <div class="acct-actions">
+          {% if c.role == 'super_admin' %}<span class="role-badge role-super">super-admin</span>
+          {% elif c.etat == 'bloque' %}<span class="role-badge role-bloque">bloqué</span>
+          {% else %}<span class="role-badge role-membre">membre</span>{% endif %}
 
-    <section class="acct-section">
-      <h3>Membres <span class="acct-count">· {{ membres|length }}</span></h3>
-      <div class="acct-list">
-        {% for c in membres %}
-        <div class="acct-row" data-id="{{ c.id }}">
-          <div class="acct-av">{{ (c.email or 'A')[0]|upper }}</div>
-          <div class="acct-main">
-            <span class="acct-mail">{{ c.email or 'administrateur (local)' }}</span>
-            <span class="acct-sub">
-              {%- if c.local %}connecté en local · {% endif -%}
-              {%- if c.derniere_cnx %}dernière connexion {{ c.derniere_cnx }}{% else %}créé le {{ c.cree }}{% endif -%}
-            </span>
-          </div>
-          <div class="acct-actions">
-            {% if c.role == 'super_admin' %}<span class="role-badge role-super">super-admin</span>
-            {% elif c.etat == 'bloque' %}<span class="role-badge role-bloque">bloqué</span>
-            {% else %}<span class="role-badge role-membre">membre</span>{% endif %}
-
-            {% if c.role != 'super_admin' and c.etat == 'actif' %}
-              {% if peut_profils %}<button class="btn ghost small" data-act="impersonate">👁 Voir en tant que</button>{% endif %}
-              {% if gere %}<button class="btn ghost small" data-act="bloquer">Bloquer</button>{% endif %}
-            {% elif c.etat == 'bloque' and gere %}
-              <button class="btn ghost small" data-act="debloquer">Débloquer</button>
-            {% endif %}
-            {% if base_admin and c.role != 'super_admin' and c.etat == 'actif' %}
-              <button class="btn ghost small" data-act="promouvoir">↑ Super-admin</button>
-            {% endif %}
-            {% if gere and c.role != 'super_admin' %}
-              <button class="btn danger small" data-act="supprimer" title="Supprimer">🗑</button>
-            {% endif %}
-          </div>
+          {% if c.role != 'super_admin' and c.etat == 'actif' %}
+            {% if peut_profils %}<button type="button" class="btn sm" data-act="impersonate"><svg class="i s16" aria-hidden="true"><use href="#i-eye"/></svg>Voir en tant que</button>{% endif %}
+            {% if gere %}<button type="button" class="btn sm" data-act="bloquer"><svg class="i s16" aria-hidden="true"><use href="#i-lock"/></svg>Bloquer</button>{% endif %}
+          {% elif c.etat == 'bloque' and gere %}
+            <button type="button" class="btn sm" data-act="debloquer"><svg class="i s16" aria-hidden="true"><use href="#i-key"/></svg>Débloquer</button>
+          {% endif %}
+          {% if base_admin and c.role != 'super_admin' and c.etat == 'actif' %}
+            <button type="button" class="btn sm" data-act="promouvoir"><svg class="i s16" aria-hidden="true"><use href="#i-shield"/></svg>Super-admin</button>
+          {% endif %}
+          {% if gere and c.role != 'super_admin' %}
+            <button type="button" class="btn sm dn ico" data-act="supprimer" title="Supprimer ce compte" aria-label="Supprimer ce compte"><svg class="i s16" aria-hidden="true"><use href="#i-trash"/></svg></button>
+          {% endif %}
         </div>
-        {% endfor %}
       </div>
-    </section>
-  </div>
-
-  <script>
-    const ROUTES = {
-      valider:  (id) => ["POST", `/api/comptes/${id}/valider`],
-      refuser:  (id) => ["POST", `/api/comptes/${id}/refuser`],
-      bloquer:  (id) => ["POST", `/api/comptes/${id}/bloquer`],
-      debloquer:(id) => ["POST", `/api/comptes/${id}/debloquer`],
-      supprimer:(id) => ["DELETE", `/api/comptes/${id}`],
-      impersonate:(id) => ["POST", `/api/comptes/${id}/impersonate`],
-      promouvoir:(id) => ["POST", `/api/comptes/${id}/role`, {role: "super_admin"}],
-    };
-    document.body.addEventListener("click", async (e) => {
-      const btn = e.target.closest("[data-act]");
-      if (!btn) return;
-      const row = btn.closest(".acct-row");
-      const [method, url, body] = ROUTES[btn.dataset.act](row.dataset.id);
-      if (btn.dataset.act === "supprimer" &&
-          !confirm("Supprimer ce compte et TOUTES ses données ? Action irréversible.")) return;
-      btn.disabled = true;
-      try {
-        const r = await fetch(url, {method,
-          headers: body ? {"Content-Type": "application/json", "X-Cinetheque": "1"}
-                        : {"X-Cinetheque": "1"},
-          body: body ? JSON.stringify(body) : undefined});
-        const d = await r.json().catch(() => ({}));
-        if (!r.ok) { alert(d.error || "Échec"); btn.disabled = false; return; }
-        if (btn.dataset.act === "impersonate") {
-          // La coquille « / » mise en cache par le service worker est celle de
-          // TON compte : on la retire pour afficher celle du compte consulté.
-          if (window.caches) {
-            try { await Promise.all((await caches.keys()).map(async (k) => (await caches.open(k)).delete("/"))); }
-            catch (_) {}
-          }
-          location.href = "{{ url_for('pages.index') }}"; return;
-        }
-        location.reload();
-      } catch (err) { alert(err.message); btn.disabled = false; }
-    });
-  </script>
-</body>
-</html>
+      {% endfor %}
+    </div>
+  </section>
+</main>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<script type="application/json" id="ct-config">{{ {"superAdmin": is_super_admin, "prefs": prefs} | tojson }}</script>
+{% endblock %}
+{% block scripts %}
+<script defer src="{{ asset('js/commun.js') }}"></script>
+<script defer src="{{ asset('js/comptes.js') }}"></script>
+{% endblock %}

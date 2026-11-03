@@ -65,9 +65,17 @@ def logout():
 
 @bp.get("/sw.js")
 def service_worker():
-    """Sert le service worker à la racine (portée « / » pour la PWA)."""
-    resp = send_from_directory(current_app.static_folder, "sw.js")
-    resp.headers["Content-Type"] = "application/javascript"
+    """Sert le service worker à la racine (portée « / » pour la PWA).
+
+    Le nom de sa copie locale suit la version du site (« cinetheque-28.0 ») :
+    à chaque mise à jour, l'ancienne copie est effacée toute seule."""
+    from routes.settings import numero_version
+    chemin = Path(current_app.static_folder) / "sw.js"
+    version = numero_version() or str(int(chemin.stat().st_mtime))
+    resp = current_app.response_class(
+        chemin.read_text(encoding="utf-8").replace("__VERSION__", version),
+        mimetype="application/javascript")
+    resp.headers["Cache-Control"] = "no-cache"
     resp.headers["Service-Worker-Allowed"] = "/"
     return resp
 
