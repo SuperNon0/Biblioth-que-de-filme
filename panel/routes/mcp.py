@@ -22,10 +22,11 @@ import json
 import secrets
 import time
 
-from flask import Blueprint, Response, jsonify, request
+from flask import Blueprint, Response, current_app, jsonify, request
 
 import auth
 import db
+from routes.settings import numero_version
 from services import mcp_tools
 
 bp = Blueprint("mcp", __name__)
@@ -77,33 +78,62 @@ def _texte(data, is_error=False):
     return out
 
 
+def _abrege(nom, args):
+    """Arguments d'un outil pour le journal d'audit (jamais un corps d'appel_api :
+    il peut contenir un mot de passe ou une clé)."""
+    if nom == "appel_api":
+        return f"{args.get('methode', 'GET')} {args.get('chemin', '')}"
+    return json.dumps({k: v for k, v in args.items() if k != "confirm"},
+                      ensure_ascii=False, default=str)[:200]
+
+
 def _appeler_outil(params):
     nom, args = params.get("name"), params.get("arguments") or {}
     outil = mcp_tools.TOOLS.get(nom)
     if outil is None:
         return None
     try:
-        return _texte(outil[2](args))
+        resultat = outil[2](args)
     except mcp_tools.OutilErreur as exc:
-        return _texte({"erreur": str(exc)}, is_error=True)
+        out = _texte({"erreur": str(exc)}, is_error=True)
     except (KeyError, ValueError, TypeError) as exc:
-        return _texte({"erreur": f"Paramètre manquant ou invalide : {exc}"}, is_error=True)
+        out = _texte({"erreur": f"Paramètre manquant ou invalide : {exc}"}, is_error=True)
+    except Exception as exc:  # noqa: BLE001 - un outil en panne ne fait pas tomber /mcp
+        db.rollback_open()
+        current_app.logger.exception("Outil MCP « %s » en échec", nom)
+        out = _texte({"erreur": f"Erreur interne : {type(exc).__name__}: {exc}"},
+                     is_error=True)
+    else:
+        out = _texte(resultat)
+        if isinstance(resultat, dict) and "apercu" in resultat:
+            return out  # simple aperçu : rien n'a été écrit
+    if nom not in mcp_tools.LECTURE_SEULE:
+        # Trace de ce que Claude a fait (réussi ou non), au nom « mcp ».
+        db.audit("mcp_outil", acteur="mcp", cible=nom,
+                 detail=_abrege(nom, args) + (" → erreur" if out.get("isError") else ""))
+    return out
 
 
 def _traiter(msg):
     """Traite UN message JSON-RPC. Renvoie la réponse, ou None (notification)."""
     if not isinstance(msg, dict) or msg.get("jsonrpc") != "2.0":
         return _erreur(None, -32600, "Requête JSON-RPC invalide.")
-    rid, method = msg.get("id"), msg.get("method", "")
+    if "method" not in msg:  # réponse du client à une requête : rien à répondre
+        return None
+    rid, method = msg.get("id"), msg.get("method")
     if "id" not in msg:  # notification (ex. notifications/initialized)
         return None
+    if not isinstance(method, str):
+        return _erreur(rid, -32600, "Requête JSON-RPC invalide.")
     params = msg.get("params") or {}
+    if not isinstance(params, dict):
+        return _erreur(rid, -32602, "« params » doit être un objet.")
     if method == "initialize":
         demande = params.get("protocolVersion")
         return _resultat(rid, {
             "protocolVersion": demande if demande in PROTOCOLES else PROTOCOLES[0],
             "capabilities": {"tools": {"listChanged": False}},
-            "serverInfo": {"name": "cinetheque", "version": "1.0"},
+            "serverInfo": {"name": "cinetheque", "version": numero_version() or "1.0"},
             "instructions": INSTRUCTIONS,
         })
     if method == "ping":
@@ -111,6 +141,8 @@ def _traiter(msg):
     if method == "tools/list":
         return _resultat(rid, {"tools": _CATALOGUE})
     if method == "tools/call":
+        if not isinstance(params.get("arguments") or {}, dict):
+            return _erreur(rid, -32602, "« arguments » doit être un objet.")
         res = _appeler_outil(params)
         if res is None:
             return _erreur(rid, -32602, f"Outil inconnu : {params.get('name')}")
@@ -118,7 +150,20 @@ def _traiter(msg):
     return _erreur(rid, -32601, f"Méthode non prise en charge : {method}")
 
 
-@bp.route("/mcp", methods=["GET", "POST", "DELETE"], defaults={"cle_url": None})
+def _traiter_sur(msg):
+    """``_traiter`` sans jamais de page d'erreur HTML : un imprévu devient une
+    erreur JSON-RPC lisible par le client."""
+    try:
+        return _traiter(msg)
+    except Exception:  # noqa: BLE001
+        db.rollback_open()
+        current_app.logger.exception("Message MCP en échec")
+        rid = msg.get("id") if isinstance(msg, dict) else None
+        return _erreur(rid, -32603, "Erreur interne du serveur MCP.")
+
+
+@bp.route("/mcp", methods=["GET", "POST", "DELETE"], defaults={"cle_url": None},
+          strict_slashes=False)
 @bp.route("/mcp/<cle_url>", methods=["GET", "POST", "DELETE"])
 def endpoint(cle_url):
     if not _cle_valide(_cle_presentee(cle_url)):
@@ -131,9 +176,11 @@ def endpoint(cle_url):
     if payload is None:
         return jsonify(_erreur(None, -32700, "JSON illisible.")), 400
     if isinstance(payload, list):  # lot de messages
-        reponses = [r for r in map(_traiter, payload) if r is not None]
+        if not payload:
+            return jsonify(_erreur(None, -32600, "Lot vide.")), 400
+        reponses = [r for r in map(_traiter_sur, payload) if r is not None]
         return jsonify(reponses) if reponses else Response(status=202)
-    reponse = _traiter(payload)
+    reponse = _traiter_sur(payload)
     return jsonify(reponse) if reponse is not None else Response(status=202)
 
 
@@ -154,7 +201,7 @@ def generer_cle():
     cle = "cine_" + secrets.token_urlsafe(32)
     db.set_setting("mcp_cle_hash", _empreinte(cle))
     db.set_setting("mcp_cle_cree", str(int(time.time())))
-    db.audit("mcp_cle_generee", acteur=(auth.current_compte() or {}).get("email"))
+    db.audit("mcp_cle_generee", acteur=auth.acteur())
     return jsonify(ok=True, cle=cle)
 
 
@@ -162,5 +209,5 @@ def generer_cle():
 @auth.super_admin_required
 def revoquer_cle():
     db.run("DELETE FROM app_settings WHERE cle IN ('mcp_cle_hash', 'mcp_cle_cree')")
-    db.audit("mcp_cle_revoquee", acteur=(auth.current_compte() or {}).get("email"))
+    db.audit("mcp_cle_revoquee", acteur=auth.acteur())
     return jsonify(ok=True)

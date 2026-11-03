@@ -12,6 +12,9 @@ contre les clés publiques de l'équipe Cloudflare + `aud` + `iss`.
 Site « perso » (données cloisonnées) : `cap_account_management=off` → un e-mail
 autorisé par Cloudflare mais inconnu est créé **automatiquement en `actif`**.
 """
+import math
+import re
+import threading
 import time
 from functools import wraps
 
@@ -32,6 +35,9 @@ except BaseException:  # pragma: no cover
     PyJWKClient = None
 
 _jwk_clients = {}  # cache des clients JWK par équipe Cloudflare
+# Nom d'équipe Cloudflare : il sert à construire l'URL des clés publiques et
+# l'émetteur (`iss`) attendu, donc aucun autre caractère n'est admis.
+TEAM_RE = re.compile(r"[a-z0-9-]{1,63}")
 
 
 # ── Configuration Cloudflare (UI/app_settings prioritaire sur config) ────────
@@ -57,7 +63,10 @@ def cf_config():
         aud = cfg.get("cf_aud", "")
     verify_s = db.get_setting("cf_verify")
     verify = bool(cfg.get("cf_verify_jwt", True)) if verify_s is None else verify_s == "1"
-    return {"team": normalize_team(team), "aud": (aud or "").strip(), "verify": verify}
+    team = normalize_team(team)
+    if team and not TEAM_RE.fullmatch(team):
+        team = ""  # valeur invalide → vérification impossible, donc refus
+    return {"team": team, "aud": (aud or "").strip(), "verify": verify}
 
 
 def access_managed():
@@ -79,6 +88,11 @@ def _get_jwk_client(team):
 def _cf_token():
     return (request.headers.get("Cf-Access-Jwt-Assertion")
             or request.cookies.get("CF_Authorization"))
+
+
+def via_cloudflare():
+    """La requête est-elle passée par Cloudflare Access (jeton présent) ?"""
+    return bool(_cf_token())
 
 
 def cf_access_email():
@@ -155,19 +169,31 @@ def compte_courant_id():
 
 
 def is_super_admin():
-    """Rôle réel : celui de l'impersonateur s'il y en a un, sinon du compte."""
+    """Rôle réel : celui de l'impersonateur s'il y en a un, sinon du compte.
+    Un compte bloqué entre-temps perd ses droits, même avec une ancienne session."""
     if session.get("impersonator_id"):
-        imp = get_compte(session["impersonator_id"])
-        return bool(imp and imp["role"] == "super_admin")
-    c = current_compte()
-    return bool(c and c["role"] == "super_admin")
+        c = get_compte(session["impersonator_id"])
+    else:
+        c = current_compte()
+    return bool(c and c["role"] == "super_admin" and c["etat"] == "actif")
 
 
 def is_base_admin():
     """Super-admin AVEC login local (mot de passe) = compte racine du site."""
     real_id = session.get("impersonator_id") or session.get("compte_id")
     c = get_compte(real_id)
-    return bool(c and c["role"] == "super_admin" and c["mdp_hash"])
+    return bool(c and c["role"] == "super_admin" and c["mdp_hash"]
+                and c["etat"] == "actif")
+
+
+def acteur():
+    """Auteur réel d'une action pour le journal d'audit : « mcp » pour le
+    connecteur Claude, sinon l'e-mail du compte réel (l'impersonateur pendant
+    un « voir en tant que »)."""
+    if session.get("via_mcp"):
+        return "mcp"
+    real = get_compte(session.get("impersonator_id") or session.get("compte_id"))
+    return real["email"] if real and real["email"] else "admin"
 
 
 def base_admin_row():
@@ -189,20 +215,53 @@ def logout():
 
 
 # ── Login local (mot de passe) — compat avec l'existant ──────────────────────
+# Anti-force brute : après chaque échec, plus aucun essai n'est examiné pendant
+# 1, 2, 4… jusqu'à 30 s, quel que soit le nombre de connexions en parallèle
+# (avant, un sleep(1) par requête : N connexions = N essais/s). Les essais
+# refusés répondent tout de suite, sans immobiliser un thread du serveur.
+_login_lock = threading.Lock()
+_login_etat = {"echecs": 0, "bloque_jusqu": 0.0}
+
+# Méthode de hachage fixée : le scrypt par défaut de Werkzeug 3 (Debian 13)
+# est illisible par Werkzeug 2 (Debian 12) — base restaurée ailleurs = plus
+# de connexion possible.
+HASH_METHOD = "pbkdf2:sha256"
+
+
+def _mdp_ok(mdp_hash, password):
+    try:
+        return bool(mdp_hash) and check_password_hash(mdp_hash, password)
+    except (ValueError, TypeError) as exc:  # format de hash non pris en charge
+        current_app.logger.warning("Mot de passe illisible par cette version : %s", exc)
+        return False
+
+
+def attente_login():
+    """Secondes avant que le prochain mot de passe soit examiné (0 : tout de suite)."""
+    return max(0, math.ceil(_login_etat["bloque_jusqu"] - time.time()))
+
+
 def do_login(password):
     """Connexion locale du super-admin de base par mot de passe (anti-force brute)."""
-    row = base_admin_row()
-    if row and row["mdp_hash"] and check_password_hash(row["mdp_hash"], password):
-        login_compte(row)
-        return True
-    time.sleep(1)
-    return False
+    with _login_lock:
+        if attente_login():
+            return False  # pendant le délai, le mot de passe n'est même pas testé
+        row = base_admin_row()
+        if row and _mdp_ok(row["mdp_hash"], password):
+            _login_etat.update(echecs=0, bloque_jusqu=0.0)
+            login_compte(row)
+            return True
+        _login_etat["echecs"] += 1
+        _login_etat["bloque_jusqu"] = time.time() + min(30, 2 ** min(_login_etat["echecs"] - 1, 5))
+        db.audit("login_echec", acteur=request.headers.get("Cf-Connecting-IP")
+                 or request.remote_addr)
+        return False
 
 
 def do_login_check(password):
     """Vérifie le mot de passe du super-admin de base sans ouvrir de session."""
     row = base_admin_row()
-    return bool(row and row["mdp_hash"] and check_password_hash(row["mdp_hash"], password))
+    return bool(row and _mdp_ok(row["mdp_hash"], password))
 
 
 def set_password(password):
@@ -213,7 +272,7 @@ def set_password(password):
     if not row:
         raise ValueError("Aucun compte administrateur de base.")
     db.run("UPDATE comptes SET mdp_hash = ? WHERE id = ?",
-           (generate_password_hash(password), row["id"]))
+           (generate_password_hash(password, method=HASH_METHOD), row["id"]))
 
 
 # ── Établissement de session via Cloudflare (before_request) ─────────────────

@@ -8,11 +8,11 @@ Les fichiers vivent dans ``posters_dir`` (config) et sont servis via la route
 ``/media/<fichier>``.
 """
 import hashlib
-import threading
+import http.client
+import os
+import tempfile
 import urllib.request
 from pathlib import Path
-
-_lock = threading.Lock()
 
 
 def _dir(app):
@@ -33,17 +33,28 @@ def cache(app, url):
     dest = _dir(app) / name
     if dest.exists():
         return name
+    tmp = None
     try:
-        with _lock:
-            if dest.exists():
-                return name
-            req = urllib.request.Request(url, headers={"User-Agent": "cinetheque"})
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                data = resp.read()
-            dest.write_bytes(data)
+        req = urllib.request.Request(url, headers={"User-Agent": "cinetheque"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = resp.read()
+        # Fichier temporaire puis renommage atomique : jamais d'affiche à moitié
+        # écrite servie, et plus de verrou global (les téléchargements d'un
+        # import de liste passaient l'un après l'autre).
+        fd, tmp = tempfile.mkstemp(dir=dest.parent, prefix=".dl-")
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(data)
+        os.replace(tmp, dest)
+        tmp = None
         return name
-    except (OSError, ValueError):
+    except (OSError, ValueError, http.client.HTTPException):
         return None
+    finally:
+        if tmp:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
 
 
 def local_url(name):

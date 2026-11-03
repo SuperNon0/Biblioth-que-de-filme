@@ -1,7 +1,7 @@
 """Permissions (capabilities) configurables par site — socle « site-base ».
 
 Chaque fonctionnalité sensible a un niveau requis, choisi à la création du site
-(docs/permissions.md) :
+(docs/authentification-v2.md §4) :
 
     off          → personne (désactivée sur ce site)
     membre       → tout compte actif

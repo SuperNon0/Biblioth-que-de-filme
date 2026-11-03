@@ -120,7 +120,14 @@ def supprimer(compte_id):
         return jsonify(error="Compte introuvable"), 404
     if c["role"] == "super_admin" and _compter_super_admins() <= 1:
         return jsonify(error="Le dernier super-admin est indestructible."), 400
-    db.run("DELETE FROM comptes WHERE id=?", (compte_id,))  # CASCADE efface son contenu
+    # Contenu supprimé explicitement (le reste suit par titre_id) : une base
+    # migrée depuis la v1 n'a pas de ON DELETE CASCADE sur compte_id, et le
+    # DELETE du compte seul y échouait (erreur 500).
+    conn = db.connect()
+    with conn:
+        conn.execute("DELETE FROM titres WHERE compte_id=?", (compte_id,))
+        conn.execute("DELETE FROM listes WHERE compte_id=?", (compte_id,))
+        conn.execute("DELETE FROM comptes WHERE id=?", (compte_id,))
     db.audit("supprimer_compte", acteur=_acteur(), cible=c["email"])
     return jsonify(ok=True)
 
@@ -201,7 +208,12 @@ def cf_get():
 def cf_set():
     data = request.get_json(silent=True) or {}
     if "team" in data:
-        db.set_setting("cf_team", auth.normalize_team(data.get("team")))
+        team = auth.normalize_team(data.get("team"))
+        # Le nom d'équipe sert à construire l'URL des clés publiques et l'`iss`
+        # attendu : un texte libre (« evil.tld/x? ») ferait accepter d'autres clés.
+        if team and not auth.TEAM_RE.fullmatch(team):
+            return jsonify(error="Nom d'équipe Cloudflare invalide (lettres, chiffres, tirets)."), 400
+        db.set_setting("cf_team", team)
     if "aud" in data:
         db.set_setting("cf_aud", (data.get("aud") or "").strip())
     if "verify" in data:
@@ -220,8 +232,7 @@ def diagnostic():
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 def _acteur():
-    real = auth.get_compte(session.get("impersonator_id") or session.get("compte_id"))
-    return real["email"] if real and real["email"] else "admin"
+    return auth.acteur()
 
 
 def _compter_super_admins():

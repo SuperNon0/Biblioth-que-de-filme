@@ -35,7 +35,8 @@ def journal():
 def del_journal(event_id):
     """Supprime une entrée du journal (correction), sans toucher aux compteurs."""
     import db
-    db.run("DELETE FROM journal WHERE id = ? AND titre_id IN "
-           "(SELECT id FROM titres WHERE compte_id = ?)",
-           (event_id, auth.compte_courant_id()))
+    if not db.run_n("DELETE FROM journal WHERE id = ? AND titre_id IN "
+                    "(SELECT id FROM titres WHERE compte_id = ?)",
+                    (event_id, auth.compte_courant_id())):
+        return jsonify(error="Entrée introuvable."), 404
     return jsonify(ok=True)

@@ -45,13 +45,15 @@ done
 
 [[ $EUID -eq 0 ]] || fail "Lance ce script en root (sudo)."
 
-# --- 1. dépendances (apt : Python 3 + Flask + PyJWT/crypto) ------------------
+# --- 1. dépendances (apt : Python 3 + Flask + PyJWT/crypto + waitress) -------
 # python3-jwt (PyJWT) + python3-cryptography : vérification du JWT Cloudflare
-# Access (RS256). Installés via apt pour rester sans pip, conformément au socle.
-log "Installation des dépendances (python3, flask, pyjwt, cryptography)…"
+# Access (RS256). python3-waitress : serveur web de production (à la place du
+# serveur de développement de Flask). Via apt pour rester sans pip.
+log "Installation des dépendances (python3, flask, pyjwt, cryptography, waitress)…"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-apt-get install -y -qq python3 python3-flask python3-jwt python3-cryptography git >/dev/null
+apt-get install -y -qq python3 python3-flask python3-jwt python3-cryptography \
+    python3-waitress git >/dev/null
 
 # --- 2. utilisateur dédié non-root ------------------------------------------
 if ! id "$APP" &>/dev/null; then
@@ -72,7 +74,9 @@ if [[ ! -f "$CONFIG" ]]; then
     log "Génération de la configuration initiale…"
     SECRET=$(python3 -c "import os; print(os.urandom(24).hex())")
     [[ -n "$PANEL_PASSWORD" ]] || PANEL_PASSWORD=$(python3 -c "import secrets; print(secrets.token_urlsafe(12))")
-    HASH=$(python3 -c "from werkzeug.security import generate_password_hash as h; print(h('$PANEL_PASSWORD'))")
+    # Mot de passe passé par l'environnement (une apostrophe cassait le code
+    # Python) ; pbkdf2 : hash lisible par toutes les versions de Werkzeug.
+    HASH=$(CINE_MDP="$PANEL_PASSWORD" python3 -c "import os; from werkzeug.security import generate_password_hash as h; print(h(os.environ['CINE_MDP'], method='pbkdf2:sha256'))")
     cat > "$CONFIG" <<EOF
 {
   "secret_key": "$SECRET",
@@ -98,15 +102,21 @@ else
     PASSWORD_TO_SHOW=""
 fi
 
-# --- 5. droits (le service tourne non-root et doit écrire ses données) -------
-chown -R "$APP:$APP" "$APP_HOME"
+# --- 5. droits ---------------------------------------------------------------
+# Le service tourne non-root et n'écrit que dans ses données. Code et scripts
+# restent à root : maître de /opt/cinetheque, le compte du site pouvait
+# remplacer scripts/update-panel.sh… que sudo l'autorise à lancer en root.
+chown root:root "$APP_HOME"; chmod 755 "$APP_HOME"
+chown -R root:root "$PANEL_DIR" "$SCRIPTS_DIR"
+chmod -R go-w "$PANEL_DIR" "$SCRIPTS_DIR"; chmod +x "$SCRIPTS_DIR"/*.sh
+chown -R "$APP:$APP" "$DATA_DIR"
 chown root:"$APP" "$CONFIG"; chmod 640 "$CONFIG"
-chown -R root:root "$SCRIPTS_DIR"; chmod +x "$SCRIPTS_DIR"/*.sh
+# Bytecode précompilé : le service ne peut plus écrire ses __pycache__.
+python3 -m compileall -q "$PANEL_DIR" >/dev/null || true
 
 # --- 6. service systemd -----------------------------------------------------
 log "Installation du service systemd…"
-sed "s/__PORT__/$PANEL_PORT/" "$SRC_DIR/systemd/$APP-panel.service" \
-    > /etc/systemd/system/$APP-panel.service
+cp "$SRC_DIR/systemd/$APP-panel.service" /etc/systemd/system/$APP-panel.service
 systemctl daemon-reload
 systemctl enable --now $APP-panel.service
 

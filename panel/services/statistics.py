@@ -6,9 +6,9 @@ acteurs les plus vus ; répartition par année. Le « temps passé » est calcul
 automatiquement à partir des durées TMDB × ce qui est marqué vu.
 """
 import collections
-import json
 
 import db
+from services.sync import ep_diffuse_sql
 
 # Durée moyenne de repli quand TMDB ne fournit pas la durée d'un épisode.
 DUREE_EPISODE_DEFAUT = 42
@@ -64,17 +64,20 @@ def temps_serie(titre_id):
     pour les films) — le min des revisionnages, uniquement si elle est complète."""
     row = db.q1(
         """SELECT SUM(COALESCE(duree, ?) * MAX(nb_vues, 1)) AS minutes,
-                  COUNT(id) AS episodes, MIN(nb_vues) AS mini
+                  COUNT(id) AS episodes
            FROM episodes WHERE titre_id = ? AND vu = 1""",
         (DUREE_EPISODE_DEFAUT, titre_id),
     )
-    total = db.q1("SELECT COUNT(*) AS n FROM episodes WHERE titre_id = ?",
-                  (titre_id,))["n"] or 0
+    # « Série vue ×N » : sur les épisodes déjà diffusés (une saison annoncée
+    # n'empêche pas une série terminée d'être comptée comme vue).
+    diff = db.q1(
+        f"""SELECT COUNT(*) AS total, SUM(vu) AS vus, MIN(nb_vues) AS mini
+            FROM episodes WHERE titre_id = ? AND {ep_diffuse_sql()}""", (titre_id,))
     minutes = (row and row["minutes"]) or 0
-    seen = (row and row["episodes"]) or 0
     info = duree_lisible(minutes)
-    info["episodes"] = seen
-    info["fois"] = (row["mini"] or 0) if (total and seen >= total) else 0
+    info["episodes"] = (row and row["episodes"]) or 0
+    total = diff["total"] or 0
+    info["fois"] = (diff["mini"] or 0) if (total and (diff["vus"] or 0) >= total) else 0
     return info
 
 
@@ -106,16 +109,19 @@ def _top_series_temps(compte_id, limit=3):
 
 def _revisionnages(compte_id):
     """Compteurs de re-visionnages : films revus ≥2 fois, séries revues ≥2 fois."""
+    # type='film' : d'anciennes séries portent des visionnages (avant le suivi
+    # par épisode) qui ne doivent pas compter comme « films revus ».
     films = db.q1(
         """SELECT COUNT(*) AS n FROM (
              SELECT v.titre_id FROM visionnages v JOIN titres t ON t.id = v.titre_id
-             WHERE t.compte_id = ? GROUP BY v.titre_id HAVING COUNT(*) >= 2)""",
+             WHERE t.compte_id = ? AND t.type = 'film'
+             GROUP BY v.titre_id HAVING COUNT(*) >= 2)""",
         (compte_id,))["n"]
-    # Série revue = tous les épisodes vus au moins 2 fois (min des nb_vues ≥ 2).
+    # Série revue = tous les épisodes diffusés vus au moins 2 fois.
     series = db.q1(
-        """SELECT COUNT(*) AS n FROM (
+        f"""SELECT COUNT(*) AS n FROM (
              SELECT e.titre_id FROM episodes e JOIN titres t ON t.id = e.titre_id
-             WHERE t.compte_id = ? GROUP BY e.titre_id
+             WHERE t.compte_id = ? AND {ep_diffuse_sql("e")} GROUP BY e.titre_id
              HAVING MIN(e.nb_vues) >= 2 AND SUM(CASE WHEN e.vu=0 THEN 1 ELSE 0 END) = 0)""",
         (compte_id,))["n"]
     return {"films": films, "series": series}
@@ -126,14 +132,17 @@ def _records(compte_id):
     film = db.q1(
         """SELECT t.titre, t.affiche, COUNT(v.id) AS n
            FROM visionnages v JOIN titres t ON t.id = v.titre_id
-           WHERE t.compte_id = ? GROUP BY t.id ORDER BY n DESC LIMIT 1""",
+           WHERE t.compte_id = ? AND t.type = 'film'
+           GROUP BY t.id ORDER BY n DESC LIMIT 1""",
         (compte_id,))
+    # Sans filtre « e.vu = 1 » (qui rendait le HAVING sans effet : 1 épisode
+    # vu 9 fois sur 53 faisait « série revue ×9 ») : série entièrement vue.
     serie = db.q1(
-        """SELECT t.titre, t.affiche, MIN(e.nb_vues) AS n
-           FROM episodes e JOIN titres t ON t.id = e.titre_id
-           WHERE t.compte_id = ? AND e.vu = 1
-           GROUP BY t.id HAVING SUM(CASE WHEN e.vu=0 THEN 1 ELSE 0 END) = 0
-           ORDER BY n DESC LIMIT 1""",
+        f"""SELECT t.titre, t.affiche, MIN(e.nb_vues) AS n
+            FROM episodes e JOIN titres t ON t.id = e.titre_id
+            WHERE t.compte_id = ? AND {ep_diffuse_sql("e")}
+            GROUP BY t.id HAVING SUM(CASE WHEN e.vu=0 THEN 1 ELSE 0 END) = 0
+            ORDER BY n DESC LIMIT 1""",
         (compte_id,))
     def fmt(r):
         return {"titre": r["titre"], "affiche": r["affiche"], "n": r["n"]} if r and r["n"] else None

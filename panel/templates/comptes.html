@@ -98,11 +98,20 @@
       btn.disabled = true;
       try {
         const r = await fetch(url, {method,
-          headers: body ? {"Content-Type": "application/json"} : {},
+          headers: body ? {"Content-Type": "application/json", "X-Cinetheque": "1"}
+                        : {"X-Cinetheque": "1"},
           body: body ? JSON.stringify(body) : undefined});
         const d = await r.json().catch(() => ({}));
         if (!r.ok) { alert(d.error || "Échec"); btn.disabled = false; return; }
-        if (btn.dataset.act === "impersonate") { location.href = "{{ url_for('pages.index') }}"; return; }
+        if (btn.dataset.act === "impersonate") {
+          // La coquille « / » mise en cache par le service worker est celle de
+          // TON compte : on la retire pour afficher celle du compte consulté.
+          if (window.caches) {
+            try { await Promise.all((await caches.keys()).map(async (k) => (await caches.open(k)).delete("/"))); }
+            catch (_) {}
+          }
+          location.href = "{{ url_for('pages.index') }}"; return;
+        }
         location.reload();
       } catch (err) { alert(err.message); btn.disabled = false; }
     });

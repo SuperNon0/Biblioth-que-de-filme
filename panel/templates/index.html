@@ -39,7 +39,7 @@
       <div id="search-results" class="search-results hidden"></div>
     </div>
 
-    <form action="{{ url_for('pages.logout') }}" method="post" class="inline">
+    <form action="{{ url_for('pages.logout') }}" method="post" class="inline logout-form">
       <button type="submit" class="btn ghost small">Déconnexion</button>
     </form>
   </header>
@@ -221,7 +221,7 @@
 
         <div class="card">
           <h3 class="sub-title">Mot de passe</h3>
-          <p class="muted">Compte unique « admin ». 8 caractères minimum.</p>
+          <p class="muted">Mot de passe de la connexion locale (super-admin). 8 caractères minimum.</p>
           <input id="set-password-actuel" class="input" type="password" placeholder="Mot de passe actuel" autocomplete="current-password">
           <input id="set-password" class="input" type="password" placeholder="Nouveau mot de passe" autocomplete="new-password">
           <button id="btn-save-password" class="btn primary small">Changer le mot de passe</button>
@@ -357,7 +357,7 @@
           <article class="aide-card">
             <div class="aide-ic">🔒</div>
             <h4>Mot de passe</h4>
-            <p>Compte unique <b>admin</b>. Change-le dans
+            <p>Mot de passe de la connexion locale du <b>super-admin</b>. Change-le dans
               <a href="#" data-goto="parametres">Paramètres → Mot de passe</a>.</p>
             <p class="aide-hint">Oublié ? Depuis le serveur (console Proxmox / SSH) :</p>
             <pre class="aide-cmd">sudo bash /opt/cinetheque/scripts/reset-admin-password.sh</pre>
@@ -368,7 +368,7 @@
             <p>Derrière <b>Cloudflare Access</b>, tu es connecté automatiquement.
               En accès par l'<b>IP locale</b>, le mot de passe reste exigé.</p>
             <p class="aide-hint">Réglable dans
-              <a href="#" data-goto="parametres">Paramètres → Connexion automatique</a>.</p>
+              <a href="#" data-goto="parametres">Paramètres → Cloudflare / Accès</a>.</p>
           </article>
         </div>
       </div>

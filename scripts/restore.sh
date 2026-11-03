@@ -8,6 +8,8 @@ DATA_DIR="${DATA_DIR:-/opt/cinetheque/data}"
 BACKUP_DIR="${BACKUP_DIR:-/opt/cinetheque/backups}"
 SERVICE="${PANEL_SERVICE:-cinetheque-panel}"
 
+[[ $EUID -eq 0 ]] || { echo "Lance ce script en root (sudo)." >&2; exit 1; }
+
 NAME="${1:-}"
 [[ -n "$NAME" ]] || { echo "Usage : restore.sh <archive.tar.gz>" >&2; exit 1; }
 ARCHIVE="$BACKUP_DIR/$NAME"

@@ -36,6 +36,44 @@ def is_syncing(titre_id):
         return titre_id in _syncing
 
 
+# ── Épisodes « diffusés » ────────────────────────────────────────────────────
+# Un épisode à venir ne doit ni être coché par « Vu » (série, saison), ni
+# compter dans la progression : sinon la nouvelle saison, une fois sortie, ne
+# revient jamais dans « Reprendre ». Règle : date connue → diffusé si passée ;
+# date inconnue (TMDB « TBA ») → diffusé seulement si un épisode SUIVANT est
+# déjà sorti, ou si la série n'a aucune date (vieilles fiches incomplètes).
+def flag_diffuses(eps, today=None):
+    """Pose ``diffuse`` (bool) sur les épisodes d'UNE série, triés par
+    (saison, numéro). Renvoie la liste."""
+    today = today or date.today().isoformat()
+    sans_dates = not any(e.get("date_diff") for e in eps)
+    suivant_sorti = False
+    for e in reversed(eps):
+        d = e.get("date_diff")
+        if d:
+            e["diffuse"] = d <= today
+            suivant_sorti = suivant_sorti or e["diffuse"]
+        else:
+            e["diffuse"] = suivant_sorti or sans_dates
+    return eps
+
+
+def ep_diffuse_sql(e="episodes"):
+    """Même règle en SQL : expression vraie si l'épisode (table ou alias ``e``)
+    est déjà diffusé. Sans paramètre (date du jour calculée par SQLite)."""
+    jour = "date('now','localtime')"
+
+    def connue(t):
+        return f"({t}.date_diff IS NOT NULL AND {t}.date_diff != '')"
+    suivant = (f"EXISTS (SELECT 1 FROM episodes _s WHERE _s.titre_id = {e}.titre_id "
+               f"AND {connue('_s')} AND _s.date_diff <= {jour} AND (_s.saison > {e}.saison "
+               f"OR (_s.saison = {e}.saison AND _s.numero > {e}.numero)))")
+    aucune = (f"NOT EXISTS (SELECT 1 FROM episodes _d WHERE _d.titre_id = {e}.titre_id "
+              f"AND {connue('_d')})")
+    return (f"(({connue(e)} AND {e}.date_diff <= {jour}) "
+            f"OR (NOT {connue(e)} AND ({suivant} OR {aucune})))")
+
+
 def _cache_affiche(url):
     if not url:
         return None
@@ -103,6 +141,7 @@ def sync_episodes(titre_id, tmdb, tmdb_id, saisons):
     premiere = db.q1("SELECT 1 FROM episodes WHERE titre_id = ? LIMIT 1",
                      (titre_id,)) is None
     ok = 0
+    conn = db.connect()
     for saison in saisons:
         num = saison["numero"]
         try:
@@ -110,18 +149,33 @@ def sync_episodes(titre_id, tmdb, tmdb_id, saisons):
         except TMDBError:
             continue  # une saison qui échoue ne bloque pas les autres
         ok += 1
-        for ep in episodes:
-            db.run(
+        # Une transaction par saison (et non un commit par épisode), et les
+        # lignes inchangées ne sont pas réécrites : la resynchro de toute la
+        # bibliothèque tient le verrou d'écriture ~6× moins longtemps.
+        with conn:
+            conn.executemany(
                 """INSERT INTO episodes
                    (titre_id, saison, numero, nom, resume, image, duree, date_diff)
                    VALUES (?,?,?,?,?,?,?,?)
                    ON CONFLICT(titre_id, saison, numero) DO UPDATE SET
                      nom=excluded.nom, resume=excluded.resume,
                      image=excluded.image, duree=excluded.duree,
-                     date_diff=excluded.date_diff""",
-                (titre_id, ep["saison"], ep["numero"], ep["nom"],
-                 ep["resume"], ep["image"], ep["duree"], ep["date_diff"]),
-            )
+                     date_diff=excluded.date_diff
+                   WHERE episodes.nom IS NOT excluded.nom
+                      OR episodes.resume IS NOT excluded.resume
+                      OR episodes.image IS NOT excluded.image
+                      OR episodes.duree IS NOT excluded.duree
+                      OR episodes.date_diff IS NOT excluded.date_diff""",
+                [(titre_id, ep["saison"], ep["numero"], ep["nom"], ep["resume"],
+                  ep["image"], ep["duree"], ep["date_diff"]) for ep in episodes])
+            nums = [ep["numero"] for ep in episodes if ep["saison"] == num]
+            if nums:
+                # Épisodes que TMDB a retirés ou renumérotés : jamais vus, ils
+                # empêchaient la série de passer « vue ». Les vus restent.
+                conn.execute(
+                    f"DELETE FROM episodes WHERE titre_id = ? AND saison = ? AND vu = 0 "
+                    f"AND nb_vues = 0 AND numero NOT IN ({','.join('?' * len(nums))})",
+                    (titre_id, num, *nums))
     if premiere:
         # Baseline anti-spam : les épisodes déjà diffusés ne déclenchent pas de
         # notification « nouvel épisode » (sinon rafale de toute la série).

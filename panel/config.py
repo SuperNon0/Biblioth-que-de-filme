@@ -23,6 +23,7 @@ DEFAULTS = {
     "tmdb_api_key": "",
     "tmdb_language": "fr-FR",
     "tmdb_region": "FR",
+    "timezone": "Europe/Paris",      # fuseau du « jour » (épisodes diffusés, alertes)
     "cf_access_email": "",
     # --- Fondation multi-comptes (auth v2, socle « site-base ») ---------------
     "superadmin_email": "",          # e-mail Google du super-admin de base

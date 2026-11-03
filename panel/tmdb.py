@@ -7,6 +7,7 @@ Attribution obligatoire (affichée en pied de page du site) :
 « This product uses the TMDb API but is not endorsed or certified by TMDb. »
 """
 import copy
+import http.client
 import json
 import re
 import threading
@@ -14,6 +15,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections import OrderedDict
 
 API_BASE = "https://api.themoviedb.org/3"
 IMG_BASE = "https://image.tmdb.org/t/p"
@@ -53,9 +55,14 @@ def canon_platform(name):
 # Cache en mémoire du processus (vidé au redémarrage/mise à jour), partagé
 # entre threads. On ne mémorise QUE le catalogue public : les données perso
 # (bibliothèque, statuts) ne passent jamais par TMDB.
-_CACHE = {}
+_CACHE = OrderedDict()  # ordre = du moins au plus récemment utilisé (LRU)
 _CACHE_LOCK = threading.Lock()
 _CACHE_MAX = 500  # nombre d'entrées max (garde-fou mémoire)
+
+# Listes du catalogue (tendances, populaires…) : elles bougent peu dans la
+# journée, et les pages tirées au hasard par les suggestions finissent en cache.
+_LISTES = re.compile(r"^/(trending|discover|movie/(popular|top_rated|now_playing|upcoming)"
+                     r"|tv/(popular|top_rated)|(movie|tv)/\d+/recommendations)")
 
 
 def _cache_ttl(path):
@@ -64,7 +71,9 @@ def _cache_ttl(path):
         return 86400   # genres / plateformes : quasi statiques → 24 h
     if path.startswith("/search/"):
         return 120     # recherche : court, pour dédupliquer la frappe
-    return 600         # catalogue & fiches : 10 min
+    if _LISTES.match(path):
+        return 3 * 3600
+    return 600         # fiches : 10 min
 
 
 def _cache_get(url):
@@ -73,6 +82,7 @@ def _cache_get(url):
     with _CACHE_LOCK:
         entry = _CACHE.get(url)
         if entry and entry[0] > now:
+            _CACHE.move_to_end(url)          # récemment utilisée
             return copy.deepcopy(entry[1])   # copie : l'appelant peut la modifier
         if entry:                            # expirée : on la retire au passage
             _CACHE.pop(url, None)
@@ -81,13 +91,12 @@ def _cache_get(url):
 
 def _cache_put(url, data, ttl):
     with _CACHE_LOCK:
-        if len(_CACHE) >= _CACHE_MAX:        # plein : purge des expirées, puis reset
-            now = time.time()
-            for k in [k for k, v in _CACHE.items() if v[0] <= now]:
-                _CACHE.pop(k, None)
-            if len(_CACHE) >= _CACHE_MAX:
-                _CACHE.clear()
         _CACHE[url] = (time.time() + ttl, data)
+        _CACHE.move_to_end(url)
+        # Plein : on évince les moins récemment utilisées (avant, tout le cache
+        # était vidé d'un coup, genres et plateformes compris).
+        while len(_CACHE) > _CACHE_MAX:
+            _CACHE.popitem(last=False)
 
 
 class TMDBError(RuntimeError):
@@ -95,11 +104,14 @@ class TMDBError(RuntimeError):
 
 
 class TMDB:
-    def __init__(self, api_key, language="fr-FR", region="FR", timeout=8):
+    def __init__(self, api_key, language="fr-FR", region="FR", timeout=8, cache=True):
         self.api_key = api_key
         self.language = language
         self.region = region
         self.timeout = timeout
+        # cache=False : appels de fond (planificateur) qui ne doivent pas
+        # évincer du cache partagé ce que l'interface vient de charger.
+        self.cache = cache
 
     # -- bas niveau --------------------------------------------------------
     def _get(self, path, **params):
@@ -108,7 +120,7 @@ class TMDB:
         params.setdefault("api_key", self.api_key)
         params.setdefault("language", self.language)
         url = f"{API_BASE}{path}?{urllib.parse.urlencode(params)}"
-        cached = _cache_get(url)   # réponse mémorisée récente → pas d'appel réseau
+        cached = _cache_get(url) if self.cache else None  # mémorisée → pas d'appel réseau
         if cached is not None:
             return cached
         try:
@@ -118,9 +130,11 @@ class TMDB:
             if exc.code == 401:
                 raise TMDBError("Clé API TMDB invalide.") from exc
             raise TMDBError(f"TMDB a répondu HTTP {exc.code}.") from exc
-        except (urllib.error.URLError, OSError, ValueError, TimeoutError) as exc:
+        except (urllib.error.URLError, OSError, ValueError, TimeoutError,
+                http.client.HTTPException) as exc:  # ex. IncompleteRead
             raise TMDBError(f"TMDB injoignable : {exc}") from exc
-        _cache_put(url, data, _cache_ttl(path))   # on ne mémorise que les succès
+        if self.cache:
+            _cache_put(url, data, _cache_ttl(path))   # on ne mémorise que les succès
         return data
 
     # -- images ------------------------------------------------------------
@@ -231,9 +245,29 @@ class TMDB:
                       append_to_response="videos,watch/providers,credits")
         return self._tv_detail(d)
 
+    def tv_light(self, tmdb_id):
+        """Fiche série sans vidéos, plateformes ni casting (planificateur) :
+        les saisons et l'affiche suffisent, pour une réponse bien plus légère."""
+        return self._tv_detail(self._get(f"/tv/{tmdb_id}"))
+
     def season(self, tmdb_id, season_number):
         d = self._get(f"/tv/{tmdb_id}/season/{season_number}")
         return [self._episode(e) for e in d.get("episodes", [])]
+
+    def sortie_salles(self, tmdb_id):
+        """Date de sortie au cinéma dans la région (type 3, sinon 2 = sortie
+        limitée), ou None. La date principale de TMDB est souvent celle des
+        États-Unis : une alerte « au cinéma » partait trop tôt."""
+        d = self._get(f"/movie/{tmdb_id}/release_dates")
+        for bloc in d.get("results", []):
+            if bloc.get("iso_3166_1") != self.region:
+                continue
+            for typ in (3, 2):
+                dates = sorted(r["release_date"][:10] for r in bloc.get("release_dates", [])
+                               if r.get("type") == typ and r.get("release_date"))
+                if dates:
+                    return dates[0]
+        return None
 
     # -- normalisation -----------------------------------------------------
     def _brief(self, r, media=None):
@@ -407,7 +441,10 @@ class TMDB:
             "pays": (d.get("origin_country") or [None])[0],
             "note_tmdb": round(d.get("vote_average", 0), 1),
             "duree": (d.get("episode_run_time") or [None])[0],
-            "nb_saisons": d.get("number_of_seasons"),
+            # Saisons qui ont des épisodes : une saison annoncée vide faisait
+            # croire à une synchro incomplète, relancée à chaque ouverture.
+            "nb_saisons": (sum(1 for s in saisons if s["nb_episodes"] != 0)
+                           if d.get("seasons") else d.get("number_of_seasons")),
             "nb_episodes": d.get("number_of_episodes"),
             "en_cours": d.get("in_production"),
             "prochain_episode": d.get("next_episode_to_air"),

@@ -5,6 +5,7 @@
 - Export complet des données (fichier JSON de secours) et réimport.
 """
 import os
+import re
 import subprocess
 import time
 
@@ -21,10 +22,20 @@ bp = Blueprint("settings", __name__, url_prefix="/api")
 
 UPDATE_SCRIPT = "/opt/cinetheque/scripts/update-panel.sh"
 
+# Réglages réservés au super-admin : l'URL de botpanel n'a pas de jeton, un
+# membre pourrait sinon poster sur le Discord.
+_REGLAGES_ADMIN = ("botpanel_url", "botpanel_slug_episode", "botpanel_slug_cine",
+                   "botpanel_slug_streaming", "cf_access_email")
+
+
 @bp.get("/settings")
 @auth.login_required
 def get_settings():
-    return jsonify(settings_store.all_public())
+    data = settings_store.all_public()
+    if not auth.is_super_admin():
+        for key in _REGLAGES_ADMIN:
+            data.pop(key, None)
+    return jsonify(data)
 
 
 @bp.post("/settings")
@@ -54,6 +65,8 @@ def set_settings():
         else:
             values[key] = str(data[key]).strip()
     settings_store.update(values)
+    if values:  # les clés modifiées, jamais leurs valeurs (clé TMDB…)
+        db.audit("reglages", acteur=auth.acteur(), detail=", ".join(sorted(values)))
     return jsonify(ok=True, **settings_store.all_public())
 
 
@@ -72,8 +85,10 @@ def notif_test():
 @auth.login_required
 def test_tmdb():
     """Vérifie que la clé TMDB fonctionne (petite recherche témoin)."""
+    tmdb = get_tmdb()
+    tmdb.cache = False  # un vrai appel : une réponse en cache ne prouve rien
     try:
-        get_tmdb().trending("all", "week")
+        tmdb.trending("all", "week")
         return jsonify(ok=True)
     except TMDBError as exc:
         return jsonify(error=str(exc)), 502
@@ -86,6 +101,16 @@ def _git(src, *args):
         text=True, timeout=5, stderr=subprocess.DEVNULL).strip()
 
 
+def numero_version():
+    """Numéro du fichier ``VERSION`` à la racine du dépôt (ex. « 26.1 »), ou None."""
+    try:
+        with open(os.path.join(cfg().get("source_dir", "/opt/cinetheque-src"), "VERSION"),
+                  encoding="utf-8") as handle:
+            return handle.read().strip() or None
+    except OSError:
+        return None
+
+
 @bp.get("/version")
 @auth.login_required
 def version():
@@ -96,12 +121,7 @@ def version():
     dernier commit est joint quand il est disponible (contexte utile).
     """
     src = cfg().get("source_dir", "/opt/cinetheque-src")
-    numero = None
-    try:
-        with open(os.path.join(src, "VERSION"), encoding="utf-8") as handle:
-            numero = handle.read().strip() or None
-    except OSError:
-        pass
+    numero = numero_version()
     try:
         message = _git(src, "log", "-1", "--pretty=%s")
         return jsonify(version=numero or _git(src, "rev-parse", "--short", "HEAD"),
@@ -123,11 +143,13 @@ def update():
     try:
         proc = subprocess.run(["sudo", "-n", UPDATE_SCRIPT],
                               capture_output=True, text=True, timeout=120)
-    except subprocess.SubprocessError as exc:
+    except (subprocess.SubprocessError, OSError) as exc:  # OSError : sudo absent
         return jsonify(error=f"Échec du lancement : {exc}"), 500
     if proc.returncode != 0:
         detail = (proc.stderr or proc.stdout or "échec inconnu").strip()
+        db.audit("mise_a_jour", acteur=auth.acteur(), detail="échec")
         return jsonify(error=detail[-400:]), 500
+    db.audit("mise_a_jour", acteur=auth.acteur(), detail="lancée")
     return jsonify(ok=True,
                    message="Mise à jour lancée. Le site redémarre dans quelques secondes.")
 
@@ -138,28 +160,32 @@ def repair_data():
     """Vérifie et répare les incohérences de la base (sans rien supprimer) :
 
     - Film marqué « vu » mais sans aucun visionnage → ajoute un visionnage
-      (sinon il ne compte pas dans les statistiques et paraît « non sauvegardé »).
+      « déjà vu » sans date (on ne sait pas quand il a été vu ; sinon il ne
+      compte pas dans les statistiques et paraît « non sauvegardé »).
     - Épisode marqué vu sans compteur (ou l'inverse) → remet le compteur cohérent.
-    Renvoie le détail de ce qui a été corrigé.
+    Renvoie le détail de ce qui a été corrigé. ``{"simulation": true}`` :
+    compte seulement, sans rien écrire (aperçu, utilisé par le connecteur MCP).
     """
     cid = auth.compte_courant_id()
+    simulation = bool((request.get_json(silent=True) or {}).get("simulation"))
     fixes = {"films_vu_sans_visionnage": 0, "episodes_incoherents": 0}
     # 1. Films « vu » sans visionnage (de ce compte uniquement).
     orphelins = db.q(
         """SELECT id FROM titres WHERE type='film' AND statut='vu' AND compte_id = ?
            AND id NOT IN (SELECT titre_id FROM visionnages)""", (cid,))
-    for f in orphelins:
-        db.run("INSERT INTO visionnages (titre_id, date, cree) VALUES (?,?,?)",
-               (f["id"], time.strftime("%Y-%m-%d"), int(time.time())))
     fixes["films_vu_sans_visionnage"] = len(orphelins)
     # 2. Épisodes incohérents (vu sans compteur, ou compteur sans vu), de ce compte.
     scope = ("titre_id IN (SELECT id FROM titres WHERE compte_id = ?)")
-    n = db.q1(f"SELECT COUNT(*) AS n FROM episodes "
-              f"WHERE ((vu=0 AND nb_vues>0) OR (vu=1 AND nb_vues<1)) AND {scope}",
-              (cid,))["n"]
+    fixes["episodes_incoherents"] = db.q1(
+        f"SELECT COUNT(*) AS n FROM episodes "
+        f"WHERE ((vu=0 AND nb_vues>0) OR (vu=1 AND nb_vues<1)) AND {scope}", (cid,))["n"]
+    if simulation:
+        return jsonify(ok=True, simulation=True, fixes=fixes)
+    for f in orphelins:
+        db.run("INSERT INTO visionnages (titre_id, date, cree) VALUES (?,?,?)",
+               (f["id"], None, int(time.time())))
     db.run(f"UPDATE episodes SET vu=1 WHERE vu=0 AND nb_vues>0 AND {scope}", (cid,))
     db.run(f"UPDATE episodes SET nb_vues=1 WHERE vu=1 AND nb_vues<1 AND {scope}", (cid,))
-    fixes["episodes_incoherents"] = n
     return jsonify(ok=True, fixes=fixes)
 
 
@@ -179,6 +205,7 @@ def reset_data():
     except Exception as exc:  # noqa: BLE001
         conn.rollback()
         return jsonify(error=str(exc)), 500
+    db.audit("reinitialisation", acteur=auth.acteur(), cible=str(cid))
     return jsonify(ok=True)
 
 
@@ -189,6 +216,20 @@ _TABLES_TITRE = ["visionnages", "episodes", "alertes", "journal"]
 def _colonnes(conn, table):
     """Colonnes réelles d'une table (liste blanche pour l'import)."""
     return [r[1] for r in conn.execute(f"PRAGMA table_info({table})")]
+
+
+# Champs d'un export réinsérés tels quels dans des attributs HTML (src, href,
+# style) : un fichier piégé ne doit pas pouvoir y glisser du code.
+_IMAGE_OK = re.compile(r"(/media/[\w.-]+|https://image\.tmdb\.org/[\w./-]+)")
+_CHAMPS_SURS = {"affiche": _IMAGE_OK, "fond": _IMAGE_OK, "affiche_url": _IMAGE_OK,
+                "bande_annonce": re.compile(r"[\w-]{1,32}")}  # clé de vidéo YouTube
+
+
+def _assainir(row):
+    for champ, motif in _CHAMPS_SURS.items():
+        if row.get(champ) is not None and not motif.fullmatch(str(row[champ])):
+            row[champ] = None
+    return row
 
 
 @bp.get("/export")
@@ -244,7 +285,10 @@ def import_data():
         map_titres, map_listes = {}, {}
         cols = _colonnes(conn, "titres")
         for row in dump["titres"]:
-            map_titres[row.get("id")] = _insert("titres", row, cols, compte_id=cid)
+            if not isinstance(row, dict):
+                continue
+            map_titres[row.get("id")] = _insert("titres", _assainir(row), cols,
+                                                compte_id=cid)
         cols = _colonnes(conn, "listes")
         for row in dump.get("listes") or []:
             map_listes[row.get("id")] = _insert("listes", row, cols, compte_id=cid)
@@ -264,4 +308,6 @@ def import_data():
         conn.rollback()
         return jsonify(error=f"Import échoué : {exc}"), 500
     db.ensure_system_lists(cid)
+    db.audit("import", acteur=auth.acteur(), cible=str(cid),
+             detail=f"{len(map_titres)} titres")
     return jsonify(ok=True)
