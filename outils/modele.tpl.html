@@ -1,0 +1,142 @@
+<!doctype html>
+<!-- modele.html — le squelette minimal d'un site au design « encre ».
+     Copie-le comme point de départ : remplace les pages, garde la structure.
+     Fichiers à côté : encre.css, encre.js, polices.css, polices/. -->
+<html lang="fr" data-accent-defaut="lavande">
+<head>
+  <meta charset="utf-8">
+  <!-- Zoom autorisé (pas de maximum-scale) ; viewport-fit=cover pour l'encoche. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Mon site</title>
+  <meta name="color-scheme" content="dark light">
+  <meta name="theme-color" content="#0b0f17" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f5f3ee" media="(prefers-color-scheme: light)">
+  <script>
+    /* Avant l'affichage : accent et thème gardés sur cet appareil (rien ne clignote). */
+    try {
+      var p = JSON.parse(localStorage.getItem("encre-apparence") || "{}"), h = document.documentElement;
+      if (p.accent) h.dataset.accent = p.accent;
+      if (p.theme === "sombre") h.dataset.theme = "dark";
+      else if (p.theme === "clair") h.dataset.theme = "light";
+      else { h.dataset.theme = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"; h.dataset.encreAuto = ""; }
+    } catch (e) {}
+  </script>
+  <!-- STYLES -->
+  <!-- SCRIPTS -->
+</head>
+<body>
+<!-- SPRITE -->
+<div class="app">
+  <!-- Menu de gauche : ordinateur (1000 px et plus). -->
+  <aside class="side" aria-label="Menu principal">
+    <div class="ligne">
+      <a class="brand" href="#accueil"><span class="wm">mon<b>site</b></span></a>
+    </div>
+    <!-- Recherche rapide : ce bouton, Ctrl K (⌘ K) ou « / ». -->
+    <button class="side-search" type="button" data-encre-recherche>{{i:search s18}}Rechercher…<span class="kbd">Ctrl K</span></button>
+    <nav aria-label="Pages">
+      <a class="side-it" href="#accueil" data-page="accueil">{{i:home}}<span class="nom">Accueil</span></a>
+      <a class="side-it" href="#liste" data-page="liste">{{i:list}}<span class="nom">Liste</span></a>
+      <a class="side-it" href="#reglages" data-page="reglages">{{i:gear}}<span class="nom">Réglages</span></a>
+    </nav>
+  </aside>
+
+  <div class="main">
+    <!-- Barre du haut : téléphone et tablette (en verre, elle aussi). -->
+    <header class="top">
+      <a class="brand" href="#accueil"><span class="wm">mon<b>site</b></span></a>
+      <span class="esp"></span>
+      <button class="ib" type="button" data-encre-recherche aria-label="Rechercher">{{i:search}}</button>
+    </header>
+
+    <main class="pages">
+      <section class="page" data-page="accueil">
+        <div class="page-h"><h1 class="page-t">Accueil</h1></div>
+        <div class="carte" style="padding: 18px">
+          <p>Le contenu de la page. Fais défiler : il passe sous la barre flottante, adouci par le flou.</p>
+          <div class="ligne" style="margin-top: 12px">
+            <button type="button" class="btn pri" id="essai">{{i:check s18}}Essayer</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="page" data-page="liste">
+        <div class="page-h"><h1 class="page-t">Liste</h1></div>
+        <div class="liste-r">
+          <a class="li" href="#reglages"><span class="li-ic acc">{{i:star}}</span><span class="tx">Un élément<small>Une ligne d'explication</small></span>{{i:chev s18 muted}}</a>
+          <a class="li" href="#reglages"><span class="li-ic">{{i:bell}}</span><span class="tx">Un autre<small>Touche pour ouvrir</small></span>{{i:chev s18 muted}}</a>
+        </div>
+      </section>
+
+      <section class="page" data-page="reglages">
+        <div class="page-h"><h1 class="page-t">Réglages</h1></div>
+        <section class="carte" style="padding: 18px">
+          <div class="reg-sec" style="margin-top: 0">
+            <div class="lbl-mono">Couleur d'accent</div>
+            <!-- encre.js allume la bonne pastille et enregistre le choix. -->
+            <div class="pastilles" data-encre-accent role="radiogroup" aria-label="Couleur d'accent">
+              <button type="button" class="past" data-v="or" role="radio"><i></i>Or</button>
+              <button type="button" class="past" data-v="ambre" role="radio"><i></i>Ambre</button>
+              <button type="button" class="past" data-v="corail" role="radio"><i></i>Corail</button>
+              <button type="button" class="past" data-v="menthe" role="radio"><i></i>Menthe</button>
+              <button type="button" class="past" data-v="lavande" role="radio"><i></i>Lavande</button>
+            </div>
+          </div>
+          <div class="reg-sec">
+            <div class="lbl-mono">Thème</div>
+            <div class="seg" data-encre-theme role="group" aria-label="Thème">
+              <button type="button" data-v="auto">Automatique</button><button type="button" data-v="clair">Clair</button><button type="button" data-v="sombre">Sombre</button>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+  </div>
+</div>
+
+<!-- Barre d'onglets flottante en verre : téléphone et tablette. -->
+<nav class="tabbar" aria-label="Navigation">
+  <a class="tab" href="#accueil" data-page="accueil"><span class="ti">{{i:home s22}}</span>Accueil</a>
+  <a class="tab" href="#liste" data-page="liste"><span class="ti">{{i:list s22}}</span>Liste</a>
+  <a class="tab" href="#reglages" data-page="reglages"><span class="ti">{{i:gear s22}}</span>Réglages</a>
+  <button class="tab" type="button" data-encre-plus="encre-plus" aria-haspopup="dialog"><span class="ti">{{i:dots s22}}</span>Plus</button>
+</nav>
+
+<!-- Contenu de la feuille « Plus ». -->
+<template id="encre-plus">
+  <div class="q-tuiles plus-t">
+    <a class="qt" href="#reglages">{{i:gear s22}}Réglages</a>
+    <a class="qt" href="#liste">{{i:list s22}}Liste</a>
+  </div>
+</template>
+
+<script>
+  /* Affiche la page de l'adresse (#accueil, #liste…). Un site à plusieurs
+     pages côté serveur n'en a pas besoin : <body data-page="…"> suffit. */
+  document.addEventListener("DOMContentLoaded", () => {
+    const pages = [...document.querySelectorAll(".page")].map((p) => p.dataset.page);
+    function montrer() {
+      const page = location.hash.slice(1).split("/")[0];
+      const p = pages.includes(page) ? page : pages[0];
+      document.querySelectorAll(".page").forEach((s) => s.classList.toggle("on", s.dataset.page === p));
+      Encre.nav.marquer(p);
+      scrollTo({ top: 0 });
+    }
+    addEventListener("hashchange", montrer);
+    montrer();
+
+    /* Ce que propose la recherche rapide. */
+    Encre.recherche.raccourcis = [
+      { titre: "Accueil", icone: "home", href: "#accueil" },
+      { titre: "Liste", icone: "list", href: "#liste" },
+      { titre: "Réglages", sous: "Couleur d'accent, thème", icone: "gear", mots: "couleur theme apparence", href: "#reglages" },
+    ];
+
+    document.getElementById("essai").addEventListener("click", async (e) => {
+      const ok = await Encre.confirmer("Ceci remplace confirm() du navigateur.", { ok: "Continuer", titre: "Une question" });
+      if (ok) Encre.toast("Fait", { annuler: async () => {} });
+    });
+  });
+</script>
+</body>
+</html>

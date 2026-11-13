@@ -1,0 +1,24 @@
+const { chromium } = require("playwright");
+const path = require("path");
+(async () => {
+  const b = await chromium.launch();
+  const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const p = await ctx.newPage();
+  const err = [];
+  p.on("pageerror", (e) => err.push(e.message));
+  const base = "file://" + path.resolve(process.argv[2]) + "/";
+  await p.goto(base + "a.html");
+  await p.waitForFunction(() => window.Encre && Encre._demarre);
+  const onglet = () => p.evaluate(() => (document.querySelector(".tab.on") || {}).textContent);
+  console.log("a.html onglet allumé :", await onglet());
+  await p.click(".tab[data-encre-plus]"); await p.waitForTimeout(300);
+  await Promise.all([p.waitForURL(/b\.html$/), p.click("#vers-b")]);
+  await p.waitForFunction(() => window.Encre && Encre._demarre);
+  console.log("après le lien :", p.url().split("/").pop(), "onglet", await onglet());
+  await p.goBack(); await p.waitForTimeout(400);
+  console.log("retour :", p.url().split("/").pop(), "feuille ouverte :", await p.evaluate(() => !!document.querySelector(".feuille")), "onglet", await onglet());
+  const n = await p.evaluate(() => history.length);
+  console.log("historique :", n, "(attendu 2 : a, b)");
+  console.log("erreurs :", err.join(" | ") || "aucune");
+  await b.close();
+})();

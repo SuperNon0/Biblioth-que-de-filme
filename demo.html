@@ -1,0 +1,707 @@
+<!doctype html>
+<!-- Démonstration du design « encre » : ouvre ce fichier dans un navigateur
+     (il charge polices.css, encre.css et encre.js depuis le même dossier).
+     Elle sert aussi de modèle : chaque bloc montre le HTML à recopier. -->
+<html lang="fr" data-accent-defaut="lavande">
+<head>
+  <meta charset="utf-8">
+  <!-- Zoom autorisé : les champs font 16 px, l'iPhone ne zoome pas tout seul. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Design encre · démonstration</title>
+  <meta name="color-scheme" content="dark light">
+  <meta name="theme-color" content="#0b0f17" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f5f3ee" media="(prefers-color-scheme: light)">
+  <script>
+    /* Avant l'affichage : accent et thème gardés sur cet appareil (rien ne clignote). */
+    try {
+      var p = JSON.parse(localStorage.getItem("encre-apparence") || "{}"), h = document.documentElement;
+      if (p.accent) h.dataset.accent = p.accent;
+      if (p.theme === "sombre") h.dataset.theme = "dark";
+      else if (p.theme === "clair") h.dataset.theme = "light";
+      else { h.dataset.theme = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"; h.dataset.encreAuto = ""; }
+    } catch (e) {}
+  </script>
+  <link rel="stylesheet" href="polices.css">
+  <link rel="stylesheet" href="encre.css">
+  <style>
+    /* ---- Propre à cette démonstration (toujours avec les jetons de encre.css). */
+    .marque { width: 30px; height: 30px; border-radius: 9px; background: var(--accent); color: var(--ink); display: grid; place-items: center; font: italic 400 22px/1 var(--f-title); flex: none; padding-bottom: 3px; }
+    .demo-hero { position: relative; overflow: hidden; isolation: isolate; padding: 18px; border-color: var(--line2); }
+    .demo-hero::before { content: ""; position: absolute; inset: 0; z-index: -1; background: radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--accent) 28%, transparent), transparent 62%), radial-gradient(90% 80% at 0% 100%, color-mix(in srgb, var(--prog) 20%, transparent), transparent 60%); }
+    .demo-hero .ey { font: 600 10.5px/1 var(--f-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--accent); display: flex; align-items: center; gap: 6px; }
+    .demo-hero .ttl { font-size: calc(30px * var(--t-scale)); line-height: 1.05; margin-top: 8px; }
+    .demo-hero p { color: var(--soft); margin-top: 8px; max-width: 54ch; font-size: 14.5px; }
+    .demo-hero .bt { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+    @media (min-width: 760px) { .demo-hero { padding: 26px; } .demo-hero .ttl { font-size: calc(40px * var(--t-scale)); } }
+    .demo-mur { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    @media (min-width: 760px) { .demo-mur { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; } }
+    .demo-mur > div { aspect-ratio: 4 / 3; border-radius: var(--r-lg); padding: 12px; display: flex; flex-direction: column; justify-content: flex-end; color: var(--on-img); position: relative; overflow: hidden; isolation: isolate; }
+    .demo-mur > div::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(180deg, transparent 35%, var(--verre-img)); }
+    .demo-mur b { font: 400 calc(19px * var(--t-scale))/1.1 var(--f-title); }
+    .demo-mur span { font-size: 12px; opacity: .9; }
+    .demo-mur .m1 { background: linear-gradient(135deg, var(--sw-lavande), var(--sw-corail)); }
+    .demo-mur .m2 { background: linear-gradient(135deg, var(--sw-menthe), var(--sw-lavande)); }
+    .demo-mur .m3 { background: linear-gradient(135deg, var(--sw-ambre), var(--sw-corail)); }
+    .demo-mur .m4 { background: linear-gradient(135deg, var(--sw-or), var(--sw-menthe)); }
+    .demo-mur .m5 { background: linear-gradient(135deg, var(--sw-corail), var(--sw-or)); }
+    .demo-mur .m6 { background: linear-gradient(135deg, var(--prog), var(--sw-menthe)); }
+    .demo-mur .m7 { background: linear-gradient(135deg, var(--sw-lavande), var(--prog)); }
+    .demo-mur .m8 { background: linear-gradient(135deg, var(--sw-menthe), var(--sw-ambre)); }
+    .demo-sec { margin-top: 26px; }
+    .demo-sec > .lbl-mono { margin-bottom: 10px; }
+    .demo-col { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+    @media (min-width: 1000px) { .demo-col { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; } }
+    .demo-pile { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+    .demo-nuancier { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    @media (min-width: 760px) { .demo-nuancier { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+    .demo-nuancier div { display: flex; gap: 10px; align-items: center; padding: 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); min-width: 0; }
+    .demo-nuancier i { width: 34px; height: 34px; border-radius: 9px; flex: none; box-shadow: inset 0 0 0 1px var(--line2); }
+    .demo-nuancier span { min-width: 0; }
+    .demo-nuancier b { display: block; font: 500 12px var(--f-mono); color: var(--text); }
+    .demo-nuancier small { display: block; font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .demo-typo { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+    .demo-typo .cote { font: 500 11px var(--f-mono); color: var(--muted); display: block; margin-bottom: 3px; }
+    .demo-login { border-radius: var(--r-lg); border: 1px solid var(--line); padding: 26px 14px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; justify-items: center;
+      background: radial-gradient(70% 50% at 50% 0%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%), var(--bg); }
+    @media (min-width: 1000px) { .demo-login { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; padding: 34px; } }
+    .demo-login .login-card { animation: none; }
+    .compteur { font: 600 13px var(--f-mono); color: var(--accent); }
+    .demo-res { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; margin-top: 10px; }
+  </style>
+  <script defer src="encre.js"></script>
+</head>
+<body>
+<svg xmlns="http://www.w3.org/2000/svg" class="sprite" aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden">
+<!-- Icônes du design « encre » : 77 symboles tracés au trait (24 × 24, trait 1,8).
+     Utilisation : <svg class="i"><use href="#i-home"/></svg> si ce fichier est collé dans la page,
+     ou <svg class="i"><use href="/static/icones.svg#i-home"/></svg> en fichier à part (même site). -->
+<symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.8V20h5v-6h4v6h5V9.8"/></symbol>
+<symbol id="i-lib" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="2"/><path d="M8 4.5v15M16 4.5v15M3 9.5h5M16 9.5h5M3 14.5h5M16 14.5h5"/></symbol>
+<symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m14.8 9.2-1.7 4-4 1.7 1.7-4z"/></symbol>
+<symbol id="i-bell" viewBox="0 0 24 24"><path d="M6.5 9.5a5.5 5.5 0 0 1 11 0c0 4.5 2 5.5 2 5.5H4.5s2-1 2-5.5z"/><path d="M10 19a2 2 0 0 0 4 0"/></symbol>
+<symbol id="i-bellon" viewBox="0 0 24 24"><path d="M6.5 9.5a5.5 5.5 0 0 1 11 0c0 4.5 2 5.5 2 5.5H4.5s2-1 2-5.5z" fill="currentColor"/><path d="M10 19a2 2 0 0 0 4 0"/></symbol>
+<symbol id="i-dots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.7" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></symbol>
+<symbol id="i-list" viewBox="0 0 24 24"><path d="M8.5 6H21M8.5 12H21M8.5 18H21"/><circle cx="4" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="4" cy="18" r="1.2" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-listplus" viewBox="0 0 24 24"><path d="M3 6h12M3 12h12M3 18h7"/><path d="M17.5 14.5v7M14 18h7"/></symbol>
+<symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+<symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.2a6.5 6.5 0 0 1 3.5 5.8"/></symbol>
+<symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 20.5h18"/><path d="M6.5 20.5v-6M12 20.5V4.5M17.5 20.5v-9"/></symbol>
+<symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.6M12 18.6v2.6M21.2 12h-2.6M5.4 12H2.8M18.5 5.5l-1.8 1.8M7.3 16.7l-1.8 1.8M18.5 18.5l-1.8-1.8M7.3 7.3 5.5 5.5"/><circle cx="12" cy="12" r="7"/></symbol>
+<symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.4 9.4a2.6 2.6 0 1 1 3.7 2.4c-.7.3-1.1.9-1.1 1.6v.6"/><circle cx="12" cy="17.2" r=".95" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+<symbol id="i-checks" viewBox="0 0 24 24"><path d="m2.5 12.5 4 4L15 8"/><path d="m11.5 16 .5.5L21 8"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="i-bookmark" viewBox="0 0 24 24"><path d="M6.5 3.5h11v17l-5.5-4-5.5 4z"/></symbol>
+<symbol id="i-bookmarkon" viewBox="0 0 24 24"><path d="M6.5 3.5h11v17l-5.5-4-5.5 4z" fill="currentColor"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><circle cx="12" cy="7.6" r=".95" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+<symbol id="i-chevl" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></symbol>
+<symbol id="i-chevd" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+<symbol id="i-chevu" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></symbol>
+<symbol id="i-film" viewBox="0 0 24 24"><rect x="3" y="3.5" width="18" height="17" rx="2.5"/><path d="M7.5 3.5v17M16.5 3.5v17M3 8h4.5M3 12h4.5M3 16h4.5M16.5 8H21M16.5 12H21M16.5 16H21"/></symbol>
+<symbol id="i-tv" viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="13" rx="2.5"/><path d="M8 21h8M9 2.5l3 2.5 3-2.5"/></symbol>
+<symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20s-7.5-4.6-9-9.2C1.9 7.3 4.3 4.5 7.3 4.5c1.9 0 3.3 1 4.7 2.7 1.4-1.7 2.8-2.7 4.7-2.7 3 0 5.4 2.8 4.3 6.3C19.5 15.4 12 20 12 20z"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></symbol>
+<symbol id="i-filter" viewBox="0 0 24 24"><path d="M3.5 5h17l-6.5 8v6l-4-2v-4z"/></symbol>
+<symbol id="i-sort" viewBox="0 0 24 24"><path d="M7 4v16M3.5 16.5 7 20l3.5-3.5M17 20V4M13.5 7.5 17 4l3.5 3.5"/></symbol>
+<symbol id="i-grid" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></symbol>
+<symbol id="i-rows" viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="4.5" rx="1.5"/><rect x="3.5" y="9.75" width="17" height="4.5" rx="1.5"/><rect x="3.5" y="15.5" width="17" height="4.5" rx="1.5"/></symbol>
+<symbol id="i-grip" viewBox="0 0 24 24"><circle cx="9" cy="6" r="1.3" fill="currentColor" stroke="none"/><circle cx="15" cy="6" r="1.3" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="9" cy="18" r="1.3" fill="currentColor" stroke="none"/><circle cx="15" cy="18" r="1.3" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.5c0 4.6 3.2 8 7.5 9.5 4.3-1.5 7.5-4.9 7.5-9.5V6z"/></symbol>
+<symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M16.5 6.5 19 9M14 9l2 2"/></symbol>
+<symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18.5h10.5a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.5 10a4.25 4.25 0 0 0 .5 8.5z"/></symbol>
+<symbol id="i-plug" viewBox="0 0 24 24"><path d="M9 2.5v5M15 2.5v5M6 7.5h12v3a6 6 0 0 1-12 0zM12 16.5v5"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3.5v12M7 11l5 5 5-5M4 20.5h16"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.7-4.3L3.5 9"/><path d="M3.5 4v5h5"/><path d="M4 13a8 8 0 0 0 14.7 4.3l1.8-2.3"/><path d="M20.5 20v-5h-5"/></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3.5 2.5 20h19z"/><path d="M12 10v4.5"/><circle cx="12" cy="17.2" r=".95" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3c.6 4.2 2.8 6.4 7 7-4.2.6-6.4 2.8-7 7-.6-4.2-2.8-6.4-7-7 4.2-.6 6.4-2.8 7-7z"/></symbol>
+<symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></symbol>
+<symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></symbol>
+<symbol id="i-palette" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18c1.2 0 1.8-.8 1.8-1.7 0-1.3-1.1-1.6-1.1-2.8 0-1 .8-1.7 1.8-1.7H17a4 4 0 0 0 4-4C21 6.4 17 3 12 3z"/><circle cx="7.5" cy="11" r="1.2"/><circle cx="10.5" cy="7.2" r="1.2"/><circle cx="15" cy="7.5" r="1.2"/></symbol>
+<symbol id="i-type" viewBox="0 0 24 24"><path d="M4.5 7V4.5h15V7M12 4.5v15M8.5 19.5h7"/></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/></symbol>
+<symbol id="i-logout" viewBox="0 0 24 24"><path d="M14 4.5h4.5A1.5 1.5 0 0 1 20 6v12a1.5 1.5 0 0 1-1.5 1.5H14"/><path d="M10 16.5 5.5 12 10 7.5M5.5 12H15"/></symbol>
+<symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/></symbol>
+<symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></symbol>
+<symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 0 5 5L21 12.6a6 6 0 0 1-7.4 1.9L7 21.1a2.1 2.1 0 0 1-3-3l6.6-6.6A6 6 0 0 1 12.4 4l1.3 1.3z"/></symbol>
+<symbol id="i-chat" viewBox="0 0 24 24"><path d="M4 5h16v11H9.5L4 20.5z"/></symbol>
+<symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+<symbol id="i-cal" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></symbol>
+<symbol id="i-share" viewBox="0 0 24 24"><path d="M12 3.5v12M7.5 8 12 3.5 16.5 8"/><path d="M5 12.5V19a1.5 1.5 0 0 0 1.5 1.5h11A1.5 1.5 0 0 0 19 19v-6.5"/></symbol>
+<symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+<symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/></symbol>
+<symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2.5 4.5 13.5H12l-1 8 8.5-11H12z"/></symbol>
+<symbol id="i-hourglass" viewBox="0 0 24 24"><path d="M6.5 3.5h11M6.5 20.5h11M7.5 3.5c0 5 9 5.5 9 8.5s-9 3.5-9 8.5M16.5 3.5c0 5-9 5.5-9 8.5s9 3.5 9 8.5"/></symbol>
+<symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m3.5 6.5 8.5 7 8.5-7"/></symbol>
+<symbol id="i-signal" viewBox="0 0 24 24"><rect x="2.5" y="15" width="3" height="5" rx="1" fill="currentColor" stroke="none"/><rect x="7.5" y="11.5" width="3" height="8.5" rx="1" fill="currentColor" stroke="none"/><rect x="12.5" y="8" width="3" height="12" rx="1" fill="currentColor" stroke="none"/><rect x="17.5" y="4.5" width="3" height="15.5" rx="1" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-wifi" viewBox="0 0 24 24"><path d="M2.5 9a14 14 0 0 1 19 0M5.5 12.5a9.5 9.5 0 0 1 13 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19.2" r="1.3" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-spin" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9" /></symbol>
+<symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12.5" height="12.5" rx="2.5"/><path d="M16 8V5.5A2 2 0 0 0 14 3.5H5.5a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2H8"/></symbol>
+<symbol id="i-hash" viewBox="0 0 24 24"><path d="M9 3.5 7 20.5M17 3.5l-2 17M4 9h16.5M3.5 15H20"/></symbol>
+<symbol id="i-dot" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></symbol>
+<symbol id="i-staron" viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" fill="currentColor"/></symbol>
+<symbol id="i-heartfill" viewBox="0 0 24 24"><path d="M12 20s-7.5-4.6-9-9.2C1.9 7.3 4.3 4.5 7.3 4.5c1.9 0 3.3 1 4.7 2.7 1.4-1.7 2.8-2.7 4.7-2.7 3 0 5.4 2.8 4.3 6.3C19.5 15.4 12 20 12 20z" fill="currentColor"/></symbol>
+<symbol id="i-dice" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3.5"/><circle cx="8.5" cy="8.5" r="1.1" fill="currentColor" stroke="none"/><circle cx="15.5" cy="8.5" r="1.1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.1" fill="currentColor" stroke="none"/><circle cx="8.5" cy="15.5" r="1.1" fill="currentColor" stroke="none"/><circle cx="15.5" cy="15.5" r="1.1" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 15.5v-12M7 8l5-5 5 5M4 20.5h16"/></symbol>
+<symbol id="i-ticket" viewBox="0 0 24 24"><path d="M4 7.5A1.5 1.5 0 0 1 5.5 6h13A1.5 1.5 0 0 1 20 7.5V10a2 2 0 0 0 0 4v2.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 16.5V14a2 2 0 0 0 0-4z"/><path d="M14.5 6.5v2M14.5 11v2M14.5 15.5v2"/></symbol>
+<symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v4.5A1.5 1.5 0 0 1 16.5 20h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"/></symbol>
+<symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+<symbol id="i-rotate" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4.5V11h-6.5"/></symbol>
+</svg>
+<div class="app">
+  <!-- ======================================= menu de gauche (ordinateur, 1000 px et plus) -->
+  <aside class="side" aria-label="Menu principal">
+    <div class="ligne">
+      <a class="brand" href="#accueil" aria-label="encre, accueil"><span class="marque" aria-hidden="true">e</span><span class="wm">en<b>cre</b></span></a>
+      <span class="ver" title="Version du design">1.0</span>
+    </div>
+    <button class="side-search" type="button" data-encre-recherche><svg class="i s18" aria-hidden="true"><use href="#i-search"/></svg>Rechercher…<span class="kbd">Ctrl K</span></button>
+    <nav aria-label="Pages">
+      <a class="side-it" href="#accueil" data-page="accueil"><svg class="i" aria-hidden="true"><use href="#i-home"/></svg><span class="nom">Accueil</span></a>
+      <a class="side-it" href="#briques" data-page="briques"><svg class="i" aria-hidden="true"><use href="#i-grid"/></svg><span class="nom">Briques</span><span class="n">24</span></a>
+      <a class="side-it" href="#retours" data-page="retours"><svg class="i" aria-hidden="true"><use href="#i-zap"/></svg><span class="nom">Retours</span></a>
+      <a class="side-it" href="#apparence" data-page="apparence"><svg class="i" aria-hidden="true"><use href="#i-palette"/></svg><span class="nom">Apparence</span></a>
+    </nav>
+    <div class="side-lbl">Exemples</div>
+    <div class="side-listes">
+      <a class="side-it" href="#reglages" data-page="reglages"><svg class="i" aria-hidden="true"><use href="#i-gear"/></svg><span class="nom">Réglages</span></a>
+      <a class="side-it" href="#connexion" data-page="connexion"><svg class="i" aria-hidden="true"><use href="#i-lock"/></svg><span class="nom">Connexion</span></a>
+      <a class="side-it" href="#aide" data-page="aide"><svg class="i" aria-hidden="true"><use href="#i-help"/></svg><span class="nom">Aide</span></a>
+    </div>
+    <div class="side-foot">
+      <div class="side-compte">
+        <span class="av" aria-hidden="true">N</span><span title="noe@exemple.fr">noe@exemple.fr</span>
+        <button type="button" class="ib form-deco" data-demo="deco" title="Se déconnecter" aria-label="Se déconnecter"><svg class="i s18" aria-hidden="true"><use href="#i-logout"/></svg></button>
+      </div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <!-- ================================== barre du haut (téléphone et tablette) -->
+    <header class="top" id="top">
+      <a class="brand" href="#accueil" aria-label="encre, accueil"><span class="marque" aria-hidden="true">e</span><span class="wm">en<b>cre</b></span></a>
+      <span class="esp"></span>
+      <button class="ib" type="button" data-demo="theme" aria-label="Changer de thème"><svg class="i" aria-hidden="true"><use href="#i-moon"/></svg></button>
+      <button class="ib" type="button" data-encre-recherche aria-label="Rechercher"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg></button>
+    </header>
+
+    <main class="pages" id="pages">
+      <!-- =========================================================== Accueil -->
+      <section class="page" data-page="accueil" aria-label="Accueil">
+        <div class="page-h">
+          <h1 class="page-t">Bonjour</h1>
+          <div class="seg" role="group" aria-label="Période">
+            <button type="button" class="on" data-seg>Jour</button><button type="button" data-seg>Semaine</button><button type="button" data-seg>Mois</button>
+          </div>
+        </div>
+        <div class="anim">
+          <div class="carte demo-hero">
+            <div class="ey"><svg class="i s16" aria-hidden="true"><use href="#i-sparkle"/></svg>Le design « encre »</div>
+            <h2 class="ttl">Un seul style pour tous tes sites</h2>
+            <p>Fond couleur d'encre, une seule couleur d'accent, des titres en DM Serif Display et une barre de navigation qui flotte en verre flouté. Fais défiler : tout passe sous la barre, adouci par le flou.</p>
+            <div class="bt">
+              <a class="btn pri" href="#briques"><svg class="i s18" aria-hidden="true"><use href="#i-grid"/></svg>Voir les briques</a>
+              <a class="btn" href="#apparence"><svg class="i s18" aria-hidden="true"><use href="#i-palette"/></svg>Changer la couleur</a>
+            </div>
+          </div>
+
+          <div class="sec-h"><h2 class="sec-t">Chiffres clés <button type="button" class="q" aria-label="Explication" data-t="Chiffres clés" data-d="Des tuiles pour les chiffres importants : le titre en petit, la valeur en grand dans la police des titres, une ligne d'explication dessous.">?</button></h2></div>
+          <div class="tuiles">
+            <div class="tuile big">
+              <div class="k"><svg class="i s16" aria-hidden="true"><use href="#i-clock"/></svg>Temps total</div>
+              <div class="v">2 930 <small>h</small></div>
+              <div class="s">soit 122 jours, d'après tout ce qui est enregistré</div>
+              <div class="split" aria-hidden="true"><i class="f" style="width: 22%"></i><i class="s" style="width: 78%"></i></div>
+              <div class="leg"><span><i class="f"></i>Films 22 %</span><span><i class="s"></i>Séries 78 %</span></div>
+            </div>
+            <div class="tuile"><div class="k"><svg class="i s16" aria-hidden="true"><use href="#i-check"/></svg>Terminés</div><div class="v">377</div><div class="s">+12 ce mois-ci</div></div>
+            <div class="tuile"><div class="k"><svg class="i s16" aria-hidden="true"><use href="#i-play"/></svg>En cours</div><div class="v">8</div><div class="s">dont 3 cette semaine</div></div>
+            <div class="tuile"><div class="k"><svg class="i s16" aria-hidden="true"><use href="#i-bookmark"/></svg>À faire</div><div class="v">210</div><div class="s">la liste qui grandit</div></div>
+            <div class="tuile"><div class="k"><svg class="i s16" aria-hidden="true"><use href="#i-staron"/></svg>Favoris</div><div class="v">24</div><div class="s">tes indispensables</div></div>
+          </div>
+
+          <div class="sec-h"><h2 class="sec-t">Une rangée d'images</h2><a class="lien-r" href="#briques">Tout voir<svg class="i s16" aria-hidden="true"><use href="#i-chev"/></svg></a></div>
+          <div class="demo-mur">
+            <div class="m1"><b>Lavande</b><span>l'accent par défaut</span></div>
+            <div class="m2"><b>Menthe</b><span>calme et frais</span></div>
+            <div class="m3"><b>Ambre</b><span>chaleureux</span></div>
+            <div class="m4"><b>Or</b><span>l'ancien RecipeLog</span></div>
+            <div class="m5"><b>Corail</b><span>énergique</span></div>
+            <div class="m6"><b>Progression</b><span>les barres d'avancement</span></div>
+            <div class="m7"><b>Verre</b><span>la barre du bas floute ceci</span></div>
+            <div class="m8"><b>Contraste</b><span>texte toujours lisible</span></div>
+          </div>
+
+          <div class="sec-h"><h2 class="sec-t">Activité récente</h2></div>
+          <div class="liste-r">
+            <div class="li"><span class="li-ic acc"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg></span><span class="tx">Marqué comme terminé<small>Il y a 5 minutes · depuis ton téléphone</small></span><span class="v">14 h 02</span></div>
+            <div class="li"><span class="li-ic"><svg class="i" aria-hidden="true"><use href="#i-listplus"/></svg></span><span class="tx">Ajouté à « Soirées pop-corn »<small>Hier soir</small></span><span class="v">21 h 47</span></div>
+            <div class="li"><span class="li-ic"><svg class="i" aria-hidden="true"><use href="#i-refresh"/></svg></span><span class="tx">Site mis à jour en 1.0<small>Tout s'est bien passé</small></span><span class="v">Lun.</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =========================================================== Briques -->
+      <section class="page" data-page="briques" aria-label="Briques">
+        <div class="page-h"><h1 class="page-t">Briques <span class="n">24</span></h1></div>
+        <p class="intro-p">Les pièces communes à tous les sites. Chacune garde le même nom de classe partout (voir LISEZMOI.md).</p>
+        <div class="demo-col">
+          <div class="demo-pile">
+            <div class="bloc">
+              <div class="lbl-mono">Boutons</div>
+              <div class="ligne" style="margin-top: 10px">
+                <button type="button" class="btn pri"><svg class="i s18" aria-hidden="true"><use href="#i-check"/></svg>Principal</button>
+                <button type="button" class="btn">Normal</button>
+                <button type="button" class="btn gh">Discret</button>
+                <button type="button" class="btn dn"><svg class="i s18" aria-hidden="true"><use href="#i-trash"/></svg>Danger</button>
+              </div>
+              <div class="ligne" style="margin-top: 8px">
+                <button type="button" class="btn sm pri">Petit</button>
+                <button type="button" class="btn sm">Petit</button>
+                <button type="button" class="btn xs">Mini</button>
+                <button type="button" class="btn ico" aria-label="Ajouter"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg></button>
+                <button type="button" class="btn prg sm">En cours</button>
+                <button type="button" class="btn okb sm">Réussi</button>
+              </div>
+              <div class="ligne" style="margin-top: 8px">
+                <button type="button" class="btn pri deux" data-demo="occupe"><span><svg class="i s18" aria-hidden="true"><use href="#i-check"/></svg>Enregistrer</span><span class="sub">bloque le temps d'enregistrer</span></button>
+                <button type="button" class="ib" aria-label="Partager"><svg class="i" aria-hidden="true"><use href="#i-share"/></svg></button>
+                <button type="button" class="ib on" aria-label="Favori"><svg class="i" aria-hidden="true"><use href="#i-heartfill"/></svg></button>
+                <a class="lien" href="#retours">Un lien<svg class="i s16" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+              </div>
+            </div>
+
+            <div class="bloc">
+              <div class="lbl-mono">Puces et segments</div>
+              <div class="chips" style="margin-top: 10px">
+                <button type="button" class="chip on">Tout <span class="n">520</span></button>
+                <button type="button" class="chip">Films <span class="n">377</span></button>
+                <button type="button" class="chip">Séries <span class="n">143</span></button>
+                <button type="button" class="chip"><svg class="i s16" aria-hidden="true"><use href="#i-filter"/></svg>Filtres <span class="pastille">2</span></button>
+              </div>
+              <div class="ligne" style="margin-top: 12px; flex-wrap: nowrap">
+                <div class="seg" role="group" aria-label="Vue" style="flex: 1">
+                  <button type="button" class="on" data-seg>Grille</button><button type="button" data-seg>Liste</button><button type="button" data-seg>Rangées</button>
+                </div>
+                <div class="seg ico" role="group" aria-label="Affichage">
+                  <button type="button" class="on" data-seg aria-label="Grille"><svg class="i s18" aria-hidden="true"><use href="#i-grid"/></svg></button><button type="button" data-seg aria-label="Lignes"><svg class="i s18" aria-hidden="true"><use href="#i-rows"/></svg></button>
+                </div>
+              </div>
+            </div>
+
+            <div class="bloc">
+              <div class="lbl-mono">Champs</div>
+              <div class="form" style="margin-top: 10px">
+                <label class="champ"><svg class="i s18" aria-hidden="true"><use href="#i-search"/></svg><input type="search" placeholder="Chercher un titre…" aria-label="Chercher"><span class="kbd">Ctrl K</span></label>
+                <div><label class="lbl" for="d-nom">Nom</label><input class="input" id="d-nom" placeholder="Ex. : Soirées pop-corn"></div>
+                <div><label class="lbl" for="d-choix">Choix</label><select class="select" id="d-choix"><option>Tous les jours</option><option>Chaque semaine</option></select></div>
+                <div><label class="lbl" for="d-note">Note</label><textarea class="input" id="d-note" rows="2" placeholder="Quelques mots…"></textarea></div>
+                <p class="statut ok">Enregistré à 14 h 02</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="demo-pile">
+            <div class="bloc">
+              <div class="lbl-mono">Interrupteurs et coches</div>
+              <div class="reg-l"><div class="tx"><b>Notifications</b><span>Un message le jour de la sortie</span></div><input type="checkbox" class="sw" checked aria-label="Notifications"></div>
+              <div class="reg-l"><div class="tx"><b>Mode compact <button type="button" class="q" aria-label="Explication" data-t="Mode compact" data-d="Exemple de bulle « ? » : un mot d'explication à côté d'un réglage ou d'un chiffre.">?</button></b><span>Moins d'espace entre les lignes</span></div><input type="checkbox" class="sw" aria-label="Mode compact"></div>
+              <div class="reg-l"><div class="tx"><b>Coches rondes et carrées</b><span>Touche pour cocher</span></div>
+                <button type="button" class="ck on" data-ck aria-pressed="true" aria-label="Coché"><svg class="i s16" aria-hidden="true"><use href="#i-check"/></svg></button>
+                <button type="button" class="ck" data-ck aria-pressed="false" aria-label="Pas coché"><svg class="i s16" aria-hidden="true"><use href="#i-check"/></svg></button>
+                <button type="button" class="ck sq on" data-ck aria-pressed="true" aria-label="Coché"><svg class="i s16" aria-hidden="true"><use href="#i-check"/></svg></button>
+              </div>
+            </div>
+
+            <div class="bloc">
+              <div class="lbl-mono">Progression, badges</div>
+              <div class="demo-pile" style="margin-top: 10px">
+                <div class="pg"><i style="width: 64%"></i></div>
+                <div class="pg ok"><i style="width: 100%"></i></div>
+                <div class="pg acc epais"><i style="width: 38%"></i></div>
+                <div class="ligne"><span class="badge">Accès privé</span><span class="role-badge role-super">Super-admin</span><span class="role-badge role-membre">Membre</span><span class="role-badge role-bloque">Bloqué</span><span class="kbd">Échap</span></div>
+              </div>
+            </div>
+
+            <div class="bloc">
+              <div class="lbl-mono">Vide et chargement</div>
+              <div class="vide"><svg class="i" aria-hidden="true"><use href="#i-list"/></svg><b>Rien ici pour l'instant</b><span>Un message doux quand une liste est vide, avec ce qu'on peut faire.</span><button type="button" class="btn sm pri" data-demo="demander"><svg class="i s16" aria-hidden="true"><use href="#i-plus"/></svg>Créer une liste</button></div>
+              <div class="sk ln t"></div><div class="sk sk-l"></div><div class="sk ln" style="width: 70%"></div>
+            </div>
+
+            <div class="zone-d">
+              <h3><svg class="i s18" aria-hidden="true"><use href="#i-alert"/></svg>Zone sensible</h3>
+              <p>Les actions qu'on ne peut pas défaire sont rangées tout en bas, en rouge, et demandent une confirmation.</p>
+              <button type="button" class="btn dn sm" style="margin-top: 12px" data-demo="danger"><svg class="i s16" aria-hidden="true"><use href="#i-trash"/></svg>Tout effacer</button>
+            </div>
+
+            <div class="bloc">
+              <div class="lbl-mono">Copier, avertir, montrer du code</div>
+              <div class="copie"><code>encre-1-0-demo</code><button type="button" class="btn sm" data-demo="copier"><svg class="i s16" aria-hidden="true"><use href="#i-copy"/></svg>Copier</button></div>
+              <div class="bandeau-c" style="margin-top: 10px"><svg class="i s18" aria-hidden="true"><use href="#i-alert"/></svg><span>Un avertissement : à lire avant de continuer.</span></div>
+              <pre class="bloc-code">sudo bash /opt/mon-site/install.sh</pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =========================================================== Retours -->
+      <section class="page" data-page="retours" aria-label="Retours">
+        <div class="page-h"><h1 class="page-t">Retours</h1></div>
+        <p class="intro-p">Ce que le site répond quand on agit. Jamais de fenêtre grise du navigateur : tout se passe dans la page, et le bouton retour du téléphone referme ce qui est ouvert.</p>
+        <div class="demo-col">
+          <div class="demo-pile">
+            <div class="reg-g">Messages</div>
+            <div class="liste-r">
+              <button type="button" class="li" data-demo="toast"><span class="li-ic"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg></span><span class="tx">Message simple<small>« Enregistré », 2,6 secondes</small></span><svg class="i s18 muted" aria-hidden="true"><use href="#i-chev"/></svg></button>
+              <button type="button" class="li" data-demo="annuler"><span class="li-ic acc"><svg class="i" aria-hidden="true"><use href="#i-undo"/></svg></span><span class="tx">Message avec « Annuler »<small>5 secondes pour revenir en arrière · compteur : <span class="compteur" id="d-compteur">0</span></small></span><svg class="i s18 muted" aria-hidden="true"><use href="#i-chev"/></svg></button>
+              <button type="button" class="li" data-demo="erreur"><span class="li-ic"><svg class="i" aria-hidden="true"><use href="#i-alert"/></svg></span><span class="tx">Message d'erreur<small>En rouge, un peu plus long</small></span><svg class="i s18 muted" aria-hidden="true"><use href="#i-chev"/></svg></button>
+            </div>
+            <div class="reg-g" style="margin-top: 8px">Questions</div>
+            <div class="liste-r">
+              <button type="button" class="li" data-demo="confirmer"><span class="li-ic"><svg class="i" aria-hidden="true"><use href="#i-help"/></svg></span><span class="tx">Confirmer<small>Remplace confirm()</small></span><svg class="i s18 muted" aria-hidden="true"><use href="#i-chev"/></svg></button>
+              <button type="button" class="li dn" data-demo="danger"><span class="li-ic"><svg class="i" aria-hidden="true"><use href="#i-trash"/></svg></span><span class="tx">Confirmer une action sensible<small>Bouton rouge</small></span><svg class="i s18 muted" aria-hidden="true"><use href="#i-chev"/></svg></button>
+              <button type="button" class="li" data-demo="demander"><span class="li-ic"><svg class="i" aria-hidden="true"><use href="#i-edit"/></svg></span><span class="tx">Demander un nom<small>Remplace prompt()</small></span><svg class="i s18 muted" aria-hidden="true"><use href="#i-chev"/></svg></button>
+            </div>
+          </div>
+          <div class="demo-pile">
+            <div class="reg-g">Feuilles et menus</div>
+            <div class="liste-r">
+              <button type="button" class="li" data-demo="feuille"><span class="li-ic"><svg class="i" aria-hidden="true"><use href="#i-layers"/></svg></span><span class="tx">Feuille du bas<small>Fenêtre centrée sur ordinateur</small></span><svg class="i s18 muted" aria-hidden="true"><use href="#i-chev"/></svg></button>
+              <button type="button" class="li" data-demo="menu"><span class="li-ic"><svg class="i" aria-hidden="true"><use href="#i-dots"/></svg></span><span class="tx">Menu d'actions<small>Menu flottant à la souris, feuille au doigt</small></span><svg class="i s18 muted" aria-hidden="true"><use href="#i-chev"/></svg></button>
+              <button type="button" class="li" data-demo="selection"><span class="li-ic"><svg class="i" aria-hidden="true"><use href="#i-checks"/></svg></span><span class="tx">Sélection multiple<small>Une barre d'actions flottante remplace les onglets</small></span><svg class="i s18 muted" aria-hidden="true"><use href="#i-chev"/></svg></button>
+            </div>
+            <div class="reg-g" style="margin-top: 8px">Boutons qui travaillent</div>
+            <div class="bloc">
+              <p class="soft petit">Un bouton qui enregistre se grise et montre une roue : impossible d'envoyer deux fois.</p>
+              <button type="button" class="btn pri w" style="margin-top: 10px" data-demo="occupe"><svg class="i s18" aria-hidden="true"><use href="#i-upload"/></svg>Envoyer</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================================= Apparence -->
+      <section class="page" data-page="apparence" aria-label="Apparence">
+        <div class="page-h"><h1 class="page-t">Apparence</h1></div>
+        <div class="demo-col">
+          <section class="carte" style="padding: 18px">
+            <div class="reg-sec" style="margin-top: 0">
+              <div class="lbl-mono">Couleur d'accent <button type="button" class="q" aria-label="Explication" data-t="Couleur d'accent" data-d="La couleur des boutons principaux, des onglets actifs et des titres mis en avant. Elle s'adapte au thème clair pour rester lisible.">?</button></div>
+              <div class="pastilles" data-encre-accent role="radiogroup" aria-label="Couleur d'accent">
+                <button type="button" class="past" data-v="or" role="radio"><i></i>Or</button>
+                <button type="button" class="past" data-v="ambre" role="radio"><i></i>Ambre</button>
+                <button type="button" class="past" data-v="corail" role="radio"><i></i>Corail</button>
+                <button type="button" class="past" data-v="menthe" role="radio"><i></i>Menthe</button>
+                <button type="button" class="past" data-v="lavande" role="radio"><i></i>Lavande</button>
+              </div>
+            </div>
+            <div class="reg-sec">
+              <div class="lbl-mono">Thème <button type="button" class="q" aria-label="Explication" data-t="Thème" data-d="« Automatique » suit le réglage de ton appareil : clair en journée, sombre le soir. Tu peux aussi forcer l'un ou l'autre.">?</button></div>
+              <div class="seg" data-encre-theme role="group" aria-label="Thème">
+                <button type="button" data-v="auto"><svg class="i s16" aria-hidden="true"><use href="#i-refresh"/></svg>Automatique</button><button type="button" data-v="clair"><svg class="i s16" aria-hidden="true"><use href="#i-sun"/></svg>Clair</button><button type="button" data-v="sombre"><svg class="i s16" aria-hidden="true"><use href="#i-moon"/></svg>Sombre</button>
+              </div>
+            </div>
+            <div class="reg-sec">
+              <div class="lbl-mono">Les polices</div>
+              <div class="demo-typo">
+                <div><span class="cote">DM Serif Display · titres de page, 27 px (30 sur ordinateur)</span><div class="page-t">Bonjour Noë</div></div>
+                <div><span class="cote">DM Serif Display · titres de section, 19 px</span><div class="sec-t">Activité récente</div></div>
+                <div><span class="cote">Archivo · texte, 15 px</span><p>Le texte de tous les jours : résumés, boutons, réglages. Une police nette et reposante, même en petit.</p></div>
+                <div><span class="cote">DM Mono · petits libellés en capitales, 11 px</span><div class="lbl-mono">Mon compte</div></div>
+              </div>
+            </div>
+          </section>
+          <section class="carte" style="padding: 18px">
+            <div class="lbl-mono" style="margin-bottom: 10px">Les couleurs (jetons de encre.css)</div>
+            <div class="demo-nuancier">
+              <div><i style="background: var(--bg)"></i><span><b>--bg</b><small>fond de page</small></span></div>
+              <div><i style="background: var(--surface)"></i><span><b>--surface</b><small>barres, champs</small></span></div>
+              <div><i style="background: var(--card)"></i><span><b>--card</b><small>cartes</small></span></div>
+              <div><i style="background: var(--pop)"></i><span><b>--pop</b><small>menus, feuilles</small></span></div>
+              <div><i style="background: var(--line2)"></i><span><b>--line2</b><small>bordures</small></span></div>
+              <div><i style="background: var(--text)"></i><span><b>--text</b><small>texte</small></span></div>
+              <div><i style="background: var(--soft)"></i><span><b>--soft</b><small>texte secondaire</small></span></div>
+              <div><i style="background: var(--muted)"></i><span><b>--muted</b><small>texte discret</small></span></div>
+              <div><i style="background: var(--accent)"></i><span><b>--accent</b><small>l'accent choisi</small></span></div>
+              <div><i style="background: var(--ink)"></i><span><b>--ink</b><small>texte sur l'accent</small></span></div>
+              <div><i style="background: var(--ok)"></i><span><b>--ok</b><small>réussi, vu</small></span></div>
+              <div><i style="background: var(--prog)"></i><span><b>--prog</b><small>en cours</small></span></div>
+              <div><i style="background: var(--danger)"></i><span><b>--danger</b><small>supprimer, erreur</small></span></div>
+              <div><i style="background: var(--warn)"></i><span><b>--warn</b><small>attention</small></span></div>
+              <div><i style="background: var(--acc-dim)"></i><span><b>--acc-dim</b><small>fond teinté</small></span></div>
+              <div><i style="background: var(--glass)"></i><span><b>--glass</b><small>verre des barres</small></span></div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <!-- ========================================================== Réglages -->
+      <section class="page" data-page="reglages" aria-label="Réglages">
+        <div class="page-h"><h1 class="page-t">Réglages</h1></div>
+        <div class="reglages" id="d-reglages">
+          <div class="reg-liste">
+            <div>
+              <div class="reg-g">Mon compte</div>
+              <div class="liste-r">
+                <a class="li" href="#reglages/apparence" data-reg="apparence"><span class="li-ic acc"><svg class="i" aria-hidden="true"><use href="#i-palette"/></svg></span><span class="tx">Apparence<small>Couleur d'accent, thème</small></span><svg class="i s18 muted" aria-hidden="true"><use href="#i-chev"/></svg></a>
+                <a class="li" href="#reglages/notifications" data-reg="notifications"><span class="li-ic"><svg class="i" aria-hidden="true"><use href="#i-bell"/></svg></span><span class="tx">Notifications<small>Discord, rappels</small></span><svg class="i s18 muted" aria-hidden="true"><use href="#i-chev"/></svg></a>
+              </div>
+            </div>
+            <div>
+              <div class="reg-g">Site</div>
+              <div class="liste-r">
+                <a class="li" href="#reglages/site" data-reg="site"><span class="li-ic"><svg class="i" aria-hidden="true"><use href="#i-refresh"/></svg></span><span class="tx">Mise à jour<small>Version 1.0</small></span><svg class="i s18 muted" aria-hidden="true"><use href="#i-chev"/></svg></a>
+                <a class="li" href="#reglages/avance" data-reg="avance"><span class="li-ic"><svg class="i" aria-hidden="true"><use href="#i-wrench"/></svg></span><span class="tx">Avancé<small>Clés, connecteurs, données</small></span><svg class="i s18 muted" aria-hidden="true"><use href="#i-chev"/></svg></a>
+              </div>
+            </div>
+          </div>
+          <div class="reg-det">
+            <a class="btn sm gh reg-retour" href="#reglages"><svg class="i s18" aria-hidden="true"><use href="#i-chevl"/></svg>Réglages</a>
+            <section class="carte reg-panneau" data-panneau="apparence">
+              <h2><svg class="i s22 acc" aria-hidden="true"><use href="#i-palette"/></svg>Apparence</h2>
+              <p class="intro">Tout s'enregistre dès que tu changes un réglage. Sur ordinateur, la liste reste à gauche et le réglage s'ouvre à droite.</p>
+              <div class="reg-sec">
+                <div class="lbl-mono">Couleur d'accent</div>
+                <div class="pastilles" data-encre-accent role="radiogroup" aria-label="Couleur d'accent">
+                  <button type="button" class="past" data-v="or" role="radio"><i></i>Or</button>
+                  <button type="button" class="past" data-v="ambre" role="radio"><i></i>Ambre</button>
+                  <button type="button" class="past" data-v="corail" role="radio"><i></i>Corail</button>
+                  <button type="button" class="past" data-v="menthe" role="radio"><i></i>Menthe</button>
+                  <button type="button" class="past" data-v="lavande" role="radio"><i></i>Lavande</button>
+                </div>
+              </div>
+              <div class="reg-sec">
+                <div class="lbl-mono">Thème</div>
+                <div class="seg" data-encre-theme role="group" aria-label="Thème">
+                  <button type="button" data-v="auto">Automatique</button><button type="button" data-v="clair">Clair</button><button type="button" data-v="sombre">Sombre</button>
+                </div>
+              </div>
+            </section>
+            <section class="carte reg-panneau" data-panneau="notifications" hidden>
+              <h2><svg class="i s22 acc" aria-hidden="true"><use href="#i-bell"/></svg>Notifications</h2>
+              <p class="intro">Une ligne par réglage, chacun s'enregistre tout seul.</p>
+              <div class="reg-l"><div class="tx"><b>Sorties</b><span>Le jour de la sortie, à 9 h</span></div><input type="checkbox" class="sw" checked aria-label="Sorties"></div>
+              <div class="reg-l"><div class="tx"><b>Résumé de la semaine</b><span>Chaque dimanche soir</span></div><input type="checkbox" class="sw" aria-label="Résumé de la semaine"></div>
+            </section>
+            <section class="carte reg-panneau" data-panneau="site" hidden>
+              <h2><svg class="i s22 acc" aria-hidden="true"><use href="#i-refresh"/></svg>Mise à jour</h2>
+              <p class="intro">Version installée : 1.0. Le site se remet tout seul sur l'ancienne version si la nouvelle ne répond plus.</p>
+              <button type="button" class="btn pri" data-demo="occupe"><svg class="i s18" aria-hidden="true"><use href="#i-download"/></svg>Mettre à jour le site</button>
+            </section>
+            <section class="carte reg-panneau" data-panneau="avance" hidden>
+              <h2><svg class="i s22 acc" aria-hidden="true"><use href="#i-wrench"/></svg>Avancé</h2>
+              <p class="intro">Les réglages techniques sont rangés ici, pour ne pas encombrer le reste.</p>
+              <div class="copie"><code>cle-api-exemple-1234</code><button type="button" class="btn sm" data-demo="copier"><svg class="i s16" aria-hidden="true"><use href="#i-copy"/></svg>Copier</button></div>
+              <div class="zone-d" style="margin-top: 16px"><h3><svg class="i s18" aria-hidden="true"><use href="#i-alert"/></svg>Réinitialiser</h3><p>Efface toutes les données. Une sauvegarde complète est faite avant.</p><button type="button" class="btn dn sm" style="margin-top: 12px" data-demo="danger">Réinitialiser…</button></div>
+            </section>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================================= Connexion -->
+      <section class="page" data-page="connexion" aria-label="Connexion">
+        <div class="page-h"><h1 class="page-t">Écrans de connexion</h1></div>
+        <p class="intro-p">La connexion et les écrans « demande en attente », « accès refusé » prennent le même style que le reste du site.</p>
+        <div class="demo-login">
+          <div class="login-card">
+            <div class="login-logo"><span class="marque" style="width: 44px; height: 44px; border-radius: 12px; font-size: 32px" aria-hidden="true">e</span><span class="wm">en<b>cre</b></span></div>
+            <span class="badge">Accès privé</span>
+            <h2 class="h-acces">Connexion</h2>
+            <form onsubmit="event.preventDefault(); Encre.toast('Connexion : à brancher sur ton site');">
+              <input type="password" placeholder="Mot de passe" aria-label="Mot de passe" autocomplete="current-password">
+              <button type="submit" class="btn pri w">Se connecter</button>
+            </form>
+            <a class="forgot-link" href="#connexion">Mot de passe oublié ?</a>
+          </div>
+          <div class="login-card">
+            <div class="access-icon warn"><svg class="i" aria-hidden="true"><use href="#i-hourglass"/></svg></div>
+            <h2 class="h-acces">Demande en attente</h2>
+            <span class="mail-chip">noe@exemple.fr</span>
+            <p class="access-text">Ta demande d'accès est bien arrivée. Tu pourras entrer dès qu'elle sera validée.</p>
+            <p class="access-note">Rien d'autre à faire pour l'instant.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================== Aide -->
+      <section class="page" data-page="aide" aria-label="Aide">
+        <div class="page-h"><h1 class="page-t">Aide</h1></div>
+        <div class="faq">
+          <div class="faq-g"><svg class="i s16" aria-hidden="true"><use href="#i-palette"/></svg>Apparence</div>
+          <details open><summary><svg class="i" aria-hidden="true"><use href="#i-help"/></svg>Comment changer la couleur du site ?<svg class="i s18 chev" aria-hidden="true"><use href="#i-chev"/></svg></summary>
+            <div class="rep"><p>Dans Réglages → Apparence, touche une des cinq pastilles. Le changement est immédiat et enregistré.</p></div></details>
+          <details><summary><svg class="i" aria-hidden="true"><use href="#i-help"/></svg>Pourquoi le site devient clair le matin ?<svg class="i s18 chev" aria-hidden="true"><use href="#i-chev"/></svg></summary>
+            <div class="rep"><p>Le thème « Automatique » suit ton téléphone. Choisis « Sombre » pour le garder sombre tout le temps.</p></div></details>
+          <div class="faq-g"><svg class="i s16" aria-hidden="true"><use href="#i-zap"/></svg>Navigation</div>
+          <details><summary><svg class="i" aria-hidden="true"><use href="#i-help"/></svg>Le bouton retour du téléphone ferme le site ?<svg class="i s18 chev" aria-hidden="true"><use href="#i-chev"/></svg></summary>
+            <div class="rep"><p>Non : il referme d'abord la feuille, le menu ou la fenêtre ouverte. Il ne quitte le site que s'il n'y a plus rien d'ouvert.</p></div></details>
+        </div>
+      </section>
+    </main>
+    <footer class="pied">
+      <span>Design « encre » · version 1.0</span>
+      <span>Repris de cinéthèque · DM Serif Display, Archivo et DM Mono</span>
+    </footer>
+  </div>
+</div>
+
+<!-- ========================== barre d'onglets flottante en verre (téléphone, < 1000 px) -->
+<nav class="tabbar" aria-label="Navigation">
+  <a class="tab" href="#accueil" data-page="accueil"><span class="ti"><svg class="i s22" aria-hidden="true"><use href="#i-home"/></svg></span>Accueil</a>
+  <a class="tab" href="#briques" data-page="briques"><span class="ti"><svg class="i s22" aria-hidden="true"><use href="#i-grid"/></svg></span>Briques</a>
+  <a class="tab" href="#retours" data-page="retours"><span class="ti"><svg class="i s22" aria-hidden="true"><use href="#i-zap"/></svg></span>Retours</a>
+  <a class="tab" href="#apparence" data-page="apparence"><span class="ti"><svg class="i s22" aria-hidden="true"><use href="#i-palette"/></svg></span>Apparence</a>
+  <button class="tab" type="button" data-encre-plus="encre-plus" aria-haspopup="dialog"><span class="ti"><svg class="i s22" aria-hidden="true"><use href="#i-dots"/></svg></span>Plus</button>
+</nav>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<!-- Contenu de la feuille « Plus » : 4 grandes tuiles, puis des lignes. -->
+<template id="encre-plus">
+  <div class="q-tuiles plus-t">
+    <a class="qt" href="#reglages"><svg class="i s22" aria-hidden="true"><use href="#i-gear"/></svg>Réglages</a>
+    <a class="qt" href="#connexion"><svg class="i s22" aria-hidden="true"><use href="#i-lock"/></svg>Connexion</a>
+    <a class="qt" href="#aide"><svg class="i s22" aria-hidden="true"><use href="#i-help"/></svg>Aide</a>
+    <a class="qt" href="#apparence"><svg class="i s22" aria-hidden="true"><use href="#i-palette"/></svg>Couleurs</a>
+  </div>
+  <div class="liste-r">
+    <a class="li" href="#reglages/avance"><span class="li-ic"><svg class="i" aria-hidden="true"><use href="#i-users"/></svg></span><span class="tx">Comptes et profils<small>Accès, « voir en tant que »</small></span><svg class="i s18 muted" aria-hidden="true"><use href="#i-chev"/></svg></a>
+    <button type="button" class="li" data-demo="deco"><span class="li-ic"><svg class="i" aria-hidden="true"><use href="#i-logout"/></svg></span><span class="tx">Se déconnecter<small>noe@exemple.fr</small></span></button>
+  </div>
+</template>
+
+<!-- Barre de sélection (exemple « Sélection multiple »). -->
+<div class="barre-act sel" id="d-selection" hidden>
+  <span class="compte" id="d-sel-n">3 choisis</span>
+  <button type="button" class="btn sm" data-sel="liste" title="Ajouter à une liste" aria-label="Ajouter à une liste"><svg class="i s18" aria-hidden="true"><use href="#i-listplus"/></svg><span class="lib">Liste</span></button>
+  <button type="button" class="btn sm" data-sel="vu" title="Marquer terminé" aria-label="Marquer terminé"><svg class="i s18" aria-hidden="true"><use href="#i-check"/></svg><span class="lib">Terminé</span></button>
+  <button type="button" class="btn sm dn" data-sel="retirer" title="Retirer" aria-label="Retirer"><svg class="i s18" aria-hidden="true"><use href="#i-trash"/></svg><span class="lib">Retirer</span></button>
+  <button type="button" class="ib" data-sel="fermer" aria-label="Quitter la sélection"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button>
+</div>
+
+<script>
+/* ---- Démonstration : bascule des pages et exemples (encre.js fait le reste). */
+document.addEventListener("DOMContentLoaded", () => {
+  const { $, $$, ic, toast, toastErr, confirmer, demander, feuille, menu, occupe, copier, animerEntree, nav, apparence, recherche } = Encre;
+  const PAGES = $$(".page").map((p) => p.dataset.page);
+  const TITRES = { accueil: "Accueil", briques: "Briques", retours: "Retours", apparence: "Apparence", reglages: "Réglages", connexion: "Connexion", aide: "Aide" };
+  const ICONES = { accueil: "home", briques: "grid", retours: "zap", apparence: "palette", reglages: "gear", connexion: "lock", aide: "help" };
+
+  function montrer() {
+    const [page, sous] = decodeURIComponent(location.hash.slice(1)).split("/");
+    const p = PAGES.includes(page) ? page : "accueil";
+    $$(".page").forEach((s) => s.classList.toggle("on", s.dataset.page === p));
+    nav.marquer(p);
+    if (p === "reglages") montrerReglage(sous);
+    document.title = `${TITRES[p]} · Design encre`;
+    scrollTo({ top: 0 });
+    animerEntree($(`.page[data-page="${p}"] .anim`));
+  }
+  function montrerReglage(sous) {
+    const reg = $("#d-reglages");
+    const panneaux = $$(".reg-panneau", reg).map((s) => s.dataset.panneau);
+    const choisi = panneaux.includes(sous) ? sous : null;
+    reg.classList.toggle("detail", !!choisi);
+    const montre = choisi || panneaux[0];        // sur ordinateur, le premier par défaut
+    $$(".reg-panneau", reg).forEach((s) => { s.hidden = s.dataset.panneau !== montre; });
+    $$("[data-reg]", reg).forEach((a) => a.classList.toggle("on", a.dataset.reg === montre));
+  }
+  addEventListener("hashchange", montrer);
+  montrer();
+
+  /* Segments et coches : allume celui qu'on touche (exemple). */
+  document.addEventListener("click", (e) => {
+    const s = e.target.closest("[data-seg]");
+    if (s) $$("[data-seg]", s.parentElement).forEach((b) => b.classList.toggle("on", b === s));
+    const ck = e.target.closest("[data-ck]");
+    if (ck) { const on = !ck.classList.contains("on"); ck.classList.toggle("on", on); ck.setAttribute("aria-pressed", String(on)); }
+  });
+
+  /* Recherche rapide (Ctrl K, « / » ou la loupe) : les raccourcis du site,
+     puis ce que le site trouve (ici, les briques de la démo). */
+  recherche.raccourcis = PAGES.map((p) => ({ titre: TITRES[p], sous: "Ouvrir la page", icone: ICONES[p], href: "#" + p }))
+    .concat([
+      { titre: "Changer de thème", sous: "Automatique, clair, sombre", icone: "moon", mots: "sombre clair nuit", action: () => ACTIONS.theme() },
+      { titre: "Couleur d'accent", sous: "Or, ambre, corail, menthe, lavande", icone: "palette", mots: "couleur", href: "#reglages/apparence" },
+    ]);
+  const BRIQUES = ["Boutons", "Puces", "Segments", "Champs", "Interrupteurs", "Coches", "Progression", "Badges", "Vide", "Squelettes", "Zone sensible", "Copier"];
+  recherche.chercher = async (q) => BRIQUES.filter((b) => b.toLowerCase().includes(q.toLowerCase()))
+    .map((b) => ({ groupe: "Briques", iconeGroupe: "grid", titre: b, sous: "Voir la brique", icone: "grid", href: "#briques" }));
+
+  let compteur = 0;
+  const majCompteur = () => { $("#d-compteur").textContent = String(compteur); };
+  const attendre = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  function selection(on) {
+    document.body.classList.toggle("mode-sel", on);
+    $("#d-selection").hidden = !on;
+  }
+
+  const ACTIONS = {
+    theme() {
+      const suite = { auto: "clair", clair: "sombre", sombre: "auto" }[apparence.prefs.theme];
+      apparence.choisir({ theme: suite }, { message: { auto: "Thème automatique", clair: "Thème clair", sombre: "Thème sombre" }[suite] });
+    },
+    toast: () => toast("Enregistré"),
+    annuler() {
+      compteur++; majCompteur();
+      toast("Ajouté à « Soirées pop-corn »", { annuler: async () => { await attendre(300); compteur--; majCompteur(); } });
+    },
+    erreur: () => toastErr(new Error("Le site ne répond pas. Réessaie dans un instant.")),
+    async confirmer() {
+      const ok = await confirmer("« Dune : deuxième partie » sera retiré de cette liste.", { ok: "Retirer", titre: "Retirer ce titre ?" });
+      toast(ok ? "Retiré" : "Rien n'a changé");
+    },
+    async danger() {
+      const ok = await confirmer("Tout ton historique sera effacé. Une sauvegarde complète est faite juste avant.", { ok: "Tout effacer", danger: true, titre: "Effacer l'historique ?", detail: "Cette action ne peut pas être annulée." });
+      if (ok) toast("Exemple seulement : rien n'a été effacé");
+    },
+    async demander() {
+      const nom = await demander("Nouvelle liste", { label: "Nom de la liste", placeholder: "Ex. : Soirées pop-corn", ok: "Créer" });
+      if (nom) toast(`Liste « ${nom} » créée`);
+    },
+    feuille() {
+      feuille({
+        titre: "Une feuille du bas",
+        html: `<p class="soft">Sur téléphone, elle monte du bas : tire la poignée vers le bas, touche le voile ou fais « retour » pour la fermer. Sur ordinateur, c'est une fenêtre au centre, qui se ferme avec Échap.</p>
+          <div class="q-tuiles" style="margin-top: 14px">
+            <button type="button" class="qt on">${ic("check", "s22")}Terminé</button>
+            <button type="button" class="qt">${ic("bookmark", "s22")}À faire</button>
+            <button type="button" class="qt">${ic("listplus", "s22")}Liste</button>
+            <button type="button" class="qt">${ic("share", "s22")}Partager</button>
+          </div>
+          <button type="button" class="btn pri w" data-fermer>Compris</button>`,
+      });
+    },
+    menu(btn) {
+      menu(btn, [
+        { icone: "edit", texte: "Renommer", touche: "R", action: () => ACTIONS.demander() },
+        { icone: "share", texte: "Partager", action: () => toast("Lien copié") },
+        { icone: "copy", texte: "Dupliquer", action: () => toast("Copie créée", { annuler: async () => attendre(200) }) },
+        null,
+        { icone: "trash", texte: "Supprimer", danger: true, action: () => ACTIONS.danger() },
+      ], { titre: "Soirées pop-corn" });
+    },
+    selection: () => selection(true),
+    occupe(btn) { occupe(btn, () => attendre(1400)).then(() => toast("Enregistré")); },
+    copier(btn) { copier(btn.parentElement.querySelector("code").textContent, btn); },
+    deco: () => toast("Déconnexion : à brancher sur ton site"),
+  };
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-demo]");
+    if (b && ACTIONS[b.dataset.demo]) { e.preventDefault(); ACTIONS[b.dataset.demo](b); }
+    const s = e.target.closest("[data-sel]");
+    if (!s) return;
+    if (s.dataset.sel === "fermer") { selection(false); return; }
+    const txt = { liste: "3 titres ajoutés à la liste", vu: "3 titres marqués terminés", retirer: "3 titres retirés" }[s.dataset.sel];
+    selection(false);
+    toast(txt, { annuler: async () => attendre(250) });
+  });
+});
+</script>
+</body>
+</html>

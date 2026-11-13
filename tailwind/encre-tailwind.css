@@ -1,0 +1,63 @@
+/* =========================================================================
+   encre-tailwind.css — les jetons du design « encre » en classes Tailwind v4
+   (site Next.js + Tailwind, comme RecipeLog).
+
+   Dans src/app/globals.css, dans cet ordre :
+     @import "tailwindcss";
+     @import "../encre/polices.css";            (dossier polices/ à côté)
+     @import "../encre/encre.css";
+     @import "../encre/tailwind/encre-tailwind.css";
+
+   « inline » : chaque classe pointe vers la variable elle-même, donc elle suit
+   le thème (clair / sombre) et l'accent choisis, sans rien recompiler.
+
+   Exemples : bg-fond, bg-carte, text-texte, text-doux, text-discret,
+   border-trait, bg-accent text-encre (bouton principal), bg-accent-dim,
+   text-danger, font-titre, font-mono, rounded-doux, shadow-doux, ease-encre.
+   Les briques toutes faites (btn, tabbar, feuille…) restent des classes
+   de encre.css : className="btn pri".
+   ========================================================================= */
+@theme inline {
+  /* Fonds et traits */
+  --color-fond: var(--bg);
+  --color-surface: var(--surface);
+  --color-carte: var(--card);
+  --color-pop: var(--pop);
+  --color-creux: var(--creux);
+  --color-trait: var(--line);
+  --color-trait2: var(--line2);
+  --color-verre: var(--glass);
+  --color-voile: var(--scrim);
+  /* Textes */
+  --color-texte: var(--text);
+  --color-doux: var(--soft);
+  --color-discret: var(--muted);
+  /* Accent (celui que le visiteur a choisi) */
+  --color-accent: var(--accent);
+  --color-encre: var(--ink);
+  --color-accent-dim: var(--acc-dim);
+  --color-accent-trait: var(--acc-line);
+  /* États */
+  --color-ok: var(--ok);
+  --color-ok-encre: var(--ok-ink);
+  --color-ok-dim: var(--ok-dim);
+  --color-prog: var(--prog);
+  --color-prog-encre: var(--prog-ink);
+  --color-prog-dim: var(--prog-dim);
+  --color-danger: var(--danger);
+  --color-danger-dim: var(--danger-dim);
+  --color-warn: var(--warn);
+  /* Polices */
+  --font-titre: var(--f-title);
+  --font-texte: var(--f-body);
+  --font-mono: var(--f-mono);
+  /* Formes, ombres, mouvement */
+  --radius-doux: var(--r-lg);
+  --radius-moyen: var(--r-md);
+  --radius-petit: var(--r-sm);
+  --radius-barre: 26px;
+  --shadow-doux: var(--shadow-s);
+  --shadow-fort: var(--shadow);
+  --shadow-barre: var(--sh-tab);
+  --ease-encre: var(--ease);
+}

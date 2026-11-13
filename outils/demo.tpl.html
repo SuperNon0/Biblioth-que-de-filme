@@ -1,0 +1,625 @@
+<!doctype html>
+<!-- Démonstration du design « encre » : ouvre ce fichier dans un navigateur
+     (il charge polices.css, encre.css et encre.js depuis le même dossier).
+     Elle sert aussi de modèle : chaque bloc montre le HTML à recopier. -->
+<html lang="fr" data-accent-defaut="lavande">
+<head>
+  <meta charset="utf-8">
+  <!-- Zoom autorisé : les champs font 16 px, l'iPhone ne zoome pas tout seul. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Design encre · démonstration</title>
+  <meta name="color-scheme" content="dark light">
+  <meta name="theme-color" content="#0b0f17" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f5f3ee" media="(prefers-color-scheme: light)">
+  <script>
+    /* Avant l'affichage : accent et thème gardés sur cet appareil (rien ne clignote). */
+    try {
+      var p = JSON.parse(localStorage.getItem("encre-apparence") || "{}"), h = document.documentElement;
+      if (p.accent) h.dataset.accent = p.accent;
+      if (p.theme === "sombre") h.dataset.theme = "dark";
+      else if (p.theme === "clair") h.dataset.theme = "light";
+      else { h.dataset.theme = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"; h.dataset.encreAuto = ""; }
+    } catch (e) {}
+  </script>
+  <!-- STYLES -->
+  <style>
+    /* ---- Propre à cette démonstration (toujours avec les jetons de encre.css). */
+    .marque { width: 30px; height: 30px; border-radius: 9px; background: var(--accent); color: var(--ink); display: grid; place-items: center; font: italic 400 22px/1 var(--f-title); flex: none; padding-bottom: 3px; }
+    .demo-hero { position: relative; overflow: hidden; isolation: isolate; padding: 18px; border-color: var(--line2); }
+    .demo-hero::before { content: ""; position: absolute; inset: 0; z-index: -1; background: radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--accent) 28%, transparent), transparent 62%), radial-gradient(90% 80% at 0% 100%, color-mix(in srgb, var(--prog) 20%, transparent), transparent 60%); }
+    .demo-hero .ey { font: 600 10.5px/1 var(--f-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--accent); display: flex; align-items: center; gap: 6px; }
+    .demo-hero .ttl { font-size: calc(30px * var(--t-scale)); line-height: 1.05; margin-top: 8px; }
+    .demo-hero p { color: var(--soft); margin-top: 8px; max-width: 54ch; font-size: 14.5px; }
+    .demo-hero .bt { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+    @media (min-width: 760px) { .demo-hero { padding: 26px; } .demo-hero .ttl { font-size: calc(40px * var(--t-scale)); } }
+    .demo-mur { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    @media (min-width: 760px) { .demo-mur { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; } }
+    .demo-mur > div { aspect-ratio: 4 / 3; border-radius: var(--r-lg); padding: 12px; display: flex; flex-direction: column; justify-content: flex-end; color: var(--on-img); position: relative; overflow: hidden; isolation: isolate; }
+    .demo-mur > div::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(180deg, transparent 35%, var(--verre-img)); }
+    .demo-mur b { font: 400 calc(19px * var(--t-scale))/1.1 var(--f-title); }
+    .demo-mur span { font-size: 12px; opacity: .9; }
+    .demo-mur .m1 { background: linear-gradient(135deg, var(--sw-lavande), var(--sw-corail)); }
+    .demo-mur .m2 { background: linear-gradient(135deg, var(--sw-menthe), var(--sw-lavande)); }
+    .demo-mur .m3 { background: linear-gradient(135deg, var(--sw-ambre), var(--sw-corail)); }
+    .demo-mur .m4 { background: linear-gradient(135deg, var(--sw-or), var(--sw-menthe)); }
+    .demo-mur .m5 { background: linear-gradient(135deg, var(--sw-corail), var(--sw-or)); }
+    .demo-mur .m6 { background: linear-gradient(135deg, var(--prog), var(--sw-menthe)); }
+    .demo-mur .m7 { background: linear-gradient(135deg, var(--sw-lavande), var(--prog)); }
+    .demo-mur .m8 { background: linear-gradient(135deg, var(--sw-menthe), var(--sw-ambre)); }
+    .demo-sec { margin-top: 26px; }
+    .demo-sec > .lbl-mono { margin-bottom: 10px; }
+    .demo-col { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+    @media (min-width: 1000px) { .demo-col { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; } }
+    .demo-pile { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+    .demo-nuancier { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    @media (min-width: 760px) { .demo-nuancier { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+    .demo-nuancier div { display: flex; gap: 10px; align-items: center; padding: 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); min-width: 0; }
+    .demo-nuancier i { width: 34px; height: 34px; border-radius: 9px; flex: none; box-shadow: inset 0 0 0 1px var(--line2); }
+    .demo-nuancier span { min-width: 0; }
+    .demo-nuancier b { display: block; font: 500 12px var(--f-mono); color: var(--text); }
+    .demo-nuancier small { display: block; font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .demo-typo { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+    .demo-typo .cote { font: 500 11px var(--f-mono); color: var(--muted); display: block; margin-bottom: 3px; }
+    .demo-login { border-radius: var(--r-lg); border: 1px solid var(--line); padding: 26px 14px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; justify-items: center;
+      background: radial-gradient(70% 50% at 50% 0%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%), var(--bg); }
+    @media (min-width: 1000px) { .demo-login { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; padding: 34px; } }
+    .demo-login .login-card { animation: none; }
+    .compteur { font: 600 13px var(--f-mono); color: var(--accent); }
+    .demo-res { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; margin-top: 10px; }
+  </style>
+  <!-- SCRIPTS -->
+</head>
+<body>
+<!-- SPRITE -->
+<div class="app">
+  <!-- ======================================= menu de gauche (ordinateur, 1000 px et plus) -->
+  <aside class="side" aria-label="Menu principal">
+    <div class="ligne">
+      <a class="brand" href="#accueil" aria-label="encre, accueil"><span class="marque" aria-hidden="true">e</span><span class="wm">en<b>cre</b></span></a>
+      <span class="ver" title="Version du design">1.0</span>
+    </div>
+    <button class="side-search" type="button" data-encre-recherche>{{i:search s18}}Rechercher…<span class="kbd">Ctrl K</span></button>
+    <nav aria-label="Pages">
+      <a class="side-it" href="#accueil" data-page="accueil">{{i:home}}<span class="nom">Accueil</span></a>
+      <a class="side-it" href="#briques" data-page="briques">{{i:grid}}<span class="nom">Briques</span><span class="n">24</span></a>
+      <a class="side-it" href="#retours" data-page="retours">{{i:zap}}<span class="nom">Retours</span></a>
+      <a class="side-it" href="#apparence" data-page="apparence">{{i:palette}}<span class="nom">Apparence</span></a>
+    </nav>
+    <div class="side-lbl">Exemples</div>
+    <div class="side-listes">
+      <a class="side-it" href="#reglages" data-page="reglages">{{i:gear}}<span class="nom">Réglages</span></a>
+      <a class="side-it" href="#connexion" data-page="connexion">{{i:lock}}<span class="nom">Connexion</span></a>
+      <a class="side-it" href="#aide" data-page="aide">{{i:help}}<span class="nom">Aide</span></a>
+    </div>
+    <div class="side-foot">
+      <div class="side-compte">
+        <span class="av" aria-hidden="true">N</span><span title="noe@exemple.fr">noe@exemple.fr</span>
+        <button type="button" class="ib form-deco" data-demo="deco" title="Se déconnecter" aria-label="Se déconnecter">{{i:logout s18}}</button>
+      </div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <!-- ================================== barre du haut (téléphone et tablette) -->
+    <header class="top" id="top">
+      <a class="brand" href="#accueil" aria-label="encre, accueil"><span class="marque" aria-hidden="true">e</span><span class="wm">en<b>cre</b></span></a>
+      <span class="esp"></span>
+      <button class="ib" type="button" data-demo="theme" aria-label="Changer de thème">{{i:moon}}</button>
+      <button class="ib" type="button" data-encre-recherche aria-label="Rechercher">{{i:search}}</button>
+    </header>
+
+    <main class="pages" id="pages">
+      <!-- =========================================================== Accueil -->
+      <section class="page" data-page="accueil" aria-label="Accueil">
+        <div class="page-h">
+          <h1 class="page-t">Bonjour</h1>
+          <div class="seg" role="group" aria-label="Période">
+            <button type="button" class="on" data-seg>Jour</button><button type="button" data-seg>Semaine</button><button type="button" data-seg>Mois</button>
+          </div>
+        </div>
+        <div class="anim">
+          <div class="carte demo-hero">
+            <div class="ey">{{i:sparkle s16}}Le design « encre »</div>
+            <h2 class="ttl">Un seul style pour tous tes sites</h2>
+            <p>Fond couleur d'encre, une seule couleur d'accent, des titres en DM Serif Display et une barre de navigation qui flotte en verre flouté. Fais défiler : tout passe sous la barre, adouci par le flou.</p>
+            <div class="bt">
+              <a class="btn pri" href="#briques">{{i:grid s18}}Voir les briques</a>
+              <a class="btn" href="#apparence">{{i:palette s18}}Changer la couleur</a>
+            </div>
+          </div>
+
+          <div class="sec-h"><h2 class="sec-t">Chiffres clés <button type="button" class="q" aria-label="Explication" data-t="Chiffres clés" data-d="Des tuiles pour les chiffres importants : le titre en petit, la valeur en grand dans la police des titres, une ligne d'explication dessous.">?</button></h2></div>
+          <div class="tuiles">
+            <div class="tuile big">
+              <div class="k">{{i:clock s16}}Temps total</div>
+              <div class="v">2 930 <small>h</small></div>
+              <div class="s">soit 122 jours, d'après tout ce qui est enregistré</div>
+              <div class="split" aria-hidden="true"><i class="f" style="width: 22%"></i><i class="s" style="width: 78%"></i></div>
+              <div class="leg"><span><i class="f"></i>Films 22 %</span><span><i class="s"></i>Séries 78 %</span></div>
+            </div>
+            <div class="tuile"><div class="k">{{i:check s16}}Terminés</div><div class="v">377</div><div class="s">+12 ce mois-ci</div></div>
+            <div class="tuile"><div class="k">{{i:play s16}}En cours</div><div class="v">8</div><div class="s">dont 3 cette semaine</div></div>
+            <div class="tuile"><div class="k">{{i:bookmark s16}}À faire</div><div class="v">210</div><div class="s">la liste qui grandit</div></div>
+            <div class="tuile"><div class="k">{{i:staron s16}}Favoris</div><div class="v">24</div><div class="s">tes indispensables</div></div>
+          </div>
+
+          <div class="sec-h"><h2 class="sec-t">Une rangée d'images</h2><a class="lien-r" href="#briques">Tout voir{{i:chev s16}}</a></div>
+          <div class="demo-mur">
+            <div class="m1"><b>Lavande</b><span>l'accent par défaut</span></div>
+            <div class="m2"><b>Menthe</b><span>calme et frais</span></div>
+            <div class="m3"><b>Ambre</b><span>chaleureux</span></div>
+            <div class="m4"><b>Or</b><span>l'ancien RecipeLog</span></div>
+            <div class="m5"><b>Corail</b><span>énergique</span></div>
+            <div class="m6"><b>Progression</b><span>les barres d'avancement</span></div>
+            <div class="m7"><b>Verre</b><span>la barre du bas floute ceci</span></div>
+            <div class="m8"><b>Contraste</b><span>texte toujours lisible</span></div>
+          </div>
+
+          <div class="sec-h"><h2 class="sec-t">Activité récente</h2></div>
+          <div class="liste-r">
+            <div class="li"><span class="li-ic acc">{{i:check}}</span><span class="tx">Marqué comme terminé<small>Il y a 5 minutes · depuis ton téléphone</small></span><span class="v">14 h 02</span></div>
+            <div class="li"><span class="li-ic">{{i:listplus}}</span><span class="tx">Ajouté à « Soirées pop-corn »<small>Hier soir</small></span><span class="v">21 h 47</span></div>
+            <div class="li"><span class="li-ic">{{i:refresh}}</span><span class="tx">Site mis à jour en 1.0<small>Tout s'est bien passé</small></span><span class="v">Lun.</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =========================================================== Briques -->
+      <section class="page" data-page="briques" aria-label="Briques">
+        <div class="page-h"><h1 class="page-t">Briques <span class="n">24</span></h1></div>
+        <p class="intro-p">Les pièces communes à tous les sites. Chacune garde le même nom de classe partout (voir LISEZMOI.md).</p>
+        <div class="demo-col">
+          <div class="demo-pile">
+            <div class="bloc">
+              <div class="lbl-mono">Boutons</div>
+              <div class="ligne" style="margin-top: 10px">
+                <button type="button" class="btn pri">{{i:check s18}}Principal</button>
+                <button type="button" class="btn">Normal</button>
+                <button type="button" class="btn gh">Discret</button>
+                <button type="button" class="btn dn">{{i:trash s18}}Danger</button>
+              </div>
+              <div class="ligne" style="margin-top: 8px">
+                <button type="button" class="btn sm pri">Petit</button>
+                <button type="button" class="btn sm">Petit</button>
+                <button type="button" class="btn xs">Mini</button>
+                <button type="button" class="btn ico" aria-label="Ajouter">{{i:plus}}</button>
+                <button type="button" class="btn prg sm">En cours</button>
+                <button type="button" class="btn okb sm">Réussi</button>
+              </div>
+              <div class="ligne" style="margin-top: 8px">
+                <button type="button" class="btn pri deux" data-demo="occupe"><span>{{i:check s18}}Enregistrer</span><span class="sub">bloque le temps d'enregistrer</span></button>
+                <button type="button" class="ib" aria-label="Partager">{{i:share}}</button>
+                <button type="button" class="ib on" aria-label="Favori">{{i:heartfill}}</button>
+                <a class="lien" href="#retours">Un lien{{i:arrow s16}}</a>
+              </div>
+            </div>
+
+            <div class="bloc">
+              <div class="lbl-mono">Puces et segments</div>
+              <div class="chips" style="margin-top: 10px">
+                <button type="button" class="chip on">Tout <span class="n">520</span></button>
+                <button type="button" class="chip">Films <span class="n">377</span></button>
+                <button type="button" class="chip">Séries <span class="n">143</span></button>
+                <button type="button" class="chip">{{i:filter s16}}Filtres <span class="pastille">2</span></button>
+              </div>
+              <div class="ligne" style="margin-top: 12px; flex-wrap: nowrap">
+                <div class="seg" role="group" aria-label="Vue" style="flex: 1">
+                  <button type="button" class="on" data-seg>Grille</button><button type="button" data-seg>Liste</button><button type="button" data-seg>Rangées</button>
+                </div>
+                <div class="seg ico" role="group" aria-label="Affichage">
+                  <button type="button" class="on" data-seg aria-label="Grille">{{i:grid s18}}</button><button type="button" data-seg aria-label="Lignes">{{i:rows s18}}</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="bloc">
+              <div class="lbl-mono">Champs</div>
+              <div class="form" style="margin-top: 10px">
+                <label class="champ">{{i:search s18}}<input type="search" placeholder="Chercher un titre…" aria-label="Chercher"><span class="kbd">Ctrl K</span></label>
+                <div><label class="lbl" for="d-nom">Nom</label><input class="input" id="d-nom" placeholder="Ex. : Soirées pop-corn"></div>
+                <div><label class="lbl" for="d-choix">Choix</label><select class="select" id="d-choix"><option>Tous les jours</option><option>Chaque semaine</option></select></div>
+                <div><label class="lbl" for="d-note">Note</label><textarea class="input" id="d-note" rows="2" placeholder="Quelques mots…"></textarea></div>
+                <p class="statut ok">Enregistré à 14 h 02</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="demo-pile">
+            <div class="bloc">
+              <div class="lbl-mono">Interrupteurs et coches</div>
+              <div class="reg-l"><div class="tx"><b>Notifications</b><span>Un message le jour de la sortie</span></div><input type="checkbox" class="sw" checked aria-label="Notifications"></div>
+              <div class="reg-l"><div class="tx"><b>Mode compact <button type="button" class="q" aria-label="Explication" data-t="Mode compact" data-d="Exemple de bulle « ? » : un mot d'explication à côté d'un réglage ou d'un chiffre.">?</button></b><span>Moins d'espace entre les lignes</span></div><input type="checkbox" class="sw" aria-label="Mode compact"></div>
+              <div class="reg-l"><div class="tx"><b>Coches rondes et carrées</b><span>Touche pour cocher</span></div>
+                <button type="button" class="ck on" data-ck aria-pressed="true" aria-label="Coché">{{i:check s16}}</button>
+                <button type="button" class="ck" data-ck aria-pressed="false" aria-label="Pas coché">{{i:check s16}}</button>
+                <button type="button" class="ck sq on" data-ck aria-pressed="true" aria-label="Coché">{{i:check s16}}</button>
+              </div>
+            </div>
+
+            <div class="bloc">
+              <div class="lbl-mono">Progression, badges</div>
+              <div class="demo-pile" style="margin-top: 10px">
+                <div class="pg"><i style="width: 64%"></i></div>
+                <div class="pg ok"><i style="width: 100%"></i></div>
+                <div class="pg acc epais"><i style="width: 38%"></i></div>
+                <div class="ligne"><span class="badge">Accès privé</span><span class="role-badge role-super">Super-admin</span><span class="role-badge role-membre">Membre</span><span class="role-badge role-bloque">Bloqué</span><span class="kbd">Échap</span></div>
+              </div>
+            </div>
+
+            <div class="bloc">
+              <div class="lbl-mono">Vide et chargement</div>
+              <div class="vide">{{i:list}}<b>Rien ici pour l'instant</b><span>Un message doux quand une liste est vide, avec ce qu'on peut faire.</span><button type="button" class="btn sm pri" data-demo="demander">{{i:plus s16}}Créer une liste</button></div>
+              <div class="sk ln t"></div><div class="sk sk-l"></div><div class="sk ln" style="width: 70%"></div>
+            </div>
+
+            <div class="zone-d">
+              <h3>{{i:alert s18}}Zone sensible</h3>
+              <p>Les actions qu'on ne peut pas défaire sont rangées tout en bas, en rouge, et demandent une confirmation.</p>
+              <button type="button" class="btn dn sm" style="margin-top: 12px" data-demo="danger">{{i:trash s16}}Tout effacer</button>
+            </div>
+
+            <div class="bloc">
+              <div class="lbl-mono">Copier, avertir, montrer du code</div>
+              <div class="copie"><code>encre-1-0-demo</code><button type="button" class="btn sm" data-demo="copier">{{i:copy s16}}Copier</button></div>
+              <div class="bandeau-c" style="margin-top: 10px">{{i:alert s18}}<span>Un avertissement : à lire avant de continuer.</span></div>
+              <pre class="bloc-code">sudo bash /opt/mon-site/install.sh</pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =========================================================== Retours -->
+      <section class="page" data-page="retours" aria-label="Retours">
+        <div class="page-h"><h1 class="page-t">Retours</h1></div>
+        <p class="intro-p">Ce que le site répond quand on agit. Jamais de fenêtre grise du navigateur : tout se passe dans la page, et le bouton retour du téléphone referme ce qui est ouvert.</p>
+        <div class="demo-col">
+          <div class="demo-pile">
+            <div class="reg-g">Messages</div>
+            <div class="liste-r">
+              <button type="button" class="li" data-demo="toast"><span class="li-ic">{{i:check}}</span><span class="tx">Message simple<small>« Enregistré », 2,6 secondes</small></span>{{i:chev s18 muted}}</button>
+              <button type="button" class="li" data-demo="annuler"><span class="li-ic acc">{{i:undo}}</span><span class="tx">Message avec « Annuler »<small>5 secondes pour revenir en arrière · compteur : <span class="compteur" id="d-compteur">0</span></small></span>{{i:chev s18 muted}}</button>
+              <button type="button" class="li" data-demo="erreur"><span class="li-ic">{{i:alert}}</span><span class="tx">Message d'erreur<small>En rouge, un peu plus long</small></span>{{i:chev s18 muted}}</button>
+            </div>
+            <div class="reg-g" style="margin-top: 8px">Questions</div>
+            <div class="liste-r">
+              <button type="button" class="li" data-demo="confirmer"><span class="li-ic">{{i:help}}</span><span class="tx">Confirmer<small>Remplace confirm()</small></span>{{i:chev s18 muted}}</button>
+              <button type="button" class="li dn" data-demo="danger"><span class="li-ic">{{i:trash}}</span><span class="tx">Confirmer une action sensible<small>Bouton rouge</small></span>{{i:chev s18 muted}}</button>
+              <button type="button" class="li" data-demo="demander"><span class="li-ic">{{i:edit}}</span><span class="tx">Demander un nom<small>Remplace prompt()</small></span>{{i:chev s18 muted}}</button>
+            </div>
+          </div>
+          <div class="demo-pile">
+            <div class="reg-g">Feuilles et menus</div>
+            <div class="liste-r">
+              <button type="button" class="li" data-demo="feuille"><span class="li-ic">{{i:layers}}</span><span class="tx">Feuille du bas<small>Fenêtre centrée sur ordinateur</small></span>{{i:chev s18 muted}}</button>
+              <button type="button" class="li" data-demo="menu"><span class="li-ic">{{i:dots}}</span><span class="tx">Menu d'actions<small>Menu flottant à la souris, feuille au doigt</small></span>{{i:chev s18 muted}}</button>
+              <button type="button" class="li" data-demo="selection"><span class="li-ic">{{i:checks}}</span><span class="tx">Sélection multiple<small>Une barre d'actions flottante remplace les onglets</small></span>{{i:chev s18 muted}}</button>
+            </div>
+            <div class="reg-g" style="margin-top: 8px">Boutons qui travaillent</div>
+            <div class="bloc">
+              <p class="soft petit">Un bouton qui enregistre se grise et montre une roue : impossible d'envoyer deux fois.</p>
+              <button type="button" class="btn pri w" style="margin-top: 10px" data-demo="occupe">{{i:upload s18}}Envoyer</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================================= Apparence -->
+      <section class="page" data-page="apparence" aria-label="Apparence">
+        <div class="page-h"><h1 class="page-t">Apparence</h1></div>
+        <div class="demo-col">
+          <section class="carte" style="padding: 18px">
+            <div class="reg-sec" style="margin-top: 0">
+              <div class="lbl-mono">Couleur d'accent <button type="button" class="q" aria-label="Explication" data-t="Couleur d'accent" data-d="La couleur des boutons principaux, des onglets actifs et des titres mis en avant. Elle s'adapte au thème clair pour rester lisible.">?</button></div>
+              <div class="pastilles" data-encre-accent role="radiogroup" aria-label="Couleur d'accent">
+                <button type="button" class="past" data-v="or" role="radio"><i></i>Or</button>
+                <button type="button" class="past" data-v="ambre" role="radio"><i></i>Ambre</button>
+                <button type="button" class="past" data-v="corail" role="radio"><i></i>Corail</button>
+                <button type="button" class="past" data-v="menthe" role="radio"><i></i>Menthe</button>
+                <button type="button" class="past" data-v="lavande" role="radio"><i></i>Lavande</button>
+              </div>
+            </div>
+            <div class="reg-sec">
+              <div class="lbl-mono">Thème <button type="button" class="q" aria-label="Explication" data-t="Thème" data-d="« Automatique » suit le réglage de ton appareil : clair en journée, sombre le soir. Tu peux aussi forcer l'un ou l'autre.">?</button></div>
+              <div class="seg" data-encre-theme role="group" aria-label="Thème">
+                <button type="button" data-v="auto">{{i:refresh s16}}Automatique</button><button type="button" data-v="clair">{{i:sun s16}}Clair</button><button type="button" data-v="sombre">{{i:moon s16}}Sombre</button>
+              </div>
+            </div>
+            <div class="reg-sec">
+              <div class="lbl-mono">Les polices</div>
+              <div class="demo-typo">
+                <div><span class="cote">DM Serif Display · titres de page, 27 px (30 sur ordinateur)</span><div class="page-t">Bonjour Noë</div></div>
+                <div><span class="cote">DM Serif Display · titres de section, 19 px</span><div class="sec-t">Activité récente</div></div>
+                <div><span class="cote">Archivo · texte, 15 px</span><p>Le texte de tous les jours : résumés, boutons, réglages. Une police nette et reposante, même en petit.</p></div>
+                <div><span class="cote">DM Mono · petits libellés en capitales, 11 px</span><div class="lbl-mono">Mon compte</div></div>
+              </div>
+            </div>
+          </section>
+          <section class="carte" style="padding: 18px">
+            <div class="lbl-mono" style="margin-bottom: 10px">Les couleurs (jetons de encre.css)</div>
+            <div class="demo-nuancier">
+              <div><i style="background: var(--bg)"></i><span><b>--bg</b><small>fond de page</small></span></div>
+              <div><i style="background: var(--surface)"></i><span><b>--surface</b><small>barres, champs</small></span></div>
+              <div><i style="background: var(--card)"></i><span><b>--card</b><small>cartes</small></span></div>
+              <div><i style="background: var(--pop)"></i><span><b>--pop</b><small>menus, feuilles</small></span></div>
+              <div><i style="background: var(--line2)"></i><span><b>--line2</b><small>bordures</small></span></div>
+              <div><i style="background: var(--text)"></i><span><b>--text</b><small>texte</small></span></div>
+              <div><i style="background: var(--soft)"></i><span><b>--soft</b><small>texte secondaire</small></span></div>
+              <div><i style="background: var(--muted)"></i><span><b>--muted</b><small>texte discret</small></span></div>
+              <div><i style="background: var(--accent)"></i><span><b>--accent</b><small>l'accent choisi</small></span></div>
+              <div><i style="background: var(--ink)"></i><span><b>--ink</b><small>texte sur l'accent</small></span></div>
+              <div><i style="background: var(--ok)"></i><span><b>--ok</b><small>réussi, vu</small></span></div>
+              <div><i style="background: var(--prog)"></i><span><b>--prog</b><small>en cours</small></span></div>
+              <div><i style="background: var(--danger)"></i><span><b>--danger</b><small>supprimer, erreur</small></span></div>
+              <div><i style="background: var(--warn)"></i><span><b>--warn</b><small>attention</small></span></div>
+              <div><i style="background: var(--acc-dim)"></i><span><b>--acc-dim</b><small>fond teinté</small></span></div>
+              <div><i style="background: var(--glass)"></i><span><b>--glass</b><small>verre des barres</small></span></div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <!-- ========================================================== Réglages -->
+      <section class="page" data-page="reglages" aria-label="Réglages">
+        <div class="page-h"><h1 class="page-t">Réglages</h1></div>
+        <div class="reglages" id="d-reglages">
+          <div class="reg-liste">
+            <div>
+              <div class="reg-g">Mon compte</div>
+              <div class="liste-r">
+                <a class="li" href="#reglages/apparence" data-reg="apparence"><span class="li-ic acc">{{i:palette}}</span><span class="tx">Apparence<small>Couleur d'accent, thème</small></span>{{i:chev s18 muted}}</a>
+                <a class="li" href="#reglages/notifications" data-reg="notifications"><span class="li-ic">{{i:bell}}</span><span class="tx">Notifications<small>Discord, rappels</small></span>{{i:chev s18 muted}}</a>
+              </div>
+            </div>
+            <div>
+              <div class="reg-g">Site</div>
+              <div class="liste-r">
+                <a class="li" href="#reglages/site" data-reg="site"><span class="li-ic">{{i:refresh}}</span><span class="tx">Mise à jour<small>Version 1.0</small></span>{{i:chev s18 muted}}</a>
+                <a class="li" href="#reglages/avance" data-reg="avance"><span class="li-ic">{{i:wrench}}</span><span class="tx">Avancé<small>Clés, connecteurs, données</small></span>{{i:chev s18 muted}}</a>
+              </div>
+            </div>
+          </div>
+          <div class="reg-det">
+            <a class="btn sm gh reg-retour" href="#reglages">{{i:chevl s18}}Réglages</a>
+            <section class="carte reg-panneau" data-panneau="apparence">
+              <h2>{{i:palette s22 acc}}Apparence</h2>
+              <p class="intro">Tout s'enregistre dès que tu changes un réglage. Sur ordinateur, la liste reste à gauche et le réglage s'ouvre à droite.</p>
+              <div class="reg-sec">
+                <div class="lbl-mono">Couleur d'accent</div>
+                <div class="pastilles" data-encre-accent role="radiogroup" aria-label="Couleur d'accent">
+                  <button type="button" class="past" data-v="or" role="radio"><i></i>Or</button>
+                  <button type="button" class="past" data-v="ambre" role="radio"><i></i>Ambre</button>
+                  <button type="button" class="past" data-v="corail" role="radio"><i></i>Corail</button>
+                  <button type="button" class="past" data-v="menthe" role="radio"><i></i>Menthe</button>
+                  <button type="button" class="past" data-v="lavande" role="radio"><i></i>Lavande</button>
+                </div>
+              </div>
+              <div class="reg-sec">
+                <div class="lbl-mono">Thème</div>
+                <div class="seg" data-encre-theme role="group" aria-label="Thème">
+                  <button type="button" data-v="auto">Automatique</button><button type="button" data-v="clair">Clair</button><button type="button" data-v="sombre">Sombre</button>
+                </div>
+              </div>
+            </section>
+            <section class="carte reg-panneau" data-panneau="notifications" hidden>
+              <h2>{{i:bell s22 acc}}Notifications</h2>
+              <p class="intro">Une ligne par réglage, chacun s'enregistre tout seul.</p>
+              <div class="reg-l"><div class="tx"><b>Sorties</b><span>Le jour de la sortie, à 9 h</span></div><input type="checkbox" class="sw" checked aria-label="Sorties"></div>
+              <div class="reg-l"><div class="tx"><b>Résumé de la semaine</b><span>Chaque dimanche soir</span></div><input type="checkbox" class="sw" aria-label="Résumé de la semaine"></div>
+            </section>
+            <section class="carte reg-panneau" data-panneau="site" hidden>
+              <h2>{{i:refresh s22 acc}}Mise à jour</h2>
+              <p class="intro">Version installée : 1.0. Le site se remet tout seul sur l'ancienne version si la nouvelle ne répond plus.</p>
+              <button type="button" class="btn pri" data-demo="occupe">{{i:download s18}}Mettre à jour le site</button>
+            </section>
+            <section class="carte reg-panneau" data-panneau="avance" hidden>
+              <h2>{{i:wrench s22 acc}}Avancé</h2>
+              <p class="intro">Les réglages techniques sont rangés ici, pour ne pas encombrer le reste.</p>
+              <div class="copie"><code>cle-api-exemple-1234</code><button type="button" class="btn sm" data-demo="copier">{{i:copy s16}}Copier</button></div>
+              <div class="zone-d" style="margin-top: 16px"><h3>{{i:alert s18}}Réinitialiser</h3><p>Efface toutes les données. Une sauvegarde complète est faite avant.</p><button type="button" class="btn dn sm" style="margin-top: 12px" data-demo="danger">Réinitialiser…</button></div>
+            </section>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================================= Connexion -->
+      <section class="page" data-page="connexion" aria-label="Connexion">
+        <div class="page-h"><h1 class="page-t">Écrans de connexion</h1></div>
+        <p class="intro-p">La connexion et les écrans « demande en attente », « accès refusé » prennent le même style que le reste du site.</p>
+        <div class="demo-login">
+          <div class="login-card">
+            <div class="login-logo"><span class="marque" style="width: 44px; height: 44px; border-radius: 12px; font-size: 32px" aria-hidden="true">e</span><span class="wm">en<b>cre</b></span></div>
+            <span class="badge">Accès privé</span>
+            <h2 class="h-acces">Connexion</h2>
+            <form onsubmit="event.preventDefault(); Encre.toast('Connexion : à brancher sur ton site');">
+              <input type="password" placeholder="Mot de passe" aria-label="Mot de passe" autocomplete="current-password">
+              <button type="submit" class="btn pri w">Se connecter</button>
+            </form>
+            <a class="forgot-link" href="#connexion">Mot de passe oublié ?</a>
+          </div>
+          <div class="login-card">
+            <div class="access-icon warn">{{i:hourglass}}</div>
+            <h2 class="h-acces">Demande en attente</h2>
+            <span class="mail-chip">noe@exemple.fr</span>
+            <p class="access-text">Ta demande d'accès est bien arrivée. Tu pourras entrer dès qu'elle sera validée.</p>
+            <p class="access-note">Rien d'autre à faire pour l'instant.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================== Aide -->
+      <section class="page" data-page="aide" aria-label="Aide">
+        <div class="page-h"><h1 class="page-t">Aide</h1></div>
+        <div class="faq">
+          <div class="faq-g">{{i:palette s16}}Apparence</div>
+          <details open><summary>{{i:help}}Comment changer la couleur du site ?{{i:chev s18 chev}}</summary>
+            <div class="rep"><p>Dans Réglages → Apparence, touche une des cinq pastilles. Le changement est immédiat et enregistré.</p></div></details>
+          <details><summary>{{i:help}}Pourquoi le site devient clair le matin ?{{i:chev s18 chev}}</summary>
+            <div class="rep"><p>Le thème « Automatique » suit ton téléphone. Choisis « Sombre » pour le garder sombre tout le temps.</p></div></details>
+          <div class="faq-g">{{i:zap s16}}Navigation</div>
+          <details><summary>{{i:help}}Le bouton retour du téléphone ferme le site ?{{i:chev s18 chev}}</summary>
+            <div class="rep"><p>Non : il referme d'abord la feuille, le menu ou la fenêtre ouverte. Il ne quitte le site que s'il n'y a plus rien d'ouvert.</p></div></details>
+        </div>
+      </section>
+    </main>
+    <footer class="pied">
+      <span>Design « encre » · version 1.0</span>
+      <span>Repris de cinéthèque · DM Serif Display, Archivo et DM Mono</span>
+    </footer>
+  </div>
+</div>
+
+<!-- ========================== barre d'onglets flottante en verre (téléphone, < 1000 px) -->
+<nav class="tabbar" aria-label="Navigation">
+  <a class="tab" href="#accueil" data-page="accueil"><span class="ti">{{i:home s22}}</span>Accueil</a>
+  <a class="tab" href="#briques" data-page="briques"><span class="ti">{{i:grid s22}}</span>Briques</a>
+  <a class="tab" href="#retours" data-page="retours"><span class="ti">{{i:zap s22}}</span>Retours</a>
+  <a class="tab" href="#apparence" data-page="apparence"><span class="ti">{{i:palette s22}}</span>Apparence</a>
+  <button class="tab" type="button" data-encre-plus="encre-plus" aria-haspopup="dialog"><span class="ti">{{i:dots s22}}</span>Plus</button>
+</nav>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<!-- Contenu de la feuille « Plus » : 4 grandes tuiles, puis des lignes. -->
+<template id="encre-plus">
+  <div class="q-tuiles plus-t">
+    <a class="qt" href="#reglages">{{i:gear s22}}Réglages</a>
+    <a class="qt" href="#connexion">{{i:lock s22}}Connexion</a>
+    <a class="qt" href="#aide">{{i:help s22}}Aide</a>
+    <a class="qt" href="#apparence">{{i:palette s22}}Couleurs</a>
+  </div>
+  <div class="liste-r">
+    <a class="li" href="#reglages/avance"><span class="li-ic">{{i:users}}</span><span class="tx">Comptes et profils<small>Accès, « voir en tant que »</small></span>{{i:chev s18 muted}}</a>
+    <button type="button" class="li" data-demo="deco"><span class="li-ic">{{i:logout}}</span><span class="tx">Se déconnecter<small>noe@exemple.fr</small></span></button>
+  </div>
+</template>
+
+<!-- Barre de sélection (exemple « Sélection multiple »). -->
+<div class="barre-act sel" id="d-selection" hidden>
+  <span class="compte" id="d-sel-n">3 choisis</span>
+  <button type="button" class="btn sm" data-sel="liste" title="Ajouter à une liste" aria-label="Ajouter à une liste">{{i:listplus s18}}<span class="lib">Liste</span></button>
+  <button type="button" class="btn sm" data-sel="vu" title="Marquer terminé" aria-label="Marquer terminé">{{i:check s18}}<span class="lib">Terminé</span></button>
+  <button type="button" class="btn sm dn" data-sel="retirer" title="Retirer" aria-label="Retirer">{{i:trash s18}}<span class="lib">Retirer</span></button>
+  <button type="button" class="ib" data-sel="fermer" aria-label="Quitter la sélection">{{i:x}}</button>
+</div>
+
+<script>
+/* ---- Démonstration : bascule des pages et exemples (encre.js fait le reste). */
+document.addEventListener("DOMContentLoaded", () => {
+  const { $, $$, ic, toast, toastErr, confirmer, demander, feuille, menu, occupe, copier, animerEntree, nav, apparence, recherche } = Encre;
+  const PAGES = $$(".page").map((p) => p.dataset.page);
+  const TITRES = { accueil: "Accueil", briques: "Briques", retours: "Retours", apparence: "Apparence", reglages: "Réglages", connexion: "Connexion", aide: "Aide" };
+  const ICONES = { accueil: "home", briques: "grid", retours: "zap", apparence: "palette", reglages: "gear", connexion: "lock", aide: "help" };
+
+  function montrer() {
+    const [page, sous] = decodeURIComponent(location.hash.slice(1)).split("/");
+    const p = PAGES.includes(page) ? page : "accueil";
+    $$(".page").forEach((s) => s.classList.toggle("on", s.dataset.page === p));
+    nav.marquer(p);
+    if (p === "reglages") montrerReglage(sous);
+    document.title = `${TITRES[p]} · Design encre`;
+    scrollTo({ top: 0 });
+    animerEntree($(`.page[data-page="${p}"] .anim`));
+  }
+  function montrerReglage(sous) {
+    const reg = $("#d-reglages");
+    const panneaux = $$(".reg-panneau", reg).map((s) => s.dataset.panneau);
+    const choisi = panneaux.includes(sous) ? sous : null;
+    reg.classList.toggle("detail", !!choisi);
+    const montre = choisi || panneaux[0];        // sur ordinateur, le premier par défaut
+    $$(".reg-panneau", reg).forEach((s) => { s.hidden = s.dataset.panneau !== montre; });
+    $$("[data-reg]", reg).forEach((a) => a.classList.toggle("on", a.dataset.reg === montre));
+  }
+  addEventListener("hashchange", montrer);
+  montrer();
+
+  /* Segments et coches : allume celui qu'on touche (exemple). */
+  document.addEventListener("click", (e) => {
+    const s = e.target.closest("[data-seg]");
+    if (s) $$("[data-seg]", s.parentElement).forEach((b) => b.classList.toggle("on", b === s));
+    const ck = e.target.closest("[data-ck]");
+    if (ck) { const on = !ck.classList.contains("on"); ck.classList.toggle("on", on); ck.setAttribute("aria-pressed", String(on)); }
+  });
+
+  /* Recherche rapide (Ctrl K, « / » ou la loupe) : les raccourcis du site,
+     puis ce que le site trouve (ici, les briques de la démo). */
+  recherche.raccourcis = PAGES.map((p) => ({ titre: TITRES[p], sous: "Ouvrir la page", icone: ICONES[p], href: "#" + p }))
+    .concat([
+      { titre: "Changer de thème", sous: "Automatique, clair, sombre", icone: "moon", mots: "sombre clair nuit", action: () => ACTIONS.theme() },
+      { titre: "Couleur d'accent", sous: "Or, ambre, corail, menthe, lavande", icone: "palette", mots: "couleur", href: "#reglages/apparence" },
+    ]);
+  const BRIQUES = ["Boutons", "Puces", "Segments", "Champs", "Interrupteurs", "Coches", "Progression", "Badges", "Vide", "Squelettes", "Zone sensible", "Copier"];
+  recherche.chercher = async (q) => BRIQUES.filter((b) => b.toLowerCase().includes(q.toLowerCase()))
+    .map((b) => ({ groupe: "Briques", iconeGroupe: "grid", titre: b, sous: "Voir la brique", icone: "grid", href: "#briques" }));
+
+  let compteur = 0;
+  const majCompteur = () => { $("#d-compteur").textContent = String(compteur); };
+  const attendre = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  function selection(on) {
+    document.body.classList.toggle("mode-sel", on);
+    $("#d-selection").hidden = !on;
+  }
+
+  const ACTIONS = {
+    theme() {
+      const suite = { auto: "clair", clair: "sombre", sombre: "auto" }[apparence.prefs.theme];
+      apparence.choisir({ theme: suite }, { message: { auto: "Thème automatique", clair: "Thème clair", sombre: "Thème sombre" }[suite] });
+    },
+    toast: () => toast("Enregistré"),
+    annuler() {
+      compteur++; majCompteur();
+      toast("Ajouté à « Soirées pop-corn »", { annuler: async () => { await attendre(300); compteur--; majCompteur(); } });
+    },
+    erreur: () => toastErr(new Error("Le site ne répond pas. Réessaie dans un instant.")),
+    async confirmer() {
+      const ok = await confirmer("« Dune : deuxième partie » sera retiré de cette liste.", { ok: "Retirer", titre: "Retirer ce titre ?" });
+      toast(ok ? "Retiré" : "Rien n'a changé");
+    },
+    async danger() {
+      const ok = await confirmer("Tout ton historique sera effacé. Une sauvegarde complète est faite juste avant.", { ok: "Tout effacer", danger: true, titre: "Effacer l'historique ?", detail: "Cette action ne peut pas être annulée." });
+      if (ok) toast("Exemple seulement : rien n'a été effacé");
+    },
+    async demander() {
+      const nom = await demander("Nouvelle liste", { label: "Nom de la liste", placeholder: "Ex. : Soirées pop-corn", ok: "Créer" });
+      if (nom) toast(`Liste « ${nom} » créée`);
+    },
+    feuille() {
+      feuille({
+        titre: "Une feuille du bas",
+        html: `<p class="soft">Sur téléphone, elle monte du bas : tire la poignée vers le bas, touche le voile ou fais « retour » pour la fermer. Sur ordinateur, c'est une fenêtre au centre, qui se ferme avec Échap.</p>
+          <div class="q-tuiles" style="margin-top: 14px">
+            <button type="button" class="qt on">${ic("check", "s22")}Terminé</button>
+            <button type="button" class="qt">${ic("bookmark", "s22")}À faire</button>
+            <button type="button" class="qt">${ic("listplus", "s22")}Liste</button>
+            <button type="button" class="qt">${ic("share", "s22")}Partager</button>
+          </div>
+          <button type="button" class="btn pri w" data-fermer>Compris</button>`,
+      });
+    },
+    menu(btn) {
+      menu(btn, [
+        { icone: "edit", texte: "Renommer", touche: "R", action: () => ACTIONS.demander() },
+        { icone: "share", texte: "Partager", action: () => toast("Lien copié") },
+        { icone: "copy", texte: "Dupliquer", action: () => toast("Copie créée", { annuler: async () => attendre(200) }) },
+        null,
+        { icone: "trash", texte: "Supprimer", danger: true, action: () => ACTIONS.danger() },
+      ], { titre: "Soirées pop-corn" });
+    },
+    selection: () => selection(true),
+    occupe(btn) { occupe(btn, () => attendre(1400)).then(() => toast("Enregistré")); },
+    copier(btn) { copier(btn.parentElement.querySelector("code").textContent, btn); },
+    deco: () => toast("Déconnexion : à brancher sur ton site"),
+  };
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-demo]");
+    if (b && ACTIONS[b.dataset.demo]) { e.preventDefault(); ACTIONS[b.dataset.demo](b); }
+    const s = e.target.closest("[data-sel]");
+    if (!s) return;
+    if (s.dataset.sel === "fermer") { selection(false); return; }
+    const txt = { liste: "3 titres ajoutés à la liste", vu: "3 titres marqués terminés", retirer: "3 titres retirés" }[s.dataset.sel];
+    selection(false);
+    toast(txt, { annuler: async () => attendre(250) });
+  });
+});
+</script>
+</body>
+</html>
